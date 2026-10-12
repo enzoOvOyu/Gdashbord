@@ -1,60 +1,69 @@
-# Gdashboard — GPU 云控制台
+# Nebula GPU Cloud 控制台
 
-参考 RunPod / AutoDL / Vast.ai / 优云智算 / Modal 设计的 GPU 云算力控制台。
+以单文件原型（Nebula GPU Cloud 交互原型）为唯一标准重写：目录结构、模块划分、命名规范与代码风格严格对齐原型，并补齐其缺失的后端接口、数据模型与业务逻辑，实现前后端真实联调。
 
-## 技术栈
+## 架构对齐关系（原型 → 本工程）
 
-- **后端**：Node.js 22 + Express（端口 8080，REST API + 托管前端静态文件）
-- **前端**：Vue 3 + Vite 6 + Element Plus + ECharts
-- 全部依赖安装在项目目录内（`node_modules`），不影响服务器其他项目
-
-## 设计参考要点
-
-| 平台 | 借鉴点 |
-|------|--------|
-| RunPod | GPU 选购卡片（型号/VRAM/时价/云类型标签）、三步部署向导（GPU→镜像→配置确认） |
-| AutoDL | 实例控制台（六色状态、无卡模式开机、保存镜像、JupyterLab/SSH 连接、存储进度条） |
-| Vast.ai | 市场复杂筛选（显存/价格/地域/云类型）+ 性价比排序（DLPerf/价格） |
-| 优云智算 | 镜像商城、AI 应用一键部署 |
-| Modal | 监控中心（5s 级实时指标曲线 + 深色流式日志查看器） |
+| 原型（单文件） | 本工程 |
+|---|---|
+| `GPU / IMAGES / MODELS / NAV` 常量 | `server/data/catalog.js` + `GET /api/catalog` |
+| `init` 状态 + `localStorage` | `server/data/seed.js` + `server/store.js`（JSON 持久化）+ 前端 `store.js`（UI 态） |
+| `S` / `set(path,value)` / `save()` | 前端 `public/js/store.js`；领域写入走 `PATCH /api/state` |
+| `render()` / `shell()` / `nav()` | `public/js/app.js` / `shell.js` |
+| `pages{overview,market,create,instances,endpoints,jobs,assets,security,monitor,billing}` | `public/js/pages/*.js`（10 个同名模块）+ `server/routes/*.js`（9 个同名路由） |
+| `deploy()` / `instanceAction()` | `server/services/workload.js`（同名函数，服务端执行） |
+| `metric/card/section/field/input/select/btn/segmented/chart/status/toast/modal/copy/esc/money` | `public/js/ui.js`（同名同签名） |
+| `series()` 模拟时序 | `services/workload.js#series` + `GET /api/monitor/metrics` |
+| `styles` 内联 CSS | `public/styles/main.css`（原样迁移，含 :root 变量与响应式断点） |
 
 ## 目录结构
 
 ```
-gdashboard/
-├── server/          # Express 后端 + Mock 数据
-│   ├── index.js     # API 路由 + 静态托管
-│   └── data.js      # 种子随机 Mock 数据（GPU/实例/账单/公告）
-└── client/          # Vue 3 前端
-    └── src/
-        ├── layouts/MainLayout.vue   # 顶栏 + 侧边栏
-        └── views/                   # Dashboard/市场/创建/实例/监控/镜像/费用
+/opt/gdashboard/repo
+├── config.js                  # 独立配置（端口/数据文件/日志/静态目录）
+├── server/
+│   ├── index.js               # 入口：挂载 API + 托管前端
+│   ├── store.js               # 状态仓库（load/save/set/pushEvent/reset）
+│   ├── data/{catalog,seed}.js # 目录常量与领域数据种子
+│   ├── services/workload.js   # 业务逻辑：deploy / instanceAction / series
+│   └── routes/                # overview market workloads endpoints jobs assets security monitor billing
+├── public/
+│   ├── index.html
+│   ├── styles/main.css
+│   └── js/
+│       ├── api.js             # 前后端联调
+│       ├── store.js           # 状态（UI 态持久化 + 领域态来自服务端）
+│       ├── ui.js  shell.js  app.js
+│       └── pages/             # 10 个页面模块
+├── data/state.json            # 服务端状态持久化（工程内）
+└── log/server.log
 ```
 
-## 本地开发
+## 运行
 
 ```bash
-npm run install:all   # 安装后端 + 前端依赖
-npm run dev:server    # 后端 :8080
-npm run dev:client    # 前端 :5174（代理 /api -> :8080）
+cd /opt/gdashboard/repo
+npm install     # 仅安装到本工程 node_modules，不全局安装
+npm start       # 端口 8080
 ```
 
-## 生产部署
+## API
 
-```bash
-npm run install:all
-npm run build         # 构建前端到 client/dist
-npm start             # 单端口 8080 承载 API + 前端
-```
+- `GET /api/catalog`、`GET /api/state`、`PATCH /api/state`、`POST /api/state/reset`
+- `GET /api/overview`
+- `GET /api/market?query=&gpu=&region=&sort=`、`GET /api/market/:id`
+- `GET /api/workloads`、`POST /api/workloads/deploy`、`POST /api/workloads/:id/action`
+- `GET /api/endpoints`、`POST /api/endpoints/:id/action`（scale/playground/logs/curl）
+- `GET /api/jobs`、`POST /api/jobs/:id/retry`、`POST /api/jobs/:id/logs`
+- `GET/POST /api/assets`
+- `GET /api/security`、`POST /api/security/keys`、`DELETE /api/security/keys/:id`、`POST /api/security/secrets`
+- `GET /api/monitor/metrics?tab=&range=`、`GET /api/monitor/events`、`POST /api/monitor/alerts`
+- `GET /api/billing`、`POST /api/billing/budget`、`POST /api/billing/recharge`、`GET /api/billing/export`
 
-## API 一览
+## 隔离说明
 
-- `GET  /api/overview?range=7`     Dashboard 聚合数据
-- `GET  /api/gpus?minVram=&maxPrice=&region=&cloudType=&sort=`  GPU 市场
-- `GET  /api/instances`            实例列表
-- `POST /api/instances`            创建实例
-- `POST /api/instances/:id/action` 开机/关机/无卡模式/重启/释放
-- `GET  /api/instances/:id/metrics` 实时监控指标
-- `GET  /api/instances/:id/logs`   实例日志
-- `GET  /api/images?category=`     镜像商城
-- `GET  /api/billing`              费用中心
+- 工程目录：`/opt/gdashboard/repo`，与开发机其他项目（/opt/keel、/opt/keel-tools、/opt/containerd）完全独立
+- 依赖：`npm install` 仅写入本工程 `node_modules`，未做任何全局安装
+- 端口：8080（启动前已确认无其他服务占用）
+- 配置：`config.js` 自有配置，不复用其他项目配置
+- 数据/日志：写入工程内 `data/`、`log/` 目录

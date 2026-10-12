@@ -1,0 +1,364 @@
+{
+  "project": "AI Platform / Production",
+  "balance": 12650,
+  "budget": 10000,
+  "instances": [
+    {
+      "id": "ws-001",
+      "name": "llm-research-lab",
+      "gpu": "H100",
+      "count": 2,
+      "region": "北京三区",
+      "image": "PyTorch 2.5",
+      "status": "running",
+      "kind": "开发工作空间",
+      "age": "3天 12小时",
+      "ip": "203.0.113.24",
+      "disk": 500
+    },
+    {
+      "id": "ws-002",
+      "name": "comfyui-studio",
+      "gpu": "L40S",
+      "count": 1,
+      "region": "深圳一区",
+      "image": "ComfyUI",
+      "status": "running",
+      "kind": "AI 应用环境",
+      "age": "12小时",
+      "ip": "203.0.113.36",
+      "disk": 200
+    },
+    {
+      "id": "ws-003",
+      "name": "data-prep",
+      "gpu": "RTX4090",
+      "count": 1,
+      "region": "北京三区",
+      "image": "JupyterLab",
+      "status": "stopped",
+      "kind": "数据处理",
+      "age": "1天 4小时",
+      "ip": "—",
+      "disk": 100
+    },
+    {
+      "id": "ws-004",
+      "name": "finetune-experiment",
+      "gpu": "A100",
+      "count": 4,
+      "region": "杭州一区",
+      "image": "PyTorch 2.5",
+      "status": "running",
+      "kind": "训练开发",
+      "age": "2天 6小时",
+      "ip": "203.0.113.88",
+      "disk": 1000
+    }
+  ],
+  "endpoints": [
+    {
+      "id": "ep-001",
+      "name": "qwen-chat-prod",
+      "model": "Qwen3-32B-Instruct",
+      "engine": "vLLM",
+      "gpu": "H200",
+      "status": "healthy",
+      "min": 1,
+      "max": 8,
+      "qps": 42.6,
+      "p95": 189,
+      "replicas": 3,
+      "requests": 186400,
+      "version": "v1.3.2"
+    },
+    {
+      "id": "ep-002",
+      "name": "image-generation",
+      "model": "FLUX.1-dev",
+      "engine": "ComfyUI",
+      "gpu": "L40S",
+      "status": "healthy",
+      "min": 0,
+      "max": 4,
+      "qps": 5.8,
+      "p95": 820,
+      "replicas": 2,
+      "requests": 21800,
+      "version": "v2.1.0"
+    },
+    {
+      "id": "ep-003",
+      "name": "embedding-dev",
+      "model": "BGE-M3",
+      "engine": "Triton",
+      "gpu": "A100",
+      "status": "scaled-zero",
+      "min": 0,
+      "max": 2,
+      "qps": 0,
+      "p95": 0,
+      "replicas": 0,
+      "requests": 8700,
+      "version": "v0.8.1"
+    }
+  ],
+  "jobs": [
+    {
+      "id": "job-001",
+      "name": "qwen-lora-finetune",
+      "type": "LoRA 微调",
+      "gpu": "H100",
+      "count": 8,
+      "status": "running",
+      "progress": 68,
+      "duration": "2h 14m",
+      "dataset": "nlp-corpus-v3",
+      "cost": 398.6
+    },
+    {
+      "id": "job-002",
+      "name": "image-classifier-eval",
+      "type": "批量评估",
+      "gpu": "L40S",
+      "count": 2,
+      "status": "completed",
+      "progress": 100,
+      "duration": "38m",
+      "dataset": "vision-dataset",
+      "cost": 23.4
+    },
+    {
+      "id": "job-003",
+      "name": "pretrain-stage-2",
+      "type": "分布式训练",
+      "gpu": "B200",
+      "count": 16,
+      "status": "queued",
+      "progress": 0,
+      "duration": "—",
+      "dataset": "pretrain-tokens",
+      "cost": 0
+    },
+    {
+      "id": "job-004",
+      "name": "feature-extract",
+      "type": "批处理",
+      "gpu": "A100",
+      "count": 1,
+      "status": "failed",
+      "progress": 34,
+      "duration": "12m",
+      "dataset": "vision-dataset",
+      "cost": 6.9
+    }
+  ],
+  "clusters": [
+    {
+      "id": "cl-001",
+      "name": "training-fabric-prod",
+      "nodes": 4,
+      "gpu": "H100",
+      "count": 32,
+      "status": "running",
+      "scheduler": "Slurm",
+      "network": "400G InfiniBand",
+      "util": 76
+    },
+    {
+      "id": "cl-002",
+      "name": "k8s-inference-pool",
+      "nodes": 3,
+      "gpu": "L40S",
+      "count": 12,
+      "status": "running",
+      "scheduler": "Kubernetes",
+      "network": "100G Ethernet",
+      "util": 61
+    }
+  ],
+  "assets": {
+    "models": [
+      {
+        "name": "Qwen3-32B-Instruct",
+        "type": "LLM",
+        "size": "64 GB",
+        "version": "v1.3",
+        "source": "Hugging Face",
+        "date": "今天 10:42"
+      },
+      {
+        "name": "FLUX.1-dev",
+        "type": "图像生成",
+        "size": "23 GB",
+        "version": "v2.1",
+        "source": "Model Registry",
+        "date": "昨天 18:20"
+      },
+      {
+        "name": "BGE-M3",
+        "type": "Embedding",
+        "size": "2.4 GB",
+        "version": "v1.0",
+        "source": "Hugging Face",
+        "date": "10月09日"
+      }
+    ],
+    "datasets": [
+      {
+        "name": "nlp-corpus-v3",
+        "type": "文本语料",
+        "size": "1.8 TB",
+        "version": "v3",
+        "source": "对象存储",
+        "date": "今天 09:15"
+      },
+      {
+        "name": "vision-dataset",
+        "type": "图像数据",
+        "size": "640 GB",
+        "version": "v2",
+        "source": "共享文件系统",
+        "date": "10月10日"
+      },
+      {
+        "name": "pretrain-tokens",
+        "type": "训练数据",
+        "size": "12.4 TB",
+        "version": "v4",
+        "source": "对象存储",
+        "date": "10月08日"
+      }
+    ],
+    "images": [
+      {
+        "name": "pytorch-2.5-cuda12.4",
+        "type": "官方镜像",
+        "size": "12.8 GB",
+        "version": "v2.5",
+        "source": "Registry",
+        "date": "今天 11:20"
+      },
+      {
+        "name": "vllm-openai-server",
+        "type": "推理镜像",
+        "size": "9.2 GB",
+        "version": "v0.9",
+        "source": "Registry",
+        "date": "10月11日"
+      },
+      {
+        "name": "comfyui-stable",
+        "type": "社区镜像",
+        "size": "18.6 GB",
+        "version": "v1.4",
+        "source": "Registry",
+        "date": "10月08日"
+      }
+    ],
+    "volumes": [
+      {
+        "name": "shared-model-cache",
+        "type": "高性能共享存储",
+        "size": "2 TB",
+        "version": "RWX",
+        "source": "/models",
+        "date": "今天 10:10"
+      },
+      {
+        "name": "training-checkpoints",
+        "type": "持久卷",
+        "size": "5 TB",
+        "version": "RWX",
+        "source": "/checkpoints",
+        "date": "10月09日"
+      },
+      {
+        "name": "team-datasets",
+        "type": "对象存储",
+        "size": "20 TB",
+        "version": "S3",
+        "source": "s3://team-datasets",
+        "date": "10月08日"
+      }
+    ]
+  },
+  "events": [
+    {
+      "level": "warning",
+      "time": "23:31",
+      "text": "qwen-chat-prod p95 延迟超过 200ms"
+    },
+    {
+      "level": "info",
+      "time": "23:18",
+      "text": "训练任务 qwen-lora-finetune 已保存 checkpoint"
+    },
+    {
+      "level": "success",
+      "time": "22:54",
+      "text": "image-generation 自动扩容至 2 副本"
+    },
+    {
+      "level": "info",
+      "time": "21:12",
+      "text": "共享卷 shared-model-cache 挂载成功"
+    }
+  ],
+  "bills": [
+    {
+      "name": "GPU 工作空间",
+      "sub": "H100 / A100 / L40S",
+      "cost": 1548.8,
+      "pct": 45
+    },
+    {
+      "name": "推理服务",
+      "sub": "Serverless / Dedicated",
+      "cost": 1082.6,
+      "pct": 32
+    },
+    {
+      "name": "训练任务",
+      "sub": "Batch / Distributed",
+      "cost": 548.4,
+      "pct": 16
+    },
+    {
+      "name": "存储与流量",
+      "sub": "Volume / Object Storage",
+      "cost": 240.7,
+      "pct": 7
+    }
+  ],
+  "keys": [
+    {
+      "id": "key-001",
+      "name": "production-inference",
+      "prefix": "neb_prod_••••7D3K",
+      "created": "2026-10-01",
+      "last": "2 分钟前",
+      "active": true
+    },
+    {
+      "id": "key-002",
+      "name": "research-notebook",
+      "prefix": "neb_dev_••••9P2A",
+      "created": "2026-09-22",
+      "last": "昨天",
+      "active": true
+    }
+  ],
+  "secrets": [
+    {
+      "name": "HF_TOKEN",
+      "scope": "Research / Sandbox",
+      "updated": "2026-10-10"
+    },
+    {
+      "name": "WANDB_API_KEY",
+      "scope": "AI Platform / Production",
+      "updated": "2026-10-08"
+    }
+  ]
+}
