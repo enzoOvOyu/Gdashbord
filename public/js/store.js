@@ -29,10 +29,17 @@ export const init = {
   billingTab: "overview",
   billingRange: "30d",
   overviewRange: "7d",
+  k8sTab: "overview",
+  k8sPool: "all",
+  k8sStatus: "all",
+  k8sNs: "all",
+  k8sPhase: "all",
+  k8sRange: "1h",
+
 };
 
 // UI 态（对齐原型的 localStorage 持久化）
-const UI_KEYS = ["page", "market", "create", "instanceFilter", "instanceQuery", "selectedInstance", "endpointSelected", "endpointPlayground", "endpointTab", "jobTab", "jobSelected", "assetTab", "securityTab", "monitorTab", "monitorTarget", "monitorRange", "billingTab", "billingRange", "overviewRange"];
+const UI_KEYS = ["page", "market", "create", "instanceFilter", "instanceQuery", "selectedInstance", "endpointSelected", "endpointPlayground", "endpointTab", "jobTab", "jobSelected", "assetTab", "securityTab", "monitorTab", "monitorTarget", "monitorRange", "billingTab", "billingRange", "overviewRange", "k8sTab", "k8sPool", "k8sStatus", "k8sNs", "k8sPhase", "k8sRange"];
 
 export let S = Object.assign({}, init);
 
@@ -82,6 +89,7 @@ export async function refreshDomain() {
     bills: st.bills,
     keys: st.keys,
     secrets: st.secrets,
+    k8s: st.k8s,
   });
   return S;
 }

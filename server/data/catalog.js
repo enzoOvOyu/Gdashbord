@@ -36,6 +36,7 @@ export const NAV = [
   ["jobs", "⌘", "训练任务与集群"],
   ["assets", "◫", "模型与数据资产"],
   ["security", "♧", "API 密钥与权限"],
+  ["kubernetes", "⎈", "GPU 集群 K8s"],
   ["monitor", "▥", "可观测性"],
   ["billing", "▣", "费用与预算"],
 ];

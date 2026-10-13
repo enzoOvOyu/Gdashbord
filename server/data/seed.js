@@ -1,4 +1,5 @@
 // 对齐原型 init 状态：领域数据种子
+import { k8sSeed } from "./k8s.js";
 export function seed() {
   return {
     project: "AI Platform / Production",
@@ -59,9 +60,10 @@ export function seed() {
       { name: "训练任务", sub: "Batch / Distributed", cost: 548.4, pct: 16 },
       { name: "存储与流量", sub: "Volume / Object Storage", cost: 240.7, pct: 7 },
     ],
+    k8s: k8sSeed(),
     keys: [
-      { id: "key-001", name: "production-inference", prefix: "neb_prod_••••7D3K", created: "2026-10-01", last: "2 分钟前", active: true },
-      { id: "key-002", name: "research-notebook", prefix: "neb_dev_••••9P2A", created: "2026-09-22", last: "昨天", active: true },
+      { id: "key-001", name: "production-inference", prefix: "gpc_prod_••••7D3K", created: "2026-10-01", last: "2 分钟前", active: true },
+      { id: "key-002", name: "research-notebook", prefix: "gpc_dev_••••9P2A", created: "2026-09-22", last: "昨天", active: true },
     ],
     secrets: [
       { name: "HF_TOKEN", scope: "Research / Sandbox", updated: "2026-10-10" },

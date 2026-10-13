@@ -13,8 +13,9 @@ import assets from "./pages/assets.js";
 import security from "./pages/security.js";
 import monitor from "./pages/monitor.js";
 import billing from "./pages/billing.js";
+import kubernetes, { nodeDetail, podDetail, quotaModal } from "./pages/kubernetes.js";
 
-const pages = { overview, market, create: createPage, instances, endpoints, jobs, assets, security, monitor, billing };
+const pages = { overview, market, create: createPage, instances, endpoints, jobs, assets, security, kubernetes, monitor, billing };
 
 const FOOTER = `<div class="footer-note">GPU Cloud 控制台 · 高保真交互原型 V3.0 · 服务端提供 REST API 与状态持久化；所有资源、价格、域名、监控指标和操作均为模拟数据。</div>`;
 
@@ -97,6 +98,75 @@ async function runAction(a) {
   if (a === "prev-step") { S.create.step = Math.max(1, Number(S.create.step) - 1); save(); render(); return window.scrollTo({ top: 0, behavior: "instant" }); }
   if (a === "deploy") return deploy();
   if (a === "refresh") { await refreshDomain(); render(); return toast("资源列表已刷新"); }
+  // ===== Kubernetes GPU 集群（CKS / SUNK / Mission Control）=====
+  if (a === "k8s-dispatch") {
+    try {
+      const r = await api.k8sDispatch();
+      await refreshDomain();
+      await render();
+      if (r.placed.length) toast("已放置 " + r.placed.length + " 个任务" + (r.blocked.length ? "；" + r.blocked.length + " 个仍阻塞" : ""));
+      else toast("无可调度任务：可调度 GPU 不足", "err");
+    } catch (e) { toast(e.message, "err"); }
+    return;
+  }
+  if (a === "pools-scale") return toast("节点池扩容将在连接真实 CKS API 后开放");
+  if (a.startsWith("node-cordon:") || a.startsWith("node-uncordon:") || a.startsWith("node-drain:") || a.startsWith("node-restore:") || a.startsWith("node-clear:")) {
+    const parts = a.split(":");
+    const act = parts[0].replace("node-", "");
+    const id = parts[1];
+    try {
+      await api.k8sNodeAction(id, act === "clear" ? "clear-straggler" : act);
+      await refreshDomain();
+      await render();
+      toast(act === "cordon" ? "节点已封锁" : act === "uncordon" ? "节点已恢复调度" : act === "drain" ? "节点开始排空" : act === "restore" ? "节点修复完成" : "straggler 标记已清除");
+    } catch (e) { toast(e.message, "err"); }
+    return;
+  }
+  if (a.startsWith("node:")) {
+    try { const r = await api.k8sNode(a.split(":")[1]); nodeDetail(r.node, r.pods); } catch (e) { toast(e.message, "err"); }
+    return;
+  }
+  if (a.startsWith("quota-save:")) {
+    const ns = a.split(":")[1];
+    const el = document.getElementById("q-gpu");
+    try {
+      await api.k8sQuotaSet(ns, "gpuLimit", Number(el ? el.value : 0));
+      closeModal();
+      await refreshDomain();
+      render();
+      toast("配额已更新");
+    } catch (e) { toast(e.message, "err"); }
+    return;
+  }
+  if (a.startsWith("quota:")) {
+    const ns = a.split(":")[1];
+    const q = (S.k8s || {}).quotas ? S.k8s.quotas.find((x) => x.ns === ns) : null;
+    if (q) quotaModal(q); else toast("配额信息未加载", "err");
+    return;
+  }
+  if (a.startsWith("pod-restart:") || a.startsWith("pod-delete:") || a.startsWith("pod-preempt:")) {
+    const parts = a.split(":");
+    const act = parts[0].replace("pod-", "");
+    const id = parts[1];
+    try {
+      await api.k8sPodAction(id, act);
+      closeModal();
+      await refreshDomain();
+      await render();
+      toast(act === "restart" ? "工作负载已重启" : act === "preempt" ? "已抢占该任务" : "工作负载已删除");
+    } catch (e) { toast(e.message, "err"); }
+    return;
+  }
+  if (a.startsWith("pod:")) {
+    try {
+      const r = await api.k8sWorkloads("all", "all");
+      const pod = r.pods.find((x) => x.id === a.split(":")[1]);
+      if (pod) podDetail(pod); else toast("工作负载不存在", "err");
+    } catch (e) { toast(e.message, "err"); }
+    return;
+  }
+  // K8S_GUARD
+
 
   if (a === "notifications") {
     const ev = S.events || [];

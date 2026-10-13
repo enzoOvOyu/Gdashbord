@@ -15,6 +15,7 @@ import assetsRouter from "./routes/assets.js";
 import securityRouter from "./routes/security.js";
 import monitorRouter from "./routes/monitor.js";
 import billingRouter from "./routes/billing.js";
+import k8sRouter from "./routes/k8s.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -43,6 +44,7 @@ app.use("/api/assets", assetsRouter());
 app.use("/api/security", securityRouter());
 app.use("/api/monitor", monitorRouter());
 app.use("/api/billing", billingRouter());
+app.use("/api/k8s", k8sRouter());
 
 // 托管前端（无构建，对齐原型单文件 → 拆分为模块）
 app.use(express.static(config.publicDir));

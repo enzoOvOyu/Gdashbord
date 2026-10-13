@@ -6,7 +6,7 @@ import { seed } from "./data/seed.js";
 
 const DOMAIN_KEYS = [
   "project", "balance", "budget", "instances", "endpoints", "jobs",
-  "clusters", "assets", "events", "bills", "keys", "secrets",
+  "clusters", "assets", "events", "bills", "keys", "secrets", "k8s",
 ];
 
 let state = null;

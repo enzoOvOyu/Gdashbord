@@ -1,6 +1,6 @@
 # GPU Cloud 控制台
 
-一体化 GPU 云控制台：从 GPU 选购、部署交付（工作空间 / 训练任务 / 推理 Endpoint / 集群）到实例运维、可观测性与 FinOps 成本分析。
+一体化 GPU 云控制台：从 GPU 选购、部署交付（工作空间 / 训练任务 / 推理 Endpoint / 集群）到 **Kubernetes GPU 资源管理**、可观测性与 FinOps 成本分析。
 
 前端为**无构建 ES Module** 架构，后端为 Express REST API + JSON 状态持久化，前后端真实联调。
 
@@ -8,21 +8,56 @@
 
 ## 在线演示
 
-以下 GIF 均由 **Playwright + Chromium 在真实运行的服务上录制**（1180×720，8fps 采样后合成，2 倍速播放），非设计稿、非静态图。
+以下 GIF 均由 **Playwright + Chromium 在真实运行的服务上录制**（1500×940 采样后缩放合成，2 倍速播放），非设计稿、非静态图。
 
 **演示 1 · 从选购到部署**：总览指标 → 算力市场筛选 H100 并按价格排序 → 查看 GPU 详情 → 进入部署中心走完 4 步向导 → 创建工作空间并跳转到实例列表。
 
 ![从选购到部署](docs/demo/demo-tour.gif)
 
-**演示 2 · 实例运维与推理调试**：工作空间启停 → Endpoint Playground 发送测试请求并拿到模拟响应 → 可观测性切换监控目标与告警 → 费用中心查看成本明细。
+**演示 2 · Kubernetes GPU 集群运维**：集群概览 → GPU 节点封锁与详情 → 调度队列触发 Gang 调度与抢占 → 工作负载管理。
+
+![Kubernetes GPU 集群运维](docs/demo/demo-k8s.gif)
+
+**演示 3 · 实例运维与推理调试**：工作空间启停 → Endpoint Playground 发送测试请求并拿到模拟响应 → 可观测性切换监控目标与告警 → 费用中心查看成本明细。
 
 ![实例运维与推理调试](docs/demo/demo-run.gif)
 
 ---
 
+## Kubernetes GPU 资源管理
+
+参考 CoreWeave **CKS**（CoreWeave Kubernetes Service）、**SUNK**（Slurm on Kubernetes）与 **Mission Control** 的运维概念实现，覆盖 GPU 节点状态、资源分配、任务调度与机架级监控。
+
+| 能力 | 说明 |
+|---|---|
+| **节点池与 GPU 节点** | 6 个节点池（H100 SXM / H200 NVL / B200 NVL72 / A100 / L40S / RTX4090），23 个节点的状态机：Ready / Cordoned / Draining / Remediation / NotReady |
+| **节点运维动作** | cordon（封锁）、uncordon、drain（驱逐并触发重调度）、remediate（自动修复）、straggler 标记清除 |
+| **资源分配** | 每节点 GPU / CPU / 内存分配率条形可视化，节点池与命名空间两级水位 |
+| **命名空间配额** | `nvidia.com/gpu`、CPU、内存、Pod 四维配额，Critical / High / BestEffort 三级优先级与抢占策略 |
+| **拓扑感知调度** | Gang 调度要求同时拿到全部 GPU；优先收敛在同一 NVLink 域内；反碎片收敛；容量不足时按优先级抢占 |
+| **机架拓扑** | Cabinet Visualizer：按机柜聚合节点，颜色映射 GPU 温度，异常节点红标 |
+| **集群指标** | GPU 利用率、Goodput、MTTF、Straggler、IB 网络吞吐、GPU 温度与功耗 |
+| **事件流** | `kubectl get events` 语义：FailedScheduling / GPUHealthDegraded / NVLINKDown / NodeRemediation / OOMKilling |
+
+调度队列中的阻塞原因与真实调度器输出一致，例如：
+
+```text
+0/23 nodes are available: Insufficient nvidia.com/gpu（需 64，H100 可调度 22）
+```
+
+---
+
 ## 界面一览
 
-| 总览 Dashboard | GPU 算力市场 | 部署中心（4 步向导） |
+| GPU 集群 · 集群概览（含机架拓扑） | GPU 节点 | 资源配额 |
+|:---:|:---:|:---:|
+| ![K8s 集群概览](docs/screenshots/k8s-overview.png) | ![GPU 节点](docs/screenshots/k8s-nodes.png) | ![配额](docs/screenshots/k8s-quotas.png) |
+
+| 调度队列 | 工作负载 | 调度结果 |
+|:---:|:---:|:---:|
+| ![调度](docs/screenshots/k8s-scheduler.png) | ![工作负载](docs/screenshots/k8s-workloads.png) | ![调度结果](docs/screenshots/k8s-dispatch-result.png) |
+
+| 总览 Dashboard | GPU 算力市场 | 部署中心 |
 |:---:|:---:|:---:|
 | ![总览](docs/screenshots/nb-overview.png) | ![市场](docs/screenshots/nb-market.png) | ![部署](docs/screenshots/nb-create.png) |
 
@@ -38,7 +73,11 @@
 
 ## 设计参考
 
-参考 RunPod（GPU 选购卡片与部署流程）、AutoDL（国内用户习惯与实例控制台）、Vast.ai（复杂资源筛选与价格比较）、优云智算（镜像商城与 AI 应用一键部署）、Modal（开发者体验、监控与日志），重新组织为「开发 / 训练 / 推理 / 数据 / 运营」一体化控制台。
+参考 CoreWeave（CKS / SUNK / Mission Control：节点池、cordon / drain、straggler、拓扑感知调度、goodput、机架拓扑）、RunPod（GPU 选购卡片与部署流程）、AutoDL（国内用户习惯与实例控制台）、Vast.ai（复杂资源筛选与价格比较）、优云智算（镜像商城与 AI 应用一键部署）、Modal（开发者体验、监控与日志），重新组织为「集群 / 开发 / 训练 / 推理 / 数据 / 运营」一体化控制台。
+
+## 视觉规范
+
+高密度专业风格（`public/styles/dense.css`）：13px 基准字号、8px 圆角、32px 表格行高、等宽字体呈现资源 ID、条形可视化呈现分配率与利用率，在 1440px 视口下可承载 20+ 列信息而不换行。
 
 ---
 
@@ -52,11 +91,13 @@
 | `init` 状态 + `localStorage` | `server/data/seed.js` + `server/store.js`（JSON 持久化）+ 前端 `store.js`（UI 态） |
 | `S` / `set(path,value)` / `save()` | 前端 `public/js/store.js`；领域写入走 `PATCH /api/state` |
 | `render()` / `shell()` / `nav()` | `public/js/app.js` / `shell.js` |
-| `pages{overview,market,create,instances,endpoints,jobs,assets,security,monitor,billing}` | `public/js/pages/*.js`（10 个同名模块）+ `server/routes/*.js`（9 个同名路由） |
+| `pages{...}` 页面表 | `public/js/pages/*.js`（11 个同名模块）+ `server/routes/*.js`（10 个同名路由） |
 | `deploy()` / `instanceAction()` | `server/services/workload.js`（同名函数，服务端执行） |
 | `metric/card/section/field/input/select/btn/segmented/chart/status/toast/modal/copy/esc/money` | `public/js/ui.js`（同名同签名） |
 | `series()` 模拟时序 | `services/workload.js#series` + `GET /api/monitor/metrics` |
-| `styles` 内联 CSS | `public/styles/main.css`（原样迁移，含 `:root` 变量与响应式断点） |
+| `styles` 内联 CSS | `public/styles/main.css` + `public/styles/dense.css`（高密度视觉层） |
+
+**Kubernetes 模块**（新增）：`server/data/k8s.js`（节点池 / 节点 / 配额 / 工作负载 / 事件数据模型）+ `server/services/k8s.js`（节点运维、Gang 调度模拟、配额计算、机架拓扑）+ `server/routes/k8s.js` + `public/js/pages/kubernetes.js`（5 个高密度 Tab）。
 
 ## 目录结构
 
@@ -67,16 +108,18 @@
 │   ├── index.js               # 入口：挂载 API + 托管前端
 │   ├── store.js               # 状态仓库（load/save/set/pushEvent/reset）
 │   ├── data/{catalog,seed}.js # 目录常量与领域数据种子
+│   ├── data/k8s.js            # K8s 数据模型：节点池/节点/配额/工作负载/事件
 │   ├── services/workload.js   # 业务逻辑：deploy / instanceAction / series
-│   └── routes/                # overview market workloads endpoints jobs assets security monitor billing
+│   ├── services/k8s.js        # K8s 业务逻辑：节点运维/Gang 调度/配额/拓扑
+│   └── routes/                # overview market workloads endpoints jobs assets security kubernetes monitor billing
 ├── public/
 │   ├── index.html
-│   ├── styles/main.css
+│   ├── styles/{main,dense}.css
 │   └── js/
 │       ├── api.js             # 前后端联调
 │       ├── store.js           # 状态（UI 态持久化 + 领域态来自服务端）
 │       ├── ui.js  shell.js  app.js
-│       └── pages/             # 10 个页面模块
+│       └── pages/             # 11 个页面模块（含 kubernetes.js）
 ├── docs/
 │   ├── demo/                  # 演示 GIF
 │   └── screenshots/           # 页面截图
@@ -112,6 +155,17 @@ ssh -i ~/.ssh/enzo-using.pem -N -L 18080:127.0.0.1:8080 ubuntu@13.158.38.7
 - `GET /api/monitor/metrics?tab=&range=`、`GET /api/monitor/events`、`POST /api/monitor/alerts`
 - `GET /api/billing`、`POST /api/billing/budget`、`POST /api/billing/recharge`、`GET /api/billing/export`
 
+**Kubernetes GPU 资源管理**
+
+- `GET /api/k8s/summary` — 集群总览：节点/GPU 汇总、分配率、Goodput、MTTF、straggler
+- `GET /api/k8s/nodes?pool=&status=` — GPU 节点列表；`GET /api/k8s/nodes/:id` — 节点详情与其上 Pod
+- `POST /api/k8s/nodes/:id/action` — 节点运维：cordon / uncordon / drain / remediate / restore / clear-straggler / delete
+- `GET /api/k8s/quotas`、`POST /api/k8s/quotas` — 命名空间配额读取与调整
+- `GET /api/k8s/workloads?ns=&phase=` — 工作负载列表；`POST /api/k8s/workloads/:id/action` — restart / delete / preempt
+- `GET /api/k8s/scheduler` — 调度队列；`POST /api/k8s/scheduler/dispatch` — 触发调度（含拓扑感知与抢占）
+- `GET /api/k8s/topology` — 机架拓扑（Cabinet Visualizer 数据）
+- `GET /api/k8s/metrics?tab=&range=` — 集群指标；`GET /api/k8s/events` — 集群事件
+
 ## 隔离说明
 
 - 工程目录：`/opt/gdashboard/repo`，与开发机其他项目（`/opt/keel`、`/opt/keel-tools`、`/opt/containerd`）完全独立
@@ -126,6 +180,7 @@ ssh -i ~/.ssh/enzo-using.pem -N -L 18080:127.0.0.1:8080 ubuntu@13.158.38.7
 
 ```bash
 node demo-record.mjs tour   # 录制「选购 → 部署」帧序列
+node demo-record.mjs k8s    # 录制「K8s 集群运维」帧序列
 node demo-record.mjs run    # 录制「运维 → 调试」帧序列
 node gif.mjs tour out/demo-tour.gif 860 150 2   # 合成 GIF（宽 860 / 150ms / 抽 2 帧）
 ```
