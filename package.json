@@ -1,9 +1,9 @@
 {
-  "name": "nebula-gpu-cloud",
+  "name": "gpu-cloud-console",
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Nebula GPU Cloud 控制台（对齐单文件原型架构：前端无构建 + 后端 REST API）",
+  "description": "GPU Cloud 控制台（对齐单文件原型架构：前端无构建 + 后端 REST API）",
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",

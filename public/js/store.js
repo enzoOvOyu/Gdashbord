@@ -1,7 +1,7 @@
 // 客户端状态：对齐原型单一状态树 S（UI 态持久化 + 领域态来自服务端）
 import { api } from "./api.js";
 
-const STORAGE_KEY = "nebula_gpu_cloud_v3";
+const STORAGE_KEY = "gpu_cloud_console_v3";
 
 export const init = {
   page: "overview",

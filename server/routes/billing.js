@@ -41,7 +41,7 @@ export default function billingRouter() {
     const rows = [["费用类别", "说明", "金额(元)"], ...s.bills.map((x) => [x.name, x.sub, x.cost])];
     const csv = "﻿" + rows.map((r2) => r2.map((c) => q + String(c).replace(/"/g, q + q) + q).join(",")).join("\r\n");
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
-    res.setHeader("Content-Disposition", "attachment; filename=nebula_gpu_cloud_billing.csv");
+    res.setHeader("Content-Disposition", "attachment; filename=gpu_cloud_billing.csv");
     res.send(csv);
   });
   return r;

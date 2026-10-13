@@ -53,7 +53,7 @@ export function copy(text) {
 }
 
 export function header(title, sub, buttons = "") {
-  return `<div class="pagehead"><div><div class="eyebrow">NEBULA / AI CLOUD CONSOLE</div><h1>${title}</h1><p>${sub}</p></div><div class="head-actions">${buttons}</div></div>`;
+  return `<div class="pagehead"><div><div class="eyebrow">GPU CLOUD / AI 平台控制台</div><h1>${title}</h1><p>${sub}</p></div><div class="head-actions">${buttons}</div></div>`;
 }
 
 export function metric(label, value, desc, icon = "◈", trend = "") {

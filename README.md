@@ -1,4 +1,4 @@
-# Nebula GPU Cloud 控制台
+# GPU Cloud 控制台
 
 一体化 GPU 云控制台：从 GPU 选购、部署交付（工作空间 / 训练任务 / 推理 Endpoint / 集群）到实例运维、可观测性与 FinOps 成本分析。
 

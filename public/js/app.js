@@ -16,7 +16,7 @@ import billing from "./pages/billing.js";
 
 const pages = { overview, market, create: createPage, instances, endpoints, jobs, assets, security, monitor, billing };
 
-const FOOTER = `<div class="footer-note">Nebula GPU Cloud · 高保真交互原型 V3.0 · 服务端提供 REST API 与状态持久化；所有资源、价格、域名、监控指标和操作均为模拟数据。</div>`;
+const FOOTER = `<div class="footer-note">GPU Cloud 控制台 · 高保真交互原型 V3.0 · 服务端提供 REST API 与状态持久化；所有资源、价格、域名、监控指标和操作均为模拟数据。</div>`;
 
 function navigate(page) {
   S.page = page;
@@ -143,7 +143,7 @@ async function runAction(a) {
     } catch (e) { toast(e.message, "err"); }
     return;
   }
-  if (a.startsWith("copy-connect:")) return copy("ssh -i ~/.ssh/nebula_demo_key ubuntu@203.0.113.24");
+  if (a.startsWith("copy-connect:")) return copy("ssh -i ~/.ssh/demo_key ubuntu@203.0.113.24");
 
   if (a.startsWith("endpoint:")) { S.endpointSelected = a.split(":")[1]; S.endpointTab = "overview"; save(); return navigate("endpoints"); }
   if (a === "copy-curl") {
@@ -350,7 +350,7 @@ document.addEventListener("click", (e) => {
   const step = e.target.closest("[data-step]");
   if (step) { S.create.step = Number(step.dataset.step); save(); render(); return; }
   const mode = e.target.closest("[data-mode-select]");
-  if (mode) { S.create.step = 2; S.create.mode = mode.dataset.mode; S.create.name = "my-" + mode.dataset.mode + "-workload"; save(); render(); return; }
+  if (mode) { S.create.step = 2; S.create.mode = mode.dataset.modeSelect; S.create.name = "my-" + mode.dataset.modeSelect + "-workload"; save(); render(); return; }
   const im = e.target.closest("[data-image]");
   if (im) { S.create.image = im.dataset.image; save(); render(); return; }
   const t = e.target.closest("button[data-set][data-value],a[data-set][data-value]");

@@ -106,7 +106,7 @@ export function instanceAction(s, action, id) {
     return { ok: true };
   }
   if (action === "connect") {
-    return { ok: true, connect: `ssh -i ~/.ssh/nebula_demo_key ubuntu@${x.ip}` };
+    return { ok: true, connect: `ssh -i ~/.ssh/demo_key ubuntu@${x.ip}` };
   }
   if (action === "jupyter") {
     return { ok: true, url: `https://jupyter.example.invalid/workspace/${id}` };
