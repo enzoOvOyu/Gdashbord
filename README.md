@@ -49,25 +49,40 @@
 
 ## 界面一览
 
-| GPU 集群 · 集群概览（含机架拓扑） | GPU 节点 | 资源配额 |
-|:---:|:---:|:---:|
-| ![K8s 集群概览](docs/screenshots/k8s-overview.png) | ![GPU 节点](docs/screenshots/k8s-nodes.png) | ![配额](docs/screenshots/k8s-quotas.png) |
-
-| 调度队列 | 工作负载 | 调度结果 |
-|:---:|:---:|:---:|
-| ![调度](docs/screenshots/k8s-scheduler.png) | ![工作负载](docs/screenshots/k8s-workloads.png) | ![调度结果](docs/screenshots/k8s-dispatch-result.png) |
+以下截图均由 Playwright 在 1440×900 视口下对运行中的服务实机截取（RunSun 品牌视觉，与仓库当前代码一一对应）。
 
 | 总览 Dashboard | GPU 算力市场 | 部署中心 |
 |:---:|:---:|:---:|
-| ![总览](docs/screenshots/nb-overview.png) | ![市场](docs/screenshots/nb-market.png) | ![部署](docs/screenshots/nb-create.png) |
+| ![总览](docs/screenshots/ui-overview.png) | ![市场](docs/screenshots/ui-market.png) | ![部署](docs/screenshots/ui-create.png) |
 
-| 工作空间与实例 | 推理服务 Endpoints | 可观测性 |
+| 部署向导 · 规格确认 | 工作空间与实例 | 推理服务 Endpoints |
 |:---:|:---:|:---:|
-| ![实例](docs/screenshots/nb-instances.png) | ![端点](docs/screenshots/nb-endpoints.png) | ![监控](docs/screenshots/nb-monitor.png) |
+| ![向导](docs/screenshots/ui-create-step3.png) | ![实例](docs/screenshots/ui-instances.png) | ![端点](docs/screenshots/ui-endpoints.png) |
 
-| 训练任务与集群 | 模型与数据资产 | 费用与预算 |
+| 训练任务与集群 | 模型与数据资产 | API 密钥与权限 |
 |:---:|:---:|:---:|
-| ![任务](docs/screenshots/nb-jobs.png) | ![资产](docs/screenshots/nb-assets.png) | ![费用](docs/screenshots/nb-billing.png) |
+| ![任务](docs/screenshots/ui-jobs.png) | ![资产](docs/screenshots/ui-assets.png) | ![安全](docs/screenshots/ui-security.png) |
+
+| K8s 集群概览 | GPU 节点（23 节点 / 150 卡） | 资源配额 |
+|:---:|:---:|:---:|
+| ![K8s 概览](docs/screenshots/ui-k8s-overview.png) | ![节点](docs/screenshots/ui-k8s-nodes.png) | ![配额](docs/screenshots/ui-k8s-quotas.png) |
+
+| 调度队列（Gang 调度） | 调度结果（跨节点放置 + 抢占） | 工作负载 |
+|:---:|:---:|:---:|
+| ![调度](docs/screenshots/ui-k8s-scheduler.png) | ![调度结果](docs/screenshots/ui-k8s-dispatch-result.png) | ![工作负载](docs/screenshots/ui-k8s-workloads.png) |
+
+| 可观测性 | 费用与预算 | 侧栏折叠态 |
+|:---:|:---:|:---:|
+| ![监控](docs/screenshots/ui-monitor.png) | ![费用](docs/screenshots/ui-billing.png) | ![折叠](docs/screenshots/ui-collapsed.png) |
+
+<details>
+<summary>响应式（1280 / 768）</summary>
+
+| 1280px | 768px |
+|:---:|:---:|
+| ![1280](docs/screenshots/ui-overview-1280.png) | ![768](docs/screenshots/ui-overview-768.png) |
+
+</details>
 
 ---
 
