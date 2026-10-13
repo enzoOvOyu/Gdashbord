@@ -77,7 +77,11 @@
 
 ## 视觉规范
 
-高密度专业风格（`public/styles/dense.css`）：13px 基准字号、8px 圆角、32px 表格行高、等宽字体呈现资源 ID、条形可视化呈现分配率与利用率，在 1440px 视口下可承载 20+ 列信息而不换行。
+现代云控制台设计系统（`public/styles/tokens.css` + `public/styles/main.css`，参考 Vercel / Railway / shadcn-ui / Tremor）：
+- Design Tokens 统一管理：Primary #2563EB、Sidebar #111827、Background #F8FAFC、Border #E2E8F0，8px 间距阶梯、10px 卡片圆角、轻微阴影
+- 240px 可折叠深色侧栏（64px 图标模式，状态持久化）、60px 吸顶 Header、紧凑 sticky 表格
+- 统一状态：Loading（骨架屏 + 顶部进度条）/ Empty / Error / Disabled / Hover / Selected；键盘焦点环与 aria 标注；prefers-reduced-motion 适配
+- 响应式：1440 / 1280 / 1024 / 768 四档，窄屏下无横向溢出
 
 ---
 

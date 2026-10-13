@@ -1188,3 +1188,35 @@ select {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
+
+/* ---------- 16. 页面级通用组件（第二阶段） ---------- */
+.tabs { margin-bottom: var(--s-4); }
+.card-pad > .tabs:first-child { margin-top: 0; }
+
+.endpoint-card { cursor: pointer; }
+.endpoint-card.selected { border-color: var(--brand); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08); }
+.endpoint-stats > div { min-width: 78px; }
+
+.asset-card { display: flex; align-items: flex-start; gap: var(--s-3); }
+.asset-card h3 { word-break: break-all; }
+.asset-card p { margin-top: 4px; color: var(--text-2); font-size: var(--fs-sm); }
+.flex-1 { flex: 1 1 auto; min-width: 0; }
+
+.chain-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface-3);
+}
+.chain-step b { font-size: var(--fs-base); font-weight: 600; }
+
+.stat { padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface-3); }
+.stat span { display: block; font-size: var(--fs-xs); color: var(--text-2); }
+.stat b { display: block; font-size: var(--fs-xl); font-weight: 650; letter-spacing: -0.02em; line-height: 1.2; }
+
+.kv-list { display: grid; gap: var(--s-2); }
+.kv-list > div { display: flex; align-items: flex-start; gap: 10px; font-size: var(--fs-sm); }
+.kv-list b { font-weight: 600; }
