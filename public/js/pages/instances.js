@@ -24,7 +24,7 @@ export default async function instancesPage(S) {
     `</div>`,
     `<div class="layout-wide-side">`,
     `<div class="card"><div class="table-wrap"><table><thead><tr><th>实例名称</th><th>GPU 配置</th><th>地域</th><th>状态</th><th>运行时长</th><th>费用 / 小时</th><th>操作</th></tr></thead><tbody>`,
-    list.map((x) => `<tr><td><a href="javascript:void(0)" data-act="instance:${x.id}"><strong>${esc(x.name)}</strong></a><small>${esc(x.kind)} · ${esc(x.id)}</small></td><td>${esc(x.gpu)} × ${x.count}<small>${gpu(x.gpu).vram * x.count}GB 显存</small></td><td>${esc(x.region)}</td><td>${status(x.status)}</td><td>${esc(x.age)}</td><td>${money(gpu(x.gpu).price * x.count)}</td><td><div class="table-actions">${btn(x.status === "running" ? "停止" : "启动", "toggle-instance:" + x.id, "sm")}${btn("连接", "connect:" + x.id, "sm")}${btn("详情", "instance:" + x.id, "sm")}</div></td></tr>`).join(""),
+    list.map((x) => `<tr><td><a href="javascript:void(0)" data-act="instance:${x.id}"><strong>${esc(x.name)}</strong></a><small>${esc(x.kind)} · ${esc(x.id)}</small></td><td>${esc(x.gpu)} × ${x.count}<small>${gpu(x.gpu).vram * x.count}GB 显存</small></td><td>${esc(x.region)}</td><td>${status(x.status)}</td><td>${esc(x.age)}</td><td>${money(gpu(x.gpu).price * x.count)}</td><td><div class="table-actions">${btn(x.status === "running" ? "停止" : "启动", "toggle-instance:" + x.id, "sm")}${btn("连接", "connect:" + x.id, x.status === "running" ? "sm primary" : "sm")}${btn("详情", "instance:" + x.id, "sm ghost")}</div></td></tr>`).join(""),
     `</tbody></table>${list.length ? "" : `<div class="empty">没有符合条件的实例</div>`}</div></div>`,
     `<div class="detail-panel">`,
     selected
@@ -33,7 +33,7 @@ export default async function instancesPage(S) {
           `<div class="detail-header"><div><h2>${esc(selected.name)}</h2><p>${esc(selected.id)} · ${esc(selected.kind)}</p></div><span class="metric-icon">▤</span></div>`,
           [["GPU", selected.gpu + " × " + selected.count], ["镜像", selected.image], ["区域", selected.region], ["公网 IP（示例）", selected.ip], ["数据卷", selected.disk + " GB · 持久化"], ["自动关机", "2 小时空闲"], ["工作目录", "/workspace"]]
             .map((x) => `<div class="detail-kv"><span>${x[0]}</span><b>${esc(x[1])}</b></div>`).join(""),
-          `<div class="grid cols-2 mt16">${btn("⌘ SSH / VS Code", "connect:" + selected.id, "sm")}${btn("📓 JupyterLab", "jupyter:" + selected.id, "sm")}${btn("▥ 查看日志", "logs:" + selected.id, "sm")}${btn("◈ 资源监控", "monitor:" + selected.id, "sm")}${btn("↻ 重启", "restart:" + selected.id, "sm")}${btn("删除", "delete-instance:" + selected.id, "sm danger")}</div>`,
+          `<div class="grid cols-2 mt16">${btn("⌘ SSH / VS Code", "connect:" + selected.id, "sm primary")}${btn("JupyterLab", "jupyter:" + selected.id, "sm")}${btn("▥ 查看日志", "logs:" + selected.id, "sm")}${btn("◈ 资源监控", "monitor:" + selected.id, "sm")}${btn("↻ 重启", "restart:" + selected.id, "sm")}${btn("删除", "delete-instance:" + selected.id, "sm danger")}</div>`,
           `<div class="callout mt16">实例停止后工作卷仍保留，持久化存储可能继续计费；这是工作空间与物理资源解耦的关键。</div>`,
         ].join("")
       : `<div class="empty">暂无实例</div>`,

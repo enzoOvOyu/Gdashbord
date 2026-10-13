@@ -6,17 +6,26 @@ export default async function overview(S) {
   const range = S.overviewRange === "30d" ? "7d" : "24h";
   const [ov, m] = await Promise.all([api.overview(), api.metrics("gpu", range)]);
   const monthCost = ov.metrics.monthCost;
+  const runningGpus = (S.instances || []).filter((x) => x.status === "running").reduce((a, x) => a + (x.count || 1), 0);
+  const gpuUtil = Math.round(m.primary[m.primary.length - 1] || 0);
   const billColors = ["#2866f6", "#10b9b0", "#8c6ef0", "#f6a24b"];
 
   return [
     header("云上 AI 工作台", "从 GPU 开发到训练与推理：统一查看工作负载、服务健康、资源消耗与成本。",
       btn("＋ 创建工作负载", "go-create", "primary") + btn("查看使用指南", "about")),
     `<div class="banner mb16"><div><div style="font-size:10px;letter-spacing:1.8px;opacity:.8;margin-bottom:7px">AI WORKLOADS · UNIFIED CLOUD</div><h2>让 GPU 算力真正变成 AI 生产力</h2><p>选择开发工作空间、训练任务或推理 Endpoint，按工作负载弹性分配算力。<br>支持模型与数据复用、自动伸缩、服务级监控及成本归因。</p></div>${btn("⚡ 部署模型服务", "go-endpoint", "primary")}</div>`,
-    `<div class="grid cols-4 mb16">`,
+    `<div class="grid cols-4 mb16 kpi-row">`,
+    metric("本月云资源消费", money(monthCost), "预算使用率 " + Math.round((monthCost / (ov.budget || 10000)) * 100) + "%", "◉", "↓ 8.6%", "hero"),
     metric("活跃工作空间", ov.metrics.workspaces, "GPU Pod / Workspace", "▤", "↗ 12%"),
     metric("在线推理服务", ov.metrics.endpoints, "可用 Endpoint / " + (S.endpoints || []).length, "⚡", "99.95% 可用"),
     metric("训练任务成功率", ov.metrics.jobSuccessRate, "近 7 天 · 128 个任务", "⌘", "↗ 2.4%"),
-    metric("本月云资源消费", money(monthCost), "预算使用率 " + Math.round((monthCost / (ov.budget || 10000)) * 100) + "%", "◉", "↓ 8.6%"),
+    `</div>`,
+    `<div class="status-strip mb16">`,
+    `<div><span>服务可用性</span><b>99.95% <span class="pill green sm"><i class="dot"></i>正常</span></b></div>`,
+    `<div><span>GPU 平均利用率</span><b>${gpuUtil}%</b></div>`,
+    `<div><span>运行中 GPU 卡</span><b>${runningGpus} 张</b></div>`,
+    `<div><span>调度成功率</span><b>${ov.metrics.jobSuccessRate}</b></div>`,
+    `<div><span>账户余额</span><b>${money(ov.balance || 0)}</b></div>`,
     `</div>`,
     `<div class="grid cols-3 mb16">`,
     `<div class="card quick-card" data-nav="create" data-mode="workspace"><div class="quick-icon">⌘</div><div><h3>GPU 开发工作空间 →</h3><p>PyTorch / Jupyter / VS Code / SSH<br>持久化数据卷，按需启动与自动关机</p></div></div>`,

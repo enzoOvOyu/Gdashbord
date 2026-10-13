@@ -5,6 +5,7 @@ const STORAGE_KEY = "gpu_cloud_console_v3";
 
 export const init = {
   page: "overview",
+  sidebarCollapsed: false,
   project: "AI Platform / Production",
   market: { query: "", gpu: "all", region: "all", sort: "recommended", mode: "all" },
   create: {
@@ -39,7 +40,7 @@ export const init = {
 };
 
 // UI 态（对齐原型的 localStorage 持久化）
-const UI_KEYS = ["page", "market", "create", "instanceFilter", "instanceQuery", "selectedInstance", "endpointSelected", "endpointPlayground", "endpointTab", "jobTab", "jobSelected", "assetTab", "securityTab", "monitorTab", "monitorTarget", "monitorRange", "billingTab", "billingRange", "overviewRange", "k8sTab", "k8sPool", "k8sStatus", "k8sNs", "k8sPhase", "k8sRange"];
+const UI_KEYS = ["page", "sidebarCollapsed", "market", "create", "instanceFilter", "instanceQuery", "selectedInstance", "endpointSelected", "endpointPlayground", "endpointTab", "jobTab", "jobSelected", "assetTab", "securityTab", "monitorTab", "monitorTarget", "monitorRange", "billingTab", "billingRange", "overviewRange", "k8sTab", "k8sPool", "k8sStatus", "k8sNs", "k8sPhase", "k8sRange"];
 
 export let S = Object.assign({}, init);
 

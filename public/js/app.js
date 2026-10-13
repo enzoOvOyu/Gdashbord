@@ -1,7 +1,7 @@
 // 入口：对齐原型 bootstrap / render() / runAction() / 事件委托
 import { S, loadUI, save, set, refreshDomain, refreshCatalog } from "./store.js";
 import { api } from "./api.js";
-import { $, esc, toast, modal, closeModal, copy, btn, status, money, gpu } from "./ui.js";
+import { $, esc, toast, modal, closeModal, copy, btn, status, money, gpu, skeleton } from "./ui.js";
 import { shell } from "./shell.js";
 import overview from "./pages/overview.js";
 import market from "./pages/market.js";
@@ -26,16 +26,27 @@ function navigate(page) {
   window.scrollTo({ top: 0, behavior: "instant" });
 }
 
+let lastRendered = null;
+
 async function render() {
   const app = document.getElementById("app");
+  const bar = document.getElementById("progress-top");
   if (!app.innerHTML) app.innerHTML = shell();
   const main = document.getElementById("page");
+  if (lastRendered !== S.page) {
+    main.innerHTML = skeleton();
+    if (bar) bar.classList.add("on");
+  }
   try {
     const html = await pages[S.page](S);
     app.innerHTML = shell();
     document.getElementById("page").innerHTML = html + FOOTER;
+    lastRendered = S.page;
   } catch (e) {
-    document.getElementById("page").innerHTML = `<div class="card empty">页面加载失败：${esc(e.message)}</div>` + FOOTER;
+    document.getElementById("page").innerHTML = `<div class="empty">页面加载失败：${esc(e.message)}</div>` + FOOTER;
+    lastRendered = null;
+  } finally {
+    if (bar) bar.classList.remove("on");
   }
 }
 
@@ -86,6 +97,15 @@ async function instanceAction(action, id) {
 async function runAction(a) {
   if (a === "close-modal") return closeModal();
   if (a === "none") return;
+  if (a === "toggle-sidebar") {
+    S.sidebarCollapsed = !S.sidebarCollapsed;
+    save();
+    const el = document.querySelector(".app");
+    if (el) el.classList.toggle("collapsed", !!S.sidebarCollapsed);
+    const t = document.querySelector('[data-act="toggle-sidebar"]');
+    if (t) t.title = S.sidebarCollapsed ? "展开侧边栏" : "折叠侧边栏";
+    return;
+  }
   if (a === "go-create") return navigate("create");
   if (a === "go-market") return navigate("market");
   if (a === "go-endpoint") { S.create.mode = "endpoint"; S.create.step = 2; S.create.name = "my-llm-endpoint"; save(); return navigate("create"); }

@@ -1,0 +1,107 @@
+/* ==========================================================================
+   Design Tokens — Cloud Console Light
+   统一颜色、间距、圆角、阴影、字体、层级、动效
+   参考：Vercel / Railway / shadcn-ui / Tremor
+   ========================================================================== */
+:root {
+  /* Brand */
+  --brand: #2563eb;
+  --brand-hover: #1d4ed8;
+  --brand-active: #1e40af;
+  --brand-soft: #eff6ff;
+  --brand-border: #bfdbfe;
+
+  /* Text */
+  --text: #0f172a;
+  --text-2: #64748b;
+  --text-3: #94a3b8;
+  --text-invert: #f8fafc;
+
+  /* Surfaces */
+  --bg: #f8fafc;
+  --surface: #ffffff;
+  --surface-2: #f1f5f9;
+  --surface-3: #f8fafc;
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+
+  /* Sidebar (dark) */
+  --sidebar: #111827;
+  --sidebar-hover: #1f2937;
+  --sidebar-active: #1e3a8a;
+  --sidebar-text: #9ca3af;
+  --sidebar-text-strong: #e5e7eb;
+  --sidebar-border: #1f2937;
+
+  /* Status */
+  --success: #16a34a;
+  --success-soft: #dcfce7;
+  --warning: #d97706;
+  --warning-soft: #fef3c7;
+  --error: #dc2626;
+  --error-soft: #fee2e2;
+  --info: #2563eb;
+  --info-soft: #dbeafe;
+  --neutral-soft: #f1f5f9;
+
+  /* Chart */
+  --chart-1: #2563eb;
+  --chart-2: #8b5cf6;
+  --chart-3: #0ea5e9;
+  --chart-4: #f59e0b;
+  --chart-grid: #e2e8f0;
+  --chart-axis: #94a3b8;
+
+  /* Spacing scale (base 8px) */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 24px;
+  --s-6: 32px;
+  --s-7: 40px;
+  --s-8: 48px;
+
+  /* Radius */
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 10px;
+  --r-xl: 12px;
+  --r-full: 999px;
+
+  /* Elevation — 轻微阴影，不使用厚重投影 */
+  --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.08);
+  --shadow-lg: 0 12px 32px rgba(15, 23, 42, 0.14);
+
+  /* Typography */
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --fs-xs: 11px;
+  --fs-sm: 12px;
+  --fs-base: 13px;
+  --fs-md: 14px;
+  --fs-lg: 16px;
+  --fs-xl: 20px;
+  --fs-2xl: 26px;
+  --fs-3xl: 32px;
+
+  /* Layout */
+  --sidebar-w: 240px;
+  --sidebar-w-collapsed: 64px;
+  --header-h: 60px;
+  --content-max: 1560px;
+
+  /* Motion */
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur: 140ms;
+
+  /* Z */
+  --z-sticky: 20;
+  --z-header: 30;
+  --z-modal: 60;
+  --z-toast: 80;
+}

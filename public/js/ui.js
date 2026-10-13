@@ -56,8 +56,8 @@ export function header(title, sub, buttons = "") {
   return `<div class="pagehead"><div><div class="eyebrow">GPU CLOUD / AI 平台控制台</div><h1>${title}</h1><p>${sub}</p></div><div class="head-actions">${buttons}</div></div>`;
 }
 
-export function metric(label, value, desc, icon = "◈", trend = "") {
-  return `<div class="card metric"><div class="metric-top"><span>${label}</span><span class="metric-icon">${icon}</span></div><div class="metric-value">${value}</div><div class="metric-bottom"><span>${desc}</span><span class="up">${trend}</span></div></div>`;
+export function metric(label, value, desc, icon = "◈", trend = "", cls = "") {
+  return `<div class="card metric ${cls}"><div class="metric-top"><span>${label}</span><span class="metric-icon">${icon}</span></div><div class="metric-value">${value}</div><div class="metric-bottom"><span>${desc}</span><span class="${/^\u2193/.test(String(trend)) ? "down" : "up"}">${trend}</span></div></div>`;
 }
 
 export function section(title, right = "") {
@@ -93,8 +93,8 @@ export function tabs(items, val, path) {
 }
 
 export function chart(data, options = {}) {
-  const color = options.color || "#2866f6";
-  const color2 = options.color2 || "#10b9b0";
+  const color = options.color || "#2563eb";
+  const color2 = options.color2 || "#8b5cf6";
   const second = options.second || null;
   const height = options.height || 190;
   const grid = options.grid || 4;
@@ -111,21 +111,35 @@ export function chart(data, options = {}) {
   const area = line(data) + " L " + xx(data.length - 1) + "," + (h - bottom) + " L " + pad + "," + (h - bottom) + " Z";
   const gridLines = Array.from({ length: grid + 1 }, (_, i) => {
     const y = top + (h - top - bottom) * (i / grid);
-    return `<line x1="${pad}" y1="${y}" x2="${w - pad}" y2="${y}" stroke="#eaf0f8" stroke-dasharray="4 5"/>`;
+    return `<line x1="${pad}" y1="${y}" x2="${w - pad}" y2="${y}" stroke="#e2e8f0" stroke-dasharray="3 4"/>`;
   }).join("");
   const gid = "g" + color.replace("#", "");
   const labels = showLabels
-    ? `<text x="${pad}" y="${h - 3}" fill="#96a4b7" font-size="11">${startText}</text><text x="${w - pad}" y="${h - 3}" fill="#96a4b7" font-size="11" text-anchor="end">${endText}</text>`
+    ? `<text x="${pad}" y="${h - 3}" fill="#94a3b8" font-size="11">${startText}</text><text x="${w - pad}" y="${h - 3}" fill="#94a3b8" font-size="11" text-anchor="end">${endText}</text>`
     : "";
   return [
     `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" class="chart" style="height:${height}px" role="img" aria-label="趋势图">`,
-    `<defs><linearGradient id="${gid}" x1="0" x2="0" y1="0" y2="1"><stop stop-color="${color}" stop-opacity=".21"/><stop offset="1" stop-color="${color}" stop-opacity=".01"/></linearGradient></defs>`,
+    `<defs><linearGradient id="${gid}" x1="0" x2="0" y1="0" y2="1"><stop stop-color="${color}" stop-opacity=".16"/><stop offset="1" stop-color="${color}" stop-opacity=".01"/></linearGradient></defs>`,
     gridLines,
     fill ? `<path d="${area}" fill="url(#${gid})"/>` : "",
-    `<path d="${line(data)}" fill="none" stroke="${color}" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round"/>`,
-    second ? `<path d="${line(second)}" fill="none" stroke="${color2}" stroke-width="2.5" stroke-linecap="round"/>` : "",
+    `<path d="${line(data)}" fill="none" stroke="${color}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>`,
+    second ? `<path d="${line(second)}" fill="none" stroke="${color2}" stroke-width="2" stroke-linecap="round"/>` : "",
     labels,
     "</svg>",
+  ].join("");
+}
+
+// 统一 Loading 骨架屏（对齐 Vercel / shadcn 的加载态）
+export function skeleton() {
+  return [
+    '<div class="skel">',
+    '<div class="skel-line" style="width:180px"></div>',
+    '<div class="skel-line" style="width:320px;height:22px"></div>',
+    '<div class="skel-row">',
+    '<div class="skel-block"></div><div class="skel-block"></div><div class="skel-block"></div><div class="skel-block"></div>',
+    "</div>",
+    '<div class="skel-panel"></div>',
+    "</div>",
   ].join("");
 }
 
