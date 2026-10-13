@@ -17,7 +17,7 @@ import kubernetes, { nodeDetail, podDetail, quotaModal } from "./pages/kubernete
 
 const pages = { overview, market, create: createPage, instances, endpoints, jobs, assets, security, kubernetes, monitor, billing };
 
-const FOOTER = `<div class="footer-note">GPU Cloud 控制台 · 高保真交互原型 V3.0 · 服务端提供 REST API 与状态持久化；所有资源、价格、域名、监控指标和操作均为模拟数据。</div>`;
+const FOOTER = `<div class="footer-note">RunSun Cloud 控制台 · 高保真交互原型 V3.0 · 服务端提供 REST API 与状态持久化；所有资源、价格、域名、监控指标和操作均为模拟数据。</div>`;
 
 function navigate(page) {
   S.page = page;
@@ -194,7 +194,7 @@ async function runAction(a) {
     return;
   }
   if (a === "about") {
-    modal("关于这套 GPU Cloud 原型", `<p style="line-height:1.8">本原型参考 RunPod、Vast.ai、Modal、Lambda Cloud、CoreWeave、AutoDL、优云智算等公开产品能力，重新组织为“开发 / 训练 / 推理 / 数据 / 运营”一体化 GPU Cloud 控制台。</p><div class="callout mb16">前端为无构建 ES Module 架构，后端提供 REST API 与状态持久化，前后端真实联调。</div><div class="small muted">参考：docs.runpod.io · docs.vast.ai · modal.com/docs · docs.lambda.ai · autodl.com/docs</div>`, btn("关闭", "close-modal"));
+    modal("关于这套 RunSun Cloud 原型", `<p style="line-height:1.8">本原型参考 RunPod、Vast.ai、Modal、Lambda Cloud、CoreWeave、AutoDL、优云智算等公开产品能力，重新组织为“开发 / 训练 / 推理 / 数据 / 运营”一体化 GPU Cloud 控制台。</p><div class="callout mb16">前端为无构建 ES Module 架构，后端提供 REST API 与状态持久化，前后端真实联调。</div><div class="small muted">参考：docs.runpod.io · docs.vast.ai · modal.com/docs · docs.lambda.ai · autodl.com/docs</div>`, btn("关闭", "close-modal"));
     return;
   }
   if (a === "batch-help") return toast("批量操作将在连接真实权限系统后开放");
@@ -315,7 +315,7 @@ async function runAction(a) {
   if (a.startsWith("cluster:")) {
     const c = (S.clusters || []).find((x) => x.id === a.split(":")[1]);
     if (!c) return;
-    modal("集群拓扑 · " + esc(c.name), `<div class="callout mb16">调度器：${esc(c.scheduler)} · 网络：${esc(c.network)} · ${c.nodes} 个节点 / ${c.count} 张 GPU</div><div class="grid cols-2">${Array.from({ length: c.nodes }, (_, i) => `<div class="option selected"><b>◈ GPU Node ${i + 1}</b><p>${esc(c.gpu)} × ${Math.round(c.count / c.nodes)}<br>状态：Ready · 共享存储已挂载</p></div>`).join("")}</div><div class="code mt16">squeue   // Slurm 任务队列示意</div>`, btn("关闭", "close-modal"));
+    modal("集群拓扑 · " + esc(c.name), `<div class="callout mb16">调度器：${esc(c.scheduler)} · 网络：${esc(c.network)} · ${c.nodes} 个节点 / ${c.count} 张 GPU</div><div class="grid cols-2">${Array.from({ length: c.nodes }, (_, i) => `<div class="option selected"><b><i class='bi bi-graph-up'></i> GPU Node ${i + 1}</b><p>${esc(c.gpu)} × ${Math.round(c.count / c.nodes)}<br>状态：Ready · 共享存储已挂载</p></div>`).join("")}</div><div class="code mt16">squeue   // Slurm 任务队列示意</div>`, btn("关闭", "close-modal"));
     return;
   }
 

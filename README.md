@@ -1,4 +1,4 @@
-# GPU Cloud 控制台
+# RunSun Cloud 控制台
 
 一体化 GPU 云控制台：从 GPU 选购、部署交付（工作空间 / 训练任务 / 推理 Endpoint / 集群）到 **Kubernetes GPU 资源管理**、可观测性与 FinOps 成本分析。
 
@@ -70,6 +70,21 @@
 | ![任务](docs/screenshots/nb-jobs.png) | ![资产](docs/screenshots/nb-assets.png) | ![费用](docs/screenshots/nb-billing.png) |
 
 ---
+
+## 品牌与配色（取自 runsuncloud.com）
+
+| 类别 | 值 | 来源 |
+|---|---|---|
+| 品牌主色 | `#FF6000` | Logo 主色、CTA 按钮背景、强调文字 |
+| 品牌渐变 | `linear-gradient(125deg, #FF9900, #FF6000, #FFCC32, #FF6A48)` | 站点 home-sustainable 条 |
+| 辅助色 | `#FF9900` `#FFCC32` `#FF6A48` | 渐变分段取色 |
+| 中性深色 | `#222222` / `#333333` | 深色区块 + Logo 深灰 |
+| 正文 / 次要文字 | `#313233` / `#626466` | H1 与正文计算色 |
+| 背景 / 浅底 | `#FFFFFF` → `#F4F5F7` | 区块背景渐变 |
+| 图标 | Bootstrap Icons 线形 | 站点引用 bootstrap-icons |
+| 字体 | 系统字体栈（-apple-system / Segoe UI / Noto Sans + 中文回退） | 站点未使用自定义 webfont |
+
+全部定义在 `public/styles/tokens.css`（`--brand` / `--gradient-brand` / `--gradient-brand-soft` / `--gradient-surface` 等），业务与布局不变。
 
 ## 设计参考
 

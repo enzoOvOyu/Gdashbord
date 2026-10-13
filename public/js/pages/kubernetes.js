@@ -37,9 +37,9 @@ function overviewTab(sum, cabinets, S) {
   const vals = m.values || ["88% 利用率", "94.6% Goodput", "87.8h MTTF", "3 Straggler"];
   return [
     `<div class="grid cols-4 mb16">`,
-    metric("GPU 分配率", c.allocPct + "%", `${c.allocatedGpus} / ${c.totalGpus} 张已分配`, "▦", `可调度 ${c.schedulableGpus}`),
-    metric("Goodput", c.goodput + "%", "有效算力时间占比", "◈", "目标 ≥ 93%"),
-    metric("健康 GPU", c.healthyGpus, `${c.stragglers} 个 straggler · ${c.remediation} 个修复中`, "✓", ""),
+    metric("GPU 分配率", c.allocPct + "%", `${c.allocatedGpus} / ${c.totalGpus} 张已分配`, "<i class='bi bi-cpu'></i>", `可调度 ${c.schedulableGpus}`),
+    metric("Goodput", c.goodput + "%", "有效算力时间占比", "<i class='bi bi-box-seam'></i>", "目标 ≥ 93%"),
+    metric("健康 GPU", c.healthyGpus, `${c.stragglers} 个 straggler · ${c.remediation} 个修复中`, "<i class='bi bi-check2-circle'></i>", ""),
     metric("MTTF", c.mttfHours + "h", `任务重启 ~${c.jobRestartSec}s`, "⏱", ""),
     `</div>`,
 
@@ -180,11 +180,11 @@ function schedulerTab(sch, S) {
   return [
     `<div class="grid cols-4 mb16">`,
     metric("待调度任务", pend.length, `申请 ${pend.reduce((a, p) => a + p.gpuCount, 0)} GPU`, "⏳", ""),
-    metric("最长等待", pend.length ? Math.max(...pend.map((p) => parseInt(p.age) || 0)) + "m" : "0m", "队首任务", "◷", ""),
-    metric("累计调度", sch.scheduled, "本次会话", "✓", ""),
-    metric("抢占次数", sch.preempted, "低优先级被抢占", "⇄", ""),
+    metric("最长等待", pend.length ? Math.max(...pend.map((p) => parseInt(p.age) || 0)) + "m" : "0m", "队首任务", "<i class='bi bi-clock-history'></i>", ""),
+    metric("累计调度", sch.scheduled, "本次会话", "<i class='bi bi-check2-circle'></i>", ""),
+    metric("抢占次数", sch.preempted, "低优先级被抢占", "<i class='bi bi-arrow-left-right'></i>", ""),
     `</div>`,
-    `<div class="card card-pad mb16">${section("调度队列 · Pending", btn("⚡ 触发调度", "k8s-dispatch", "primary"))}`,
+    `<div class="card card-pad mb16">${section("调度队列 · Pending", btn("<i class='bi bi-lightning-charge-fill'></i> 触发调度", "k8s-dispatch", "primary"))}`,
     pend.length
       ? `<div class="table-wrap"><table class="dense"><thead><tr><th>任务</th><th>命名空间</th><th>类型</th><th>GPU</th><th>拓扑约束</th><th>优先级</th><th>等待</th><th>阻塞原因</th><th>操作</th></tr></thead><tbody>${pend.map((p) => `<tr>
       <td>${mono(p.name)}</td>
@@ -279,7 +279,7 @@ export default async function kubernetesPage(S) {
     header(
       "GPU 集群 · Kubernetes",
       `${esc(sum.cluster.name)} · ${esc(sum.cluster.version)} · ${esc(sum.cluster.scheduler)} — 节点、配额、调度与机架级可观测性。`,
-      btn("⚡ 触发调度", "k8s-dispatch", "primary") + btn("↻ 刷新", "refresh", "sm")
+      btn("<i class='bi bi-lightning-charge-fill'></i> 触发调度", "k8s-dispatch", "primary") + btn("↻ 刷新", "refresh", "sm")
     ),
     tabs([["overview", "集群概览"], ["nodes", "GPU 节点"], ["quotas", "资源配额"], ["scheduler", "调度队列"], ["workloads", "工作负载"]], t, "k8sTab"),
     `<div class="card filterbar mb16">`,

@@ -28,17 +28,17 @@ export const MODELS = [
 export const REGIONS = ["北京三区", "上海二区", "深圳一区", "杭州一区", "新加坡一区"];
 
 export const NAV = [
-  ["overview", "◈", "总览 Dashboard"],
-  ["market", "▦", "GPU 算力市场"],
-  ["create", "✚", "部署中心"],
-  ["instances", "▤", "工作空间与实例"],
-  ["endpoints", "⚡", "推理服务 Endpoints"],
-  ["jobs", "⌘", "训练任务与集群"],
-  ["assets", "◫", "模型与数据资产"],
-  ["security", "♧", "API 密钥与权限"],
-  ["kubernetes", "⎈", "GPU 集群 K8s"],
-  ["monitor", "▥", "可观测性"],
-  ["billing", "▣", "费用与预算"],
+  ["overview", "speedometer2", "总览 Dashboard"],
+  ["market", "shop", "GPU 算力市场"],
+  ["create", "rocket-takeoff", "部署中心"],
+  ["instances", "hdd-stack", "工作空间与实例"],
+  ["endpoints", "lightning-charge-fill", "推理服务 Endpoints"],
+  ["jobs", "cpu", "训练任务与集群"],
+  ["assets", "boxes", "模型与数据资产"],
+  ["security", "shield-lock", "API 密钥与权限"],
+  ["kubernetes", "hdd-rack", "GPU 集群 K8s"],
+  ["monitor", "graph-up-arrow", "可观测性"],
+  ["billing", "receipt", "费用与预算"],
 ];
 
 export function gpu(id) {

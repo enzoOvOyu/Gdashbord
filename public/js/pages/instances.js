@@ -12,10 +12,10 @@ export default async function instancesPage(S) {
   return [
     header("工作空间与实例", "统一管理 GPU Pods、开发工作空间与远程访问；资源生命周期与持久化数据分离。", btn("＋ 创建工作空间", "create-workspace", "primary")),
     `<div class="grid cols-4 mb16">`,
-    metric("运行中", all.filter((x) => x.status === "running").length, "可连接工作空间", "▷", ""),
-    metric("已停止", all.filter((x) => x.status === "stopped").length, "工作卷仍保留", "□", ""),
-    metric("GPU 分配", res.gpuAssigned + " 张", "活跃实例占用", "▣", ""),
-    metric("持久化存储", "7.2 TB", "数据卷 / 模型缓存", "◫", ""),
+    metric("运行中", all.filter((x) => x.status === "running").length, "可连接工作空间", "<i class='bi bi-play-circle'></i>", ""),
+    metric("已停止", all.filter((x) => x.status === "stopped").length, "工作卷仍保留", "<i class='bi bi-stop-circle'></i>", ""),
+    metric("GPU 分配", res.gpuAssigned + " 张", "活跃实例占用", "<i class='bi bi-gpu-card'></i>", ""),
+    metric("持久化存储", "7.2 TB", "数据卷 / 模型缓存", "<i class='bi bi-device-hdd'></i>", ""),
     `</div>`,
     `<div class="card filterbar mb16">`,
     `<input placeholder="搜索实例名称或 GPU 型号" value="${esc(q)}" data-set="instanceQuery"/>`,
@@ -30,10 +30,10 @@ export default async function instancesPage(S) {
     selected
       ? [
           section("工作空间详情", `<span>${status(selected.status)}</span>`),
-          `<div class="detail-header"><div><h2>${esc(selected.name)}</h2><p>${esc(selected.id)} · ${esc(selected.kind)}</p></div><span class="metric-icon">▤</span></div>`,
+          `<div class="detail-header"><div><h2>${esc(selected.name)}</h2><p>${esc(selected.id)} · ${esc(selected.kind)}</p></div><span class="metric-icon"><i class='bi bi-hdd-stack'></i></span></div>`,
           [["GPU", selected.gpu + " × " + selected.count], ["镜像", selected.image], ["区域", selected.region], ["公网 IP（示例）", selected.ip], ["数据卷", selected.disk + " GB · 持久化"], ["自动关机", "2 小时空闲"], ["工作目录", "/workspace"]]
             .map((x) => `<div class="detail-kv"><span>${x[0]}</span><b>${esc(x[1])}</b></div>`).join(""),
-          `<div class="grid cols-2 mt16">${btn("⌘ SSH / VS Code", "connect:" + selected.id, "sm primary")}${btn("JupyterLab", "jupyter:" + selected.id, "sm")}${btn("▥ 查看日志", "logs:" + selected.id, "sm")}${btn("◈ 资源监控", "monitor:" + selected.id, "sm")}${btn("↻ 重启", "restart:" + selected.id, "sm")}${btn("删除", "delete-instance:" + selected.id, "sm danger")}</div>`,
+          `<div class="grid cols-2 mt16">${btn("<i class='bi bi-terminal'></i> SSH / VS Code", "connect:" + selected.id, "sm primary")}${btn("JupyterLab", "jupyter:" + selected.id, "sm")}${btn("<i class='bi bi-graph-up'></i> 查看日志", "logs:" + selected.id, "sm")}${btn("<i class='bi bi-box-seam'></i> 资源监控", "monitor:" + selected.id, "sm")}${btn("↻ 重启", "restart:" + selected.id, "sm")}${btn("删除", "delete-instance:" + selected.id, "sm danger")}</div>`,
           `<div class="callout mt16">实例停止后工作卷仍保留，持久化存储可能继续计费；这是工作空间与物理资源解耦的关键。</div>`,
         ].join("")
       : `<div class="empty">暂无实例</div>`,

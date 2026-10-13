@@ -14,10 +14,10 @@ export default async function billingPage(S) {
       `<a class="btn" href="/api/billing/export">下载 CSV 账单</a>` + btn("＋ 充值演示", "recharge", "primary")),
     tabs([["overview", "费用概览"], ["details", "成本明细"], ["budgets", "预算与告警"]], t, "billingTab"),
     `<div class="grid cols-4 mb16">`,
-    metric("账户余额", money(b.balance), "模拟账户 · 不涉及真实支付", "◉", ""),
-    metric("本月累计消费", money(b.monthCost), "按资源 / 项目归因", "▦", "↓ 8.6%"),
-    metric("推理调用成本", money((b.bills[1] || {}).cost || 0), "Serverless / Dedicated", "⚡", ""),
-    metric("预算使用率", Math.round(p) + "%", "预算 " + money(b.budget), "◷", ""),
+    metric("账户余额", money(b.balance), "模拟账户 · 不涉及真实支付", "<i class='bi bi-cash-stack'></i>", ""),
+    metric("本月累计消费", money(b.monthCost), "按资源 / 项目归因", "<i class='bi bi-cpu'></i>", "↓ 8.6%"),
+    metric("推理调用成本", money((b.bills[1] || {}).cost || 0), "Serverless / Dedicated", "<i class='bi bi-lightning-charge-fill'></i>", ""),
+    metric("预算使用率", Math.round(p) + "%", "预算 " + money(b.budget), "<i class='bi bi-clock-history'></i>", ""),
     `</div>`,
     t === "overview"
       ? [
@@ -29,7 +29,7 @@ export default async function billingPage(S) {
           `<div class="card card-pad">${section("费用构成与资源归因", `<a href="javascript:void(0)" data-set="billingTab" data-value="details">查看明细 →</a>`)}`,
           b.bills.map((x, i) => `<div style="padding:11px 0"><div class="between"><div><b>${esc(x.name)}</b><div class="small muted" style="margin-top:4px">${esc(x.sub)}</div></div><b>${money(x.cost)}</b></div><div class="progress mt12"><span style="width:${x.pct}%;background:${colors[i]}"></span></div></div>`).join(""),
           `</div>`,
-          `<div class="card card-pad">${section("成本优化建议")}<div class="callout mb12">⚡ 将低频 Endpoint 的最小副本设置为 0，降低空闲 GPU 成本。</div><div class="callout mb12">◷ 开发工作空间开启 2 小时空闲自动关机。</div><div class="callout">◈ 大型训练任务可评估预留资源与可中断计算，结合 Checkpoint 降低风险。</div></div></div>`,
+          `<div class="card card-pad">${section("成本优化建议")}<div class="callout mb12"><i class='bi bi-lightning-charge-fill'></i> 将低频 Endpoint 的最小副本设置为 0，降低空闲 GPU 成本。</div><div class="callout mb12"><i class='bi bi-clock-history'></i> 开发工作空间开启 2 小时空闲自动关机。</div><div class="callout"><i class='bi bi-box-seam'></i> 大型训练任务可评估预留资源与可中断计算，结合 Checkpoint 降低风险。</div></div></div>`,
         ].join("")
       : t === "details"
       ? `<div class="card card-pad">${section("资源级账单明细", `<span class="small muted">示例账单 · 非真实计费</span>`)}<div class="table-wrap"><table><thead><tr><th>资源名称</th><th>费用类型</th><th>GPU 规格</th><th>用量</th><th>示例单价</th><th>金额</th></tr></thead><tbody>${b.details.map((x) => `<tr><td><strong>${esc(x.name)}</strong></td><td>${esc(x.type)}</td><td>${esc(x.gpu)}</td><td>${x.h} GPU小时(示例)</td><td>${money(x.price)}/h</td><td><strong>${money(x.amount)}</strong></td></tr>`).join("")}</tbody></table></div></div>`
@@ -44,7 +44,7 @@ export default async function billingPage(S) {
           `</div>`,
           `<div class="card card-pad">${section("成本治理")}<div class="grid" style="gap:12px">`,
           [["项目成本中心", "按项目 / 标签聚合 GPU 消费"], ["用量配额", "GPU 卡数、Endpoint 副本、存储限额"], ["异常消费检测", "费用突增、空闲 GPU、低利用率"], ["资源生命周期", "自动关机、Scale-to-Zero、过期释放"]]
-            .map((x) => `<div class="flex"><span class="pill blue">✓</span><div><b>${x[0]}</b><div class="small muted" style="margin-top:4px">${x[1]}</div></div></div>`).join(""),
+            .map((x) => `<div class="flex"><span class="pill blue"><i class='bi bi-check2-circle'></i></span><div><b>${x[0]}</b><div class="small muted" style="margin-top:4px">${x[1]}</div></div></div>`).join(""),
           `</div></div></div>`,
         ].join(""),
   ].join("");

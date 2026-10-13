@@ -12,9 +12,9 @@ function workspaceForm(c) {
   return [
     `<div class="card card-pad mb16">${section("开发环境与镜像")}<div class="option-grid">`,
     (window.__IMAGES || []).map((im, i) => {
-      const icons = ["🔥", "⚡", "⌘", "🎨", "📓", "◈"];
+      const icons = ["🔥", "<i class='bi bi-lightning-charge-fill'></i>", "<i class='bi bi-terminal'></i>", "🎨", "📓", "<i class='bi bi-box-seam'></i>"];
       const desc = ["深度学习训练", "OpenAI 兼容服务", "高性能推理", "AIGC 应用", "交互式分析", "自定义环境"];
-      return `<div class="option ${c.image === im ? "selected" : ""}" data-image="${esc(im)}"><span class="sel-dot"></span><b>${icons[i] || "◈"} ${esc(im.split(" · ")[0])}</b><p>${esc(im.split(" · ")[1] || "")}<br>${desc[i] || ""}</p></div>`;
+      return `<div class="option ${c.image === im ? "selected" : ""}" data-image="${esc(im)}"><span class="sel-dot"></span><b>${icons[i] || "<i class='bi bi-box-seam'></i>"} ${esc(im.split(" · ")[0])}</b><p>${esc(im.split(" · ")[1] || "")}<br>${desc[i] || ""}</p></div>`;
     }).join(""),
     `</div></div>`,
     `<div class="card card-pad mb16">${section("数据与连接")}<div class="form-grid">`,
@@ -40,7 +40,7 @@ function endpointForm(c) {
     field("最大副本数", select([1, 2, 4, 8, 16].map((x) => [x, x + " 副本"]), c.maxReplicas, "create.maxReplicas")),
     `</div><div class="flex mt16">`,
     `<label class="check-pill"><input type="checkbox" data-check="create.auth" ${c.auth ? "checked" : ""}/> API Key 鉴权</label>`,
-    `<span class="pill green">✓ 支持 Scale-to-Zero</span><span class="pill blue">✓ 按副本扩缩容</span>`,
+    `<span class="pill green"><i class='bi bi-check2-circle'></i> 支持 Scale-to-Zero</span><span class="pill blue"><i class='bi bi-check2-circle'></i> 按副本扩缩容</span>`,
     `</div></div>`,
   ].join("");
 }
@@ -82,7 +82,7 @@ export default async function createPage(S) {
   return [
     header("部署中心", "按 AI 任务选择交付方式，平台负责 GPU 调度、镜像启动、网络、数据和生命周期管理。", btn("返回 GPU 市场", "go-market")),
     `<div class="grid cols-4 mb16">${MODES.map((x) => `<div class="option ${c.mode === x[0] ? "selected" : ""}" data-mode-select="${x[0]}"><span class="sel-dot"></span><b>${x[1]}</b><p>${x[2]}</p></div>`).join("")}</div>`,
-    `<div class="steps">${[["1", "选择工作负载"], ["2", "配置计算与镜像"], ["3", "数据、网络与伸缩"], ["4", "确认并部署"]].map((x, i) => `<div data-step="${i + 1}" style="cursor:pointer" class="step ${c.step === i + 1 ? "active" : c.step > i + 1 ? "done" : ""}"><span class="step-num">${c.step > i + 1 ? "✓" : x[0]}</span><div><b>${x[1]}</b><small>${["工作负载类型", "GPU 与运行环境", "服务策略", "检查费用"][i]}</small></div></div>`).join("")}</div>`,
+    `<div class="steps">${[["1", "选择工作负载"], ["2", "配置计算与镜像"], ["3", "数据、网络与伸缩"], ["4", "确认并部署"]].map((x, i) => `<div data-step="${i + 1}" style="cursor:pointer" class="step ${c.step === i + 1 ? "active" : c.step > i + 1 ? "done" : ""}"><span class="step-num">${c.step > i + 1 ? "<i class='bi bi-check2-circle'></i>" : x[0]}</span><div><b>${x[1]}</b><small>${["工作负载类型", "GPU 与运行环境", "服务策略", "检查费用"][i]}</small></div></div>`).join("")}</div>`,
     `<div class="layout-wide-side"><div>`,
     c.step === 1
       ? `<div class="card card-pad mb16">${section("选择 AI 工作负载")}<div class="callout mb16">GPU 云优先让用户选择“要完成什么任务”，再由平台编排 GPU、镜像、数据、网络和弹性策略。请在上方选择工作负载类型，或点击“下一步”。</div><div class="grid cols-2">${[["开发环境", "适合 Notebook、实验与调试，支持持久化工作卷"], ["在线推理", "适合生产 API，提供自动扩缩容与请求分析"], ["训练作业", "适合批处理、训练队列、Checkpoint 与重试"], ["分布式集群", "适合多机并行训练与高速网络互联"]].map((x) => `<div class="option"><b>${x[0]}</b><p>${x[1]}</p></div>`).join("")}</div></div>`
@@ -92,7 +92,7 @@ export default async function createPage(S) {
       : "",
     c.step === 3 ? (c.mode === "workspace" ? workspaceForm(c) : c.mode === "endpoint" ? endpointForm(c) : c.mode === "job" ? jobForm(c) : clusterForm(c)) : "",
     c.step === 4
-      ? `<div class="card card-pad">${section("部署前检查")}<div class="grid cols-3"><div class="check-pill">✓ 镜像兼容性检查</div><div class="check-pill">✓ 区域资源预检查</div><div class="check-pill">✓ 预算与配额预检查</div></div><div class="callout warn mt16">部署将由服务端 /api/workloads/deploy 处理，写入服务端状态并产生事件；不会调用真实云平台 API。</div></div>`
+      ? `<div class="card card-pad">${section("部署前检查")}<div class="grid cols-3"><div class="check-pill"><i class='bi bi-check2-circle'></i> 镜像兼容性检查</div><div class="check-pill"><i class='bi bi-check2-circle'></i> 区域资源预检查</div><div class="check-pill"><i class='bi bi-check2-circle'></i> 预算与配额预检查</div></div><div class="callout warn mt16">部署将由服务端 /api/workloads/deploy 处理，写入服务端状态并产生事件；不会调用真实云平台 API。</div></div>`
       : "",
     `</div>`,
     `<div class="card card-pad sticky">${section("部署配置清单", `<a href="javascript:void(0)" data-act="reset-create">重置</a>`)}`,

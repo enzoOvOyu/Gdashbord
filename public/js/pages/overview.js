@@ -8,17 +8,17 @@ export default async function overview(S) {
   const monthCost = ov.metrics.monthCost;
   const runningGpus = (S.instances || []).filter((x) => x.status === "running").reduce((a, x) => a + (x.count || 1), 0);
   const gpuUtil = Math.round(m.primary[m.primary.length - 1] || 0);
-  const billColors = ["#2866f6", "#10b9b0", "#8c6ef0", "#f6a24b"];
+  const billColors = ["#ff6000", "#f9a825", "#34383b", "#ffcc32"];
 
   return [
     header("云上 AI 工作台", "从 GPU 开发到训练与推理：统一查看工作负载、服务健康、资源消耗与成本。",
       btn("＋ 创建工作负载", "go-create", "primary") + btn("查看使用指南", "about")),
-    `<div class="banner mb16"><div><div style="font-size:10px;letter-spacing:1.8px;opacity:.8;margin-bottom:7px">AI WORKLOADS · UNIFIED CLOUD</div><h2>让 GPU 算力真正变成 AI 生产力</h2><p>选择开发工作空间、训练任务或推理 Endpoint，按工作负载弹性分配算力。<br>支持模型与数据复用、自动伸缩、服务级监控及成本归因。</p></div>${btn("⚡ 部署模型服务", "go-endpoint", "primary")}</div>`,
+    `<div class="banner mb16"><div><div style="font-size:10px;letter-spacing:1.8px;opacity:.8;margin-bottom:7px">RUNSUN CLOUD · THE GPU CLOUD</div><h2>为 AI 工作负载量身定制的 NVIDIA GPU 算力</h2><p>选择开发工作空间、训练任务或推理 Endpoint，按工作负载弹性分配算力。<br>支持模型与数据复用、自动伸缩、服务级监控及成本归因。</p></div>${btn("<i class='bi bi-lightning-charge-fill'></i> 部署模型服务", "go-endpoint", "primary")}</div>`,
     `<div class="grid cols-4 mb16 kpi-row">`,
-    metric("本月云资源消费", money(monthCost), "预算使用率 " + Math.round((monthCost / (ov.budget || 10000)) * 100) + "%", "◉", "↓ 8.6%", "hero"),
-    metric("活跃工作空间", ov.metrics.workspaces, "GPU Pod / Workspace", "▤", "↗ 12%"),
-    metric("在线推理服务", ov.metrics.endpoints, "可用 Endpoint / " + (S.endpoints || []).length, "⚡", "99.95% 可用"),
-    metric("训练任务成功率", ov.metrics.jobSuccessRate, "近 7 天 · 128 个任务", "⌘", "↗ 2.4%"),
+    metric("本月云资源消费", money(monthCost), "预算使用率 " + Math.round((monthCost / (ov.budget || 10000)) * 100) + "%", "<i class='bi bi-cash-stack'></i>", "↓ 8.6%", "hero"),
+    metric("活跃工作空间", ov.metrics.workspaces, "GPU Pod / Workspace", "<i class='bi bi-hdd-stack'></i>", "↗ 12%"),
+    metric("在线推理服务", ov.metrics.endpoints, "可用 Endpoint / " + (S.endpoints || []).length, "<i class='bi bi-lightning-charge-fill'></i>", "99.95% 可用"),
+    metric("训练任务成功率", ov.metrics.jobSuccessRate, "近 7 天 · 128 个任务", "<i class='bi bi-terminal'></i>", "↗ 2.4%"),
     `</div>`,
     `<div class="status-strip mb16">`,
     `<div><span>服务可用性</span><b>99.95% <span class="pill green sm"><i class="dot"></i>正常</span></b></div>`,
@@ -28,14 +28,14 @@ export default async function overview(S) {
     `<div><span>账户余额</span><b>${money(ov.balance || 0)}</b></div>`,
     `</div>`,
     `<div class="grid cols-3 mb16">`,
-    `<div class="card quick-card" data-nav="create" data-mode="workspace"><div class="quick-icon">⌘</div><div><h3>GPU 开发工作空间 →</h3><p>PyTorch / Jupyter / VS Code / SSH<br>持久化数据卷，按需启动与自动关机</p></div></div>`,
-    `<div class="card quick-card" data-nav="create" data-mode="job"><div class="quick-icon" style="background:#f1edff;color:#815ce9">▦</div><div><h3>提交训练 / 批处理任务 →</h3><p>任务队列、断点续训、分布式集群<br>数据集挂载与产物管理</p></div></div>`,
-    `<div class="card quick-card" data-nav="create" data-mode="endpoint"><div class="quick-icon" style="background:#e6fbf5;color:#0e9e85">⚡</div><div><h3>部署模型推理 Endpoint →</h3><p>vLLM / SGLang · OpenAI 兼容 API<br>自动扩缩容、请求监控与版本管理</p></div></div>`,
+    `<div class="card quick-card" data-nav="create" data-mode="workspace"><div class="quick-icon"><i class='bi bi-terminal'></i></div><div><h3>GPU 开发工作空间 →</h3><p>PyTorch / Jupyter / VS Code / SSH<br>持久化数据卷，按需启动与自动关机</p></div></div>`,
+    `<div class="card quick-card" data-nav="create" data-mode="job"><div class="quick-icon" style="background:#f1edff;color:#815ce9"><i class='bi bi-cpu'></i></div><div><h3>提交训练 / 批处理任务 →</h3><p>任务队列、断点续训、分布式集群<br>数据集挂载与产物管理</p></div></div>`,
+    `<div class="card quick-card" data-nav="create" data-mode="endpoint"><div class="quick-icon" style="background:#e6fbf5;color:#0e9e85"><i class='bi bi-lightning-charge-fill'></i></div><div><h3>部署模型推理 Endpoint →</h3><p>vLLM / SGLang · OpenAI 兼容 API<br>自动扩缩容、请求监控与版本管理</p></div></div>`,
     `</div>`,
     `<div class="split-65 mb16">`,
     `<div class="card card-pad">${section("云资源与调用趋势", segmented([["7d", "近7天"], ["30d", "近30天"]], S.overviewRange, "overviewRange"))}`,
-    chart(m.primary, { color: "#2866f6", second: m.secondary, color2: "#10b9b0", height: 220, startText: "起始", endText: "现在" }),
-    `<div class="flex small muted"><span style="color:#2866f6">● GPU 使用率</span><span style="color:#10b9b0">● Endpoint 请求量（归一化）</span><span style="margin-left:auto">数据来自 /api/monitor/metrics</span></div></div>`,
+    chart(m.primary, { second: m.secondary, height: 220, startText: "起始", endText: "现在" }),
+    `<div class="flex small muted"><span class="blue">● GPU 使用率</span><span class="purple">● Endpoint 请求量（归一化）</span><span style="margin-left:auto">数据来自 /api/monitor/metrics</span></div></div>`,
     `<div class="card card-pad">${section("成本结构", `<a data-nav="billing" href="javascript:void(0)">查看费用 →</a>`)}`,
     `<div class="flex" style="gap:18px;margin-top:15px"><div class="donut"><div class="donut-inner">${money(monthCost)}<small>本月消费</small></div></div>`,
     `<div class="legend" style="flex:1">${ov.bills.map((b, i) => `<div class="legend-item"><span><i style="background:${billColors[i]}"></i>${esc(b.name)}</span><b>${b.pct}%</b></div>`).join("")}</div></div>`,

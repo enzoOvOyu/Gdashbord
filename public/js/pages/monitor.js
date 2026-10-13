@@ -26,8 +26,8 @@ export default async function monitorPage(S) {
       ? [
           `<div class="grid cols-3 mb16">`,
           metric("活跃告警", events.filter((e) => e.level === "warning").length, "等待处理", "!", ""),
-          metric("已配置规则", "8", "GPU / API / Job", "▤", ""),
-          metric("SLO 达标率", "99.95%", "近 30 天", "✓", ""),
+          metric("已配置规则", "8", "GPU / API / Job", "<i class='bi bi-hdd-stack'></i>", ""),
+          metric("SLO 达标率", "99.95%", "近 30 天", "<i class='bi bi-check2-circle'></i>", ""),
           `</div>`,
           `<div class="card card-pad">${section("告警与事件流", btn("新增告警规则", "new-alert", "sm primary"))}`,
           eventsTable(events),
@@ -35,10 +35,10 @@ export default async function monitorPage(S) {
         ].join("")
       : [
           `<div class="grid cols-4 mb16">`,
-          metric(t === "inference" ? "请求吞吐" : "GPU 利用率", v[0], "实时趋势", "▦", "↗ 8.2%"),
-          metric(t === "inference" ? "p95 延迟" : t === "jobs" ? "训练 Loss" : "GPU 显存占用", v[1], "窗口内平均", "◈", ""),
-          metric(t === "inference" ? "错误率" : t === "jobs" ? "已分配 GPU" : "CPU 利用率", v[2], "监控采样", "⌘", ""),
-          metric(t === "inference" ? "活跃副本" : t === "jobs" ? "运行时长" : "网络吞吐", v[3], "当前状态", "⇄", ""),
+          metric(t === "inference" ? "请求吞吐" : "GPU 利用率", v[0], "实时趋势", "<i class='bi bi-cpu'></i>", "↗ 8.2%"),
+          metric(t === "inference" ? "p95 延迟" : t === "jobs" ? "训练 Loss" : "GPU 显存占用", v[1], "窗口内平均", "<i class='bi bi-box-seam'></i>", ""),
+          metric(t === "inference" ? "错误率" : t === "jobs" ? "已分配 GPU" : "CPU 利用率", v[2], "监控采样", "<i class='bi bi-terminal'></i>", ""),
+          metric(t === "inference" ? "活跃副本" : t === "jobs" ? "运行时长" : "网络吞吐", v[3], "当前状态", "<i class='bi bi-arrow-left-right'></i>", ""),
           `</div>`,
           `<div class="grid cols-2 mb16">`,
           `<div class="card card-pad">${section(t === "inference" ? "QPS / 请求量" : t === "jobs" ? "训练 Loss 曲线" : "GPU 利用率", `<span class="pill blue">LIVE</span>`)}${chart(m.primary, { height: 225 })}</div>`,

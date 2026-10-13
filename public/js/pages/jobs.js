@@ -14,10 +14,10 @@ export default async function jobsPage(S) {
     S.jobTab === "jobs"
       ? [
           `<div class="grid cols-4 mb16 kpi-row">`,
-          metric("运行中任务", res.running, "分配中的 GPU Job", "▷", "", "hero"),
-          metric("排队任务", res.queued, "等待资源调度", "◷", ""),
-          metric("成功率", "96.8%", "近 7 天", "✓", ""),
-          metric("训练 GPU 时", "1,280 h", "近 30 天", "▦", ""),
+          metric("运行中任务", res.running, "分配中的 GPU Job", "<i class='bi bi-play-circle'></i>", "", "hero"),
+          metric("排队任务", res.queued, "等待资源调度", "<i class='bi bi-clock-history'></i>", ""),
+          metric("成功率", "96.8%", "近 7 天", "<i class='bi bi-check2-circle'></i>", ""),
+          metric("训练 GPU 时", "1,280 h", "近 30 天", "<i class='bi bi-cpu'></i>", ""),
           `</div>`,
           `<div class="layout-wide-side">`,
           `<div class="card"><div class="table-wrap"><table><thead><tr><th>任务 / 类型</th><th>GPU 资源</th><th>数据集</th><th>状态</th><th>进度</th><th>已运行</th><th>操作</th></tr></thead><tbody>`,
@@ -30,9 +30,9 @@ export default async function jobsPage(S) {
         ].join("")
       : [
           `<div class="grid cols-3 mb16 kpi-row">`,
-          metric("GPU 集群", clusters.length, "独立集群", "◈", ""),
-          metric("总 GPU 卡数", clusters.reduce((a, c) => a + c.count, 0), "多节点资源池", "▦", "", "hero"),
-          metric("高速网络", "400G IB", "RDMA / NCCL 优化", "⇄", ""),
+          metric("GPU 集群", clusters.length, "独立集群", "<i class='bi bi-box-seam'></i>", ""),
+          metric("总 GPU 卡数", clusters.reduce((a, c) => a + c.count, 0), "多节点资源池", "<i class='bi bi-cpu'></i>", "", "hero"),
+          metric("高速网络", "400G IB", "RDMA / NCCL 优化", "<i class='bi bi-arrow-left-right'></i>", ""),
           `</div>`,
           `<div class="grid cols-2">`,
           clusters.map((c) => `<div class="card card-pad">${section(esc(c.name), status(c.status))}<div class="chiprow mb16"><span class="tag">${esc(c.scheduler)}</span><span class="tag">${esc(c.network)}</span><span class="tag">${esc(c.gpu)}</span></div><div class="grid cols-3"><div class="stat"><span>节点数</span><b>${c.nodes}</b></div><div class="stat"><span>GPU 总数</span><b>${c.count}</b></div><div class="stat"><span>利用率</span><b>${c.util}%</b></div></div><div class="progress mb16"><span style="width:${c.util}%"></span></div><div class="between"><span class="small muted">节点拓扑 · 调度器 · 共享卷</span>${btn("查看拓扑", "cluster:" + c.id, "sm")}</div></div>`).join(""),

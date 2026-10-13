@@ -1,58 +1,75 @@
 /* ==========================================================================
-   Design Tokens — Cloud Console Light
-   统一颜色、间距、圆角、阴影、字体、层级、动效
-   参考：Vercel / Railway / shadcn-ui / Tremor
+   RunSun Cloud Design Tokens
+   取自 runsuncloud.com 真实计算样式（Playwright 渲染提取）：
+   - 品牌主色 #FF6000（logo 主色之一、CTA 按钮背景、强调文字）
+   - 品牌渐变 linear-gradient(125deg, #FF9900, #FF6000, #FFCC32, #FF6A48)
+   - 深灰 #333333（logo 主色之一）/ #222222（深色区块 home-runsun）
+   - 正文 #313233、次要文字 #626466、浅灰底 #F4F5F7
    ========================================================================== */
 :root {
-  /* Brand */
-  --brand: #2563eb;
-  --brand-hover: #1d4ed8;
-  --brand-active: #1e40af;
-  --brand-soft: #eff6ff;
-  --brand-border: #bfdbfe;
+  /* ---------- 品牌主色 ---------- */
+  --brand: #ff6000;
+  --brand-hover: #e65600;
+  --brand-active: #cc4d00;
+  --brand-soft: #fff5ef;
+  --brand-border: #ffd0b3;
+  --brand-ink: #8a3200;
 
-  /* Text */
-  --text: #0f172a;
-  --text-2: #64748b;
-  --text-3: #94a3b8;
-  --text-invert: #f8fafc;
+  /* ---------- 品牌渐变规则 ----------
+     rule-1 主渐变（品牌块 / 进度条 / Hero 强调）：125deg 四段暖色
+     rule-2 浅色渐变（Hero 卡片背景）：135deg 品牌橙极低饱和
+     rule-3 中性渐变（区块背景）：180deg 白 → #F4F5F7 */
+  --gradient-brand: linear-gradient(125deg, #ff9900 0%, #ff6000 45%, #ffcc32 78%, #ff6a48 100%);
+  --gradient-brand-soft: linear-gradient(135deg, #fff8f3 0%, #ffeede 100%);
+  --gradient-surface: linear-gradient(180deg, #ffffff 0%, #f4f5f7 100%);
 
-  /* Surfaces */
-  --bg: #f8fafc;
+  /* ---------- 辅助色 ---------- */
+  --accent-1: #ff9900;
+  --accent-2: #ffcc32;
+  --accent-3: #ff6a48;
+
+  /* ---------- 文本 ---------- */
+  --text: #313233;
+  --text-2: #626466;
+  --text-3: #8c8f92;
+  --text-invert: #f5f6f7;
+
+  /* ---------- 中性 / 表面 ---------- */
+  --bg: #f4f5f7;
   --surface: #ffffff;
-  --surface-2: #f1f5f9;
-  --surface-3: #f8fafc;
-  --border: #e2e8f0;
-  --border-strong: #cbd5e1;
+  --surface-2: #f4f5f7;
+  --surface-3: #fafbfc;
+  --border: #e4e6e8;
+  --border-strong: #cfd3d6;
 
-  /* Sidebar (dark) */
-  --sidebar: #111827;
-  --sidebar-hover: #1f2937;
-  --sidebar-active: #1e3a8a;
-  --sidebar-text: #9ca3af;
-  --sidebar-text-strong: #e5e7eb;
-  --sidebar-border: #1f2937;
+  /* ---------- 深色（侧栏沿用站点深色区块） ---------- */
+  --sidebar: #222222;
+  --sidebar-hover: #2e2e2e;
+  --sidebar-active: #ff6000;
+  --sidebar-text: #a6a8aa;
+  --sidebar-text-strong: #f0f1f2;
+  --sidebar-border: #333333;
 
-  /* Status */
-  --success: #16a34a;
-  --success-soft: #dcfce7;
-  --warning: #d97706;
-  --warning-soft: #fef3c7;
+  /* ---------- 语义状态（告警用黄、错误用红，与品牌橙区分） ---------- */
+  --success: #1a9e4b;
+  --success-soft: #e8f7ed;
+  --warning: #e8a80c;
+  --warning-soft: #fdf5e0;
   --error: #dc2626;
-  --error-soft: #fee2e2;
-  --info: #2563eb;
-  --info-soft: #dbeafe;
-  --neutral-soft: #f1f5f9;
+  --error-soft: #fdeceb;
+  --info: #ff6000;
+  --info-soft: #fff5ef;
+  --neutral-soft: #f0f1f3;
 
-  /* Chart */
-  --chart-1: #2563eb;
-  --chart-2: #8b5cf6;
-  --chart-3: #0ea5e9;
-  --chart-4: #f59e0b;
-  --chart-grid: #e2e8f0;
-  --chart-axis: #94a3b8;
+  /* ---------- 图表（品牌橙为主，深灰 / 琥珀为辅，避免彩虹色） ---------- */
+  --chart-1: #ff6000;
+  --chart-2: #f9a825;
+  --chart-3: #34383b;
+  --chart-4: #ffcc32;
+  --chart-grid: #eceff1;
+  --chart-axis: #98a0a6;
 
-  /* Spacing scale (base 8px) */
+  /* ---------- 间距阶梯（8px 基准） ---------- */
   --s-1: 4px;
   --s-2: 8px;
   --s-3: 12px;
@@ -62,23 +79,23 @@
   --s-7: 40px;
   --s-8: 48px;
 
-  /* Radius */
+  /* ---------- 圆角（站点按钮 4px，卡片沿用 10px） ---------- */
   --r-xs: 4px;
-  --r-sm: 6px;
-  --r-md: 8px;
+  --r-sm: 4px;
+  --r-md: 6px;
   --r-lg: 10px;
   --r-xl: 12px;
   --r-full: 999px;
 
-  /* Elevation — 轻微阴影，不使用厚重投影 */
-  --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.04);
-  --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
-  --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.08);
-  --shadow-lg: 0 12px 32px rgba(15, 23, 42, 0.14);
+  /* ---------- 阴影（轻微） ---------- */
+  --shadow-xs: 0 1px 2px rgba(49, 50, 51, 0.04);
+  --shadow-sm: 0 1px 3px rgba(49, 50, 51, 0.06), 0 1px 2px rgba(49, 50, 51, 0.04);
+  --shadow-md: 0 4px 12px rgba(49, 50, 51, 0.08);
+  --shadow-lg: 0 12px 32px rgba(49, 50, 51, 0.14);
 
-  /* Typography */
-  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
-    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+  /* ---------- 字体（站点使用系统字体栈，补充中文回退） ---------- */
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans",
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
   --fs-xs: 11px;
   --fs-sm: 12px;
@@ -89,17 +106,17 @@
   --fs-2xl: 26px;
   --fs-3xl: 32px;
 
-  /* Layout */
+  /* ---------- 布局 ---------- */
   --sidebar-w: 240px;
   --sidebar-w-collapsed: 64px;
   --header-h: 60px;
   --content-max: 1560px;
 
-  /* Motion */
+  /* ---------- 动效 ---------- */
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
   --dur: 140ms;
 
-  /* Z */
+  /* ---------- 层级 ---------- */
   --z-sticky: 20;
   --z-header: 30;
   --z-modal: 60;

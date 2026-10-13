@@ -37,7 +37,7 @@ export function toast(text, kind = "ok") {
 }
 
 export function modal(title, body, actions = "") {
-  $("#modal-root").innerHTML = `<div class="overlay" data-overlay="1"><div class="modal" role="dialog" aria-modal="true"><div class="modal-head"><h2>${title}</h2><button class="btn sm" data-act="close-modal">✕</button></div><div class="modal-body">${body}</div>${actions ? `<div class="modal-foot">${actions}</div>` : ""}</div></div>`;
+  $("#modal-root").innerHTML = `<div class="overlay" data-overlay="1"><div class="modal" role="dialog" aria-modal="true"><div class="modal-head"><h2>${title}</h2><button class="btn sm" data-act="close-modal"><i class='bi bi-x-lg'></i></button></div><div class="modal-body">${body}</div>${actions ? `<div class="modal-foot">${actions}</div>` : ""}</div></div>`;
 }
 
 export function closeModal() {
@@ -53,7 +53,7 @@ export function copy(text) {
 }
 
 export function header(title, sub, buttons = "") {
-  return `<div class="pagehead"><div><div class="eyebrow">GPU CLOUD / AI 平台控制台</div><h1>${title}</h1><p>${sub}</p></div><div class="head-actions">${buttons}</div></div>`;
+  return `<div class="pagehead"><div><div class="eyebrow">RUNSUN CLOUD / THE GPU CLOUD</div><h1>${title}</h1><p>${sub}</p></div><div class="head-actions">${buttons}</div></div>`;
 }
 
 export function metric(label, value, desc, icon = "◈", trend = "", cls = "") {
@@ -93,8 +93,8 @@ export function tabs(items, val, path) {
 }
 
 export function chart(data, options = {}) {
-  const color = options.color || "#2563eb";
-  const color2 = options.color2 || "#8b5cf6";
+  const color = options.color || "#ff6000";
+  const color2 = options.color2 || "#34383b";
   const second = options.second || null;
   const height = options.height || 190;
   const grid = options.grid || 4;
@@ -111,11 +111,11 @@ export function chart(data, options = {}) {
   const area = line(data) + " L " + xx(data.length - 1) + "," + (h - bottom) + " L " + pad + "," + (h - bottom) + " Z";
   const gridLines = Array.from({ length: grid + 1 }, (_, i) => {
     const y = top + (h - top - bottom) * (i / grid);
-    return `<line x1="${pad}" y1="${y}" x2="${w - pad}" y2="${y}" stroke="#e2e8f0" stroke-dasharray="3 4"/>`;
+    return `<line x1="${pad}" y1="${y}" x2="${w - pad}" y2="${y}" stroke="#eceff1" stroke-dasharray="3 4"/>`;
   }).join("");
   const gid = "g" + color.replace("#", "");
   const labels = showLabels
-    ? `<text x="${pad}" y="${h - 3}" fill="#94a3b8" font-size="11">${startText}</text><text x="${w - pad}" y="${h - 3}" fill="#94a3b8" font-size="11" text-anchor="end">${endText}</text>`
+    ? `<text x="${pad}" y="${h - 3}" fill="#98a0a6" font-size="11">${startText}</text><text x="${w - pad}" y="${h - 3}" fill="#98a0a6" font-size="11" text-anchor="end">${endText}</text>`
     : "";
   return [
     `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" class="chart" style="height:${height}px" role="img" aria-label="趋势图">`,
