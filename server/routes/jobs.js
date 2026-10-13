@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { get, save, pushEvent } from "../store.js";
 
+const EV = (zh, en) => ({ zh, en });
+
 export default function jobsRouter() {
   const r = Router();
   r.get("/", (req, res) => {
@@ -17,9 +19,9 @@ export default function jobsRouter() {
     const s = get();
     const j = s.jobs.find((x) => x.id === req.params.id);
     if (!j) return res.status(404).json({ error: "job not found" });
-    const copy = { ...j, id: "job-" + Date.now().toString().slice(-6), name: j.name + "-retry", status: "queued", progress: 0, duration: "—", cost: 0 };
+    const copy = { ...j, id: "job-" + Date.now().toString().slice(-6), name: j.name + "-retry", status: "queued", progress: 0, duration: { zh: "—", en: "—" }, cost: 0 };
     s.jobs.unshift(copy);
-    pushEvent("info", `已创建重试任务 ${copy.name}`);
+    pushEvent("info", EV(`已创建重试任务 ${copy.name}`, `Retry job ${copy.name} created`));
     save();
     res.json({ ok: true, job: copy });
   });
@@ -32,7 +34,7 @@ export default function jobsRouter() {
       ok: true,
       logs: [
         "[INFO] scheduler: job allocated to GPU pool",
-        "[INFO] image: pytorch:2.5-cuda12.4",
+        "[INFO] image: pytorch:2.6-cuda12.4",
         `[INFO] dataset: ${j.dataset} mounted`,
         "[INFO] torch.distributed initialized",
         "[INFO] epoch=1 train_loss=0.00142",

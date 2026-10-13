@@ -1,7 +1,8 @@
-// 入口：对齐原型 bootstrap / render() / runAction() / 事件委托
+// 入口：render() / runAction() / 事件委托（中英双语 + 管理端动作）
 import { S, loadUI, save, set, refreshDomain, refreshCatalog } from "./store.js";
 import { api } from "./api.js";
-import { $, esc, toast, modal, closeModal, copy, btn, status, money, gpu, skeleton } from "./ui.js";
+import { $, esc, toast, modal, closeModal, copy, btn, status, money, gpu, skeleton, t, L } from "./ui.js";
+import { getLang, setLang, toggleLang } from "./i18n.js";
 import { shell } from "./shell.js";
 import overview from "./pages/overview.js";
 import market from "./pages/market.js";
@@ -14,10 +15,12 @@ import security from "./pages/security.js";
 import monitor from "./pages/monitor.js";
 import billing from "./pages/billing.js";
 import kubernetes, { nodeDetail, podDetail, quotaModal } from "./pages/kubernetes.js";
+import admin from "./pages/admin.js";
 
-const pages = { overview, market, create: createPage, instances, endpoints, jobs, assets, security, kubernetes, monitor, billing };
+const pages = { overview, market, create: createPage, instances, endpoints, jobs, assets, security, kubernetes, monitor, billing, admin };
 
-const FOOTER = `<div class="footer-note">RunSun Cloud 控制台 · 高保真交互原型 V3.0 · 服务端提供 REST API 与状态持久化；所有资源、价格、域名、监控指标和操作均为模拟数据。</div>`;
+const B = (zh, en) => ({ zh, en });
+const FOOTER = () => `<div class="footer-note">RunSun Cloud · ${t("shell.slogan")} · ${t("common.demo")} · USD</div>`;
 
 function navigate(page) {
   S.page = page;
@@ -40,22 +43,24 @@ async function render() {
   try {
     const html = await pages[S.page](S);
     app.innerHTML = shell();
-    document.getElementById("page").innerHTML = html + FOOTER;
+    document.getElementById("page").innerHTML = html + FOOTER();
     lastRendered = S.page;
   } catch (e) {
-    document.getElementById("page").innerHTML = `<div class="empty">页面加载失败：${esc(e.message)}</div>` + FOOTER;
+    document.getElementById("page").innerHTML = `<div class="empty">${esc(t("common.demo"))}: ${esc(e.message)}</div>` + FOOTER();
     lastRendered = null;
   } finally {
     if (bar) bar.classList.remove("on");
   }
 }
 
-// 对齐原型 deploy()
 async function deploy() {
   const c = S.create;
   try {
     const r = await api.deploy(c);
-    toast(r.kind === "workspace" ? "工作空间已创建" : r.kind === "endpoint" ? "Endpoint 已部署" : r.kind === "job" ? "训练任务已提交" : "集群已创建");
+    toast(r.kind === "workspace" ? B("工作空间已创建", "Workspace created")
+      : r.kind === "endpoint" ? B("Endpoint 已部署", "Endpoint deployed")
+      : r.kind === "job" ? B("训练任务已提交", "Training job submitted")
+      : B("集群已创建", "Cluster created"));
     if (r.kind === "cluster") S.jobTab = "clusters";
     await refreshDomain();
     navigate(r.page);
@@ -68,25 +73,25 @@ async function instanceAction(action, id) {
   try {
     if (action === "delete-instance") {
       const x = (S.instances || []).find((i) => i.id === id);
-      modal("确认删除工作空间", `<p>删除 <b>${esc(x ? x.name : id)}</b> 将移除工作空间。此演示不会实际删除云资源。</p><div class="callout warn">生产系统需要明确区分实例删除与持久卷删除。</div>`,
-        btn("取消", "close-modal") + btn("确认删除", "confirm-delete:" + id, "danger"));
+      modal(B("确认删除工作空间", "Delete workspace"), `<p>${esc(L(B("删除", "Delete")))} <b>${esc(x ? x.name : id)}</b> ${esc(L(B("将移除工作空间。此演示不会实际删除云资源。", "will remove the workspace. This demo does not touch real cloud resources.")))}</p><div class="callout warn">${esc(L(B("生产系统需要明确区分实例删除与持久卷删除。", "Production systems must separate instance deletion from volume deletion.")))}</div>`,
+        btn(t("common.cancel"), "close-modal") + btn(B("确认删除", "Confirm delete"), "confirm-delete:" + id, "danger"));
       return;
     }
     const r = await api.instanceAction(id, action);
     if (action === "connect") {
-      modal("SSH / VS Code 远程连接", `<div class="callout mb16">以下为模拟连接信息，不存在真实服务器或服务地址。</div><div class="code">${esc(r.connect)}</div><div class="small muted mt16">GPU 云的开发体验应提供 SSH、Web Terminal、Jupyter 和 VS Code Remote 多种入口。</div>`,
-        btn("关闭", "close-modal") + btn("复制示例", "copy-connect:" + id));
+      modal(B("SSH / VS Code 远程连接", "SSH / VS Code remote"), `<div class="callout mb16">${esc(L(B("以下为模拟连接信息，不存在真实服务器或服务地址。", "Simulated connection info; no real server or address exists.")))}</div><div class="code">${esc(r.connect)}</div>`,
+        btn(t("common.close"), "close-modal") + btn(B("复制示例", "Copy sample"), "copy-connect:" + id));
       return;
     }
     if (action === "jupyter") {
-      modal("JupyterLab 访问", `<div class="callout mb16">以下为模拟地址。</div><div class="code">${esc(r.url)}</div>`, btn("关闭", "close-modal"));
+      modal("JupyterLab", `<div class="callout mb16">${esc(L(B("以下为模拟地址。", "Simulated URL.")))}</div><div class="code">${esc(r.url)}</div>`, btn(t("common.close"), "close-modal"));
       return;
     }
     if (action === "logs") {
-      modal("工作空间运行日志", `<div class="code">${esc(r.logs)}</div>`, btn("关闭", "close-modal"));
+      modal(B("工作空间运行日志", "Workspace logs"), `<div class="code">${esc(r.logs)}</div>`, btn(t("common.close"), "close-modal"));
       return;
     }
-    toast(action === "toggle-instance" ? "实例状态已更新" : "重启指令已提交");
+    toast(B("实例状态已更新", "Instance state updated"));
     await refreshDomain();
     render();
   } catch (e) {
@@ -97,13 +102,22 @@ async function instanceAction(action, id) {
 async function runAction(a) {
   if (a === "close-modal") return closeModal();
   if (a === "none") return;
+
+  if (a === "toggle-lang") {
+    toggleLang();
+    S.lang = getLang();
+    save();
+    await render();
+    return toast(getLang() === "zh" ? "已切换到中文" : "Switched to English");
+  }
+
   if (a === "toggle-sidebar") {
     S.sidebarCollapsed = !S.sidebarCollapsed;
     save();
     const el = document.querySelector(".app");
     if (el) el.classList.toggle("collapsed", !!S.sidebarCollapsed);
-    const t = document.querySelector('[data-act="toggle-sidebar"]');
-    if (t) t.title = S.sidebarCollapsed ? "展开侧边栏" : "折叠侧边栏";
+    const tg = document.querySelector('[data-act="toggle-sidebar"]');
+    if (tg) tg.title = S.sidebarCollapsed ? t("shell.expand") : t("shell.collapse");
     return;
   }
   if (a === "go-create") return navigate("create");
@@ -117,19 +131,138 @@ async function runAction(a) {
   if (a === "next-step") { S.create.step = Math.min(4, Number(S.create.step) + 1); save(); render(); return window.scrollTo({ top: 0, behavior: "instant" }); }
   if (a === "prev-step") { S.create.step = Math.max(1, Number(S.create.step) - 1); save(); render(); return window.scrollTo({ top: 0, behavior: "instant" }); }
   if (a === "deploy") return deploy();
-  if (a === "refresh") { await refreshDomain(); render(); return toast("资源列表已刷新"); }
-  // ===== Kubernetes GPU 集群（CKS / SUNK / Mission Control）=====
+  if (a === "refresh") { await refreshDomain(); render(); return toast(B("资源列表已刷新", "Resource list refreshed")); }
+
+  // ===== 部署中心：区域 / 规格两级联动 =====
+  if (a.startsWith("pick-region:")) {
+    const region = a.split(":")[1];
+    S.create.region = region;
+    // 若当前 GPU 在该区域无库存，自动切换到该区域有库存的最优型号
+    const gpus = window.__GPU || [];
+    const cur = gpus.find((g) => g.id === S.create.gpu);
+    if (!cur || !(cur.stock[region] > 0)) {
+      const alt = gpus.filter((g) => (g.stock[region] || 0) > 0).sort((x, y) => y.score - x.score)[0];
+      if (alt) S.create.gpu = alt.id;
+    }
+    save();
+    return render();
+  }
+  if (a.startsWith("pick-gpu:")) { S.create.gpu = a.split(":")[1]; save(); return render(); }
+  if (a.startsWith("pick-count:")) { S.create.count = Number(a.split(":")[1]); save(); return render(); }
+  if (a.startsWith("pick-price:")) { S.create.priceKind = a.split(":")[1]; save(); return render(); }
+
+  // ===== 模型目录 → 部署 =====
+  if (a.startsWith("deploy-model:")) {
+    const id = a.split(":")[1];
+    const groups = window.__MODEL_GROUPS || [];
+    const m = groups.flatMap((g) => g.models).find((x) => x.id === id);
+    if (!m) return;
+    S.create.mode = "endpoint";
+    S.create.step = 2;
+    S.create.modelId = m.id;
+    S.create.model = m.name;
+    S.create.engine = m.engines[0] === "Proxy" ? "vLLM" : m.engines[0];
+    S.create.name = m.id + "-endpoint";
+    save();
+    return navigate("create");
+  }
+  // 集群规格 → 创建集群
+  if (a.startsWith("create-sku:")) {
+    const id = a.split(":")[1];
+    const sku = (window.__CLUSTER_SKUS || []).find((x) => x.id === id);
+    if (!sku) return;
+    S.create.mode = "cluster";
+    S.create.step = 3;
+    S.create.gpu = sku.gpu;
+    S.create.nodes = sku.nodes;
+    S.create.count = sku.gpusPerNode;
+    S.create.name = sku.id + "-cluster";
+    save();
+    return navigate("create");
+  }
+  // 资产页 → 部署模型
+  if (a.startsWith("deploy-asset-model:")) {
+    const item = (S.assets.models || [])[Number(a.split(":")[1])];
+    if (!item) return;
+    S.create.mode = "endpoint";
+    S.create.step = 2;
+    S.create.model = item.name;
+    S.create.name = item.name.toLowerCase().replace(/[^a-z0-9-]/g, "-").slice(0, 24) + "-ep";
+    save();
+    return navigate("create");
+  }
+  if (a.startsWith("revoke-acl:")) return toast(B("演示环境不执行真实权限回收", "Demo does not revoke real permissions"));
+
+  // ===== 管理端动作 =====
+  if (a.startsWith("admin-quota:")) {
+    const id = a.split(":")[1];
+    const x = (S.admin?.tenants || []).find((y) => y.id === id);
+    modal(B("调整租户 GPU 配额", "Edit tenant GPU quota"), `<p><b>${esc(x ? x.name : id)}</b></p><div class="field"><label>GPU ${esc(t("ad.tenant.quota"))}</label><input id="admin-quota-input" type="number" min="0" value="${x ? x.gpuQuota : 0}"/></div>`,
+      btn(t("common.cancel"), "close-modal") + btn(t("common.save"), "confirm-admin-quota:" + id, "primary"));
+    return;
+  }
+  if (a.startsWith("confirm-admin-quota:")) {
+    const id = a.split(":")[1];
+    const v = Number(($("#admin-quota-input") || {}).value);
+    if (!Number.isFinite(v) || v < 0) return toast(B("配额无效", "Invalid quota"), "err");
+    try { await api.adminTenantQuota(id, v); closeModal(); await refreshDomain(); render(); return toast(B("配额已更新", "Quota updated")); } catch (e) { return toast(e.message, "err"); }
+  }
+  if (a.startsWith("admin-tenant-status:")) {
+    const [, id, st] = a.split(":");
+    try { await api.adminTenantStatus(id, st); await refreshDomain(); render(); return toast(B("租户状态已更新", "Tenant status updated")); } catch (e) { return toast(e.message, "err"); }
+  }
+  if (a.startsWith("admin-user-status:")) {
+    const [, id, st] = a.split(":");
+    try { await api.adminUserStatus(id, st); await refreshDomain(); render(); return toast(B("成员状态已更新", "Member status updated")); } catch (e) { return toast(e.message, "err"); }
+  }
+  if (a === "admin-invite") {
+    modal(B("邀请成员", "Invite member"),
+      `<div class="field"><label>${esc(t("common.name"))}</label><input id="invite-name" placeholder="Jane Doe"/></div>
+       <div class="field mt16"><label>Email</label><input id="invite-email" placeholder="jane@acme.com"/></div>
+       <div class="field mt16"><label>${esc(t("ad.user.role"))}</label><select id="invite-role"><option value="developer">${esc(t("ad.role.developer"))}</option><option value="admin">${esc(t("ad.role.admin"))}</option><option value="viewer">${esc(t("ad.role.viewer"))}</option><option value="billing">${esc(t("ad.role.billing"))}</option></select></div>`,
+      btn(t("common.cancel"), "close-modal") + btn(B("发送邀请", "Send invite"), "confirm-admin-invite", "primary"));
+    return;
+  }
+  if (a === "confirm-admin-invite") {
+    const name = (($("#invite-name") || {}).value || "").trim();
+    const email = (($("#invite-email") || {}).value || "").trim();
+    const role = ($("#invite-role") || {}).value || "developer";
+    if (!name || !email) return toast(B("请填写姓名与邮箱", "Name and email required"), "err");
+    try { await api.adminInvite({ name, email, role, tenant: S.adminTenant !== "all" ? S.adminTenant : undefined }); closeModal(); await refreshDomain(); render(); return toast(B("邀请已发送", "Invitation sent")); } catch (e) { return toast(e.message, "err"); }
+  }
+  if (a === "admin-new-tenant") return toast(B("新建租户将在连接真实计费系统后开放", "Tenant creation opens once billing is wired"));
+  if (a.startsWith("admin-price:")) {
+    const id = a.split(":")[1];
+    const field = (document.querySelector(`[data-price="${id}:price"]`) || {}).value;
+    if (field == null) return toast(B("价目输入未找到", "Price input not found"), "err");
+    try { await api.adminPrice(id, "price", Number(field)); await refreshDomain(); render(); return toast(B("价目已更新", "Price updated")); } catch (e) { return toast(e.message, "err"); }
+  }
+  if (a.startsWith("admin-resolve:")) {
+    try { await api.adminResolveTicket(a.split(":")[1]); await refreshDomain(); render(); return toast(B("工单已标记处理", "Ticket resolved")); } catch (e) { return toast(e.message, "err"); }
+  }
+  if (a === "admin-announce") {
+    modal(B("发布公告", "Publish announcement"), `<div class="field"><label>${esc(t("ad.ticket.title"))}</label><input id="announce-text" placeholder="${esc(getLang() === "zh" ? "例如：美东区域将于本周六进行网络维护" : "e.g. US-East network maintenance this Saturday")}"/></div>`,
+      btn(t("common.cancel"), "close-modal") + btn(B("发布", "Publish"), "confirm-admin-announce", "primary"));
+    return;
+  }
+  if (a === "confirm-admin-announce") {
+    const title = (($("#announce-text") || {}).value || "").trim();
+    if (!title) return toast(B("请填写公告内容", "Announcement text required"), "err");
+    try { await api.adminAnnounce({ title, level: "info" }); closeModal(); await refreshDomain(); render(); return toast(B("公告已发布", "Announcement published")); } catch (e) { return toast(e.message, "err"); }
+  }
+
+  // ===== Kubernetes =====
   if (a === "k8s-dispatch") {
     try {
       const r = await api.k8sDispatch();
       await refreshDomain();
       await render();
-      if (r.placed.length) toast("已放置 " + r.placed.length + " 个任务" + (r.blocked.length ? "；" + r.blocked.length + " 个仍阻塞" : ""));
-      else toast("无可调度任务：可调度 GPU 不足", "err");
+      if (r.placed.length) toast(B("已放置 " + r.placed.length + " 个任务", "Placed " + r.placed.length + " jobs") + (r.blocked.length ? B("；", "; ") + r.blocked.length + B(" 个仍阻塞", " still blocked") : ""));
+      else toast(B("无可调度任务：可调度 GPU 不足", "Nothing to schedule: not enough free GPUs"), "err");
     } catch (e) { toast(e.message, "err"); }
     return;
   }
-  if (a === "pools-scale") return toast("节点池扩容将在连接真实 CKS API 后开放");
+  if (a === "pools-scale") return toast(B("节点池扩容将在连接真实 CKS API 后开放", "Pool scaling opens with a real CKS API"));
   if (a.startsWith("node-cordon:") || a.startsWith("node-uncordon:") || a.startsWith("node-drain:") || a.startsWith("node-restore:") || a.startsWith("node-clear:")) {
     const parts = a.split(":");
     const act = parts[0].replace("node-", "");
@@ -138,7 +271,7 @@ async function runAction(a) {
       await api.k8sNodeAction(id, act === "clear" ? "clear-straggler" : act);
       await refreshDomain();
       await render();
-      toast(act === "cordon" ? "节点已封锁" : act === "uncordon" ? "节点已恢复调度" : act === "drain" ? "节点开始排空" : act === "restore" ? "节点修复完成" : "straggler 标记已清除");
+      toast(act === "cordon" ? B("节点已封锁", "Node cordoned") : act === "uncordon" ? B("节点已恢复调度", "Node uncordoned") : act === "drain" ? B("节点开始排空", "Node draining") : act === "restore" ? B("节点修复完成", "Node repaired") : B("straggler 标记已清除", "Straggler flag cleared"));
     } catch (e) { toast(e.message, "err"); }
     return;
   }
@@ -154,14 +287,14 @@ async function runAction(a) {
       closeModal();
       await refreshDomain();
       render();
-      toast("配额已更新");
+      toast(B("配额已更新", "Quota updated"));
     } catch (e) { toast(e.message, "err"); }
     return;
   }
   if (a.startsWith("quota:")) {
     const ns = a.split(":")[1];
     const q = (S.k8s || {}).quotas ? S.k8s.quotas.find((x) => x.ns === ns) : null;
-    if (q) quotaModal(q); else toast("配额信息未加载", "err");
+    if (q) quotaModal(q); else toast(B("配额信息未加载", "Quota not loaded"), "err");
     return;
   }
   if (a.startsWith("pod-restart:") || a.startsWith("pod-delete:") || a.startsWith("pod-preempt:")) {
@@ -173,7 +306,7 @@ async function runAction(a) {
       closeModal();
       await refreshDomain();
       await render();
-      toast(act === "restart" ? "工作负载已重启" : act === "preempt" ? "已抢占该任务" : "工作负载已删除");
+      toast(act === "restart" ? B("工作负载已重启", "Workload restarted") : act === "preempt" ? B("已抢占该任务", "Job preempted") : B("工作负载已删除", "Workload deleted"));
     } catch (e) { toast(e.message, "err"); }
     return;
   }
@@ -181,28 +314,26 @@ async function runAction(a) {
     try {
       const r = await api.k8sWorkloads("all", "all");
       const pod = r.pods.find((x) => x.id === a.split(":")[1]);
-      if (pod) podDetail(pod); else toast("工作负载不存在", "err");
+      if (pod) podDetail(pod); else toast(B("工作负载不存在", "Workload not found"), "err");
     } catch (e) { toast(e.message, "err"); }
     return;
   }
-  // K8S_GUARD
-
 
   if (a === "notifications") {
     const ev = S.events || [];
-    modal("通知中心", ev.map((e) => `<div style="padding:12px 0;border-bottom:1px solid #edf1f7">${status(e.level)} <b style="margin-left:9px">${esc(e.text)}</b><div class="small muted mt12">${esc(e.time)}</div></div>`).join(""), btn("关闭", "close-modal"));
+    modal(B("通知中心", "Notifications"), ev.map((e) => `<div style="padding:12px 0;border-bottom:1px solid #edf1f7">${status(e.level)} <b style="margin-left:9px">${esc(L(e.text))}</b><div class="small muted mt12">${esc(e.time)}</div></div>`).join(""), btn(t("common.close"), "close-modal"));
     return;
   }
   if (a === "about") {
-    modal("关于这套 RunSun Cloud 原型", `<p style="line-height:1.8">本原型参考 RunPod、Vast.ai、Modal、Lambda Cloud、CoreWeave、AutoDL、优云智算等公开产品能力，重新组织为“开发 / 训练 / 推理 / 数据 / 运营”一体化 GPU Cloud 控制台。</p><div class="callout mb16">前端为无构建 ES Module 架构，后端提供 REST API 与状态持久化，前后端真实联调。</div><div class="small muted">参考：docs.runpod.io · docs.vast.ai · modal.com/docs · docs.lambda.ai · autodl.com/docs</div>`, btn("关闭", "close-modal"));
+    modal(B("关于这套 RunSun Cloud 原型", "About this RunSun Cloud prototype"), `<p style="line-height:1.8">${esc(L(B("本原型参考 RunPod、Vast.ai、Modal、Lambda Cloud、CoreWeave、AutoDL、优云智算等公开产品能力，重新组织为“开发 / 训练 / 推理 / 数据 / 运营”一体化 GPU Cloud 控制台。", "This prototype references RunPod, Vast.ai, Modal, Lambda Cloud, CoreWeave, AutoDL and UCloud capabilities, reorganised into one GPU cloud console for dev / training / inference / data / ops.")))}</p><div class="callout mb16">${esc(L(B("前端为无构建 ES Module 架构，后端提供 REST API 与状态持久化，前后端真实联调。区域覆盖日本 / 泰国 / 美国，GPU 型号 H100 / H200 / B200 / B300 / GB300，金额以 USD 计价。", "No-build ES module frontend, REST API backend with persisted state. Regions: Japan / Thailand / USA. GPUs: H100 / H200 / B200 / B300 / GB300. All amounts in USD.")))}</div>`, btn(t("common.close"), "close-modal"));
     return;
   }
-  if (a === "batch-help") return toast("批量操作将在连接真实权限系统后开放");
+  if (a === "batch-help") return toast(B("批量操作将在连接真实权限系统后开放", "Bulk actions open once RBAC is wired"));
 
   if (a.startsWith("gpu:")) {
     const g = gpu(a.split(":")[1]);
-    modal(g.name + " · 资源详情", `<div class="grid cols-2"><div class="summary-line">显存 <b>${g.vram}GB</b></div><div class="summary-line">GPU 互联 <b>${esc(g.network)}</b></div><div class="summary-line">vCPU <b>${g.cpu} 核</b></div><div class="summary-line">内存 <b>${g.ram}GB</b></div><div class="summary-line">区域 <b>${esc(g.region)}</b></div><div class="summary-line">可用卡数 <b>${g.available}</b></div></div><div class="callout mt16">示例价格 ${money(g.price)}/卡·小时。支持 GPU 工作空间、训练任务与推理服务的不同交付方式。</div>`,
-      btn("取消", "close-modal") + btn("选择部署", "choose-gpu:" + g.id, "primary"));
+    modal(g.name + " · " + t("common.detail"), `<div class="grid cols-2"><div class="summary-line">VRAM <b>${g.vram}GB</b></div><div class="summary-line">${esc(t("mk.card.net"))} <b>${esc(g.network)}</b></div><div class="summary-line">vCPU <b>${g.cpu}</b></div><div class="summary-line">${esc(t("mk.card.cpu"))} <b>${g.ram} GB</b></div><div class="summary-line">${esc(t("cr.gpu.meta.compute"))} <b>${(g.fp8 / 1000).toFixed(1)} PF</b></div><div class="summary-line">${esc(t("mk.card.stock"))} <b>${Object.values(g.stock || {}).reduce((x, y) => x + y, 0)}</b></div></div><div class="callout mt16">${esc(t("common.onDemand"))} ${money(g.price)} ${esc(t("common.perGpuHour"))} · ${esc(t("common.spot"))} ${money(g.spot)} · ${esc(t("common.reserved"))} ${money(g.reserved)}</div>`,
+      btn(t("common.cancel"), "close-modal") + btn(t("mk.card.deploy"), "choose-gpu:" + g.id, "primary"));
     return;
   }
   if (a.startsWith("choose-gpu:")) {
@@ -229,7 +360,7 @@ async function runAction(a) {
       closeModal();
       await refreshDomain();
       render();
-      toast("工作空间已从演示数据中删除");
+      toast(B("工作空间已从演示数据中删除", "Workspace removed from demo data"));
     } catch (e) { toast(e.message, "err"); }
     return;
   }
@@ -246,13 +377,13 @@ async function runAction(a) {
   }
   if (a === "run-playground") {
     try {
-      const txt = ($("#playground-input") || {}).value || "你好";
+      const txt = ($("#playground-input") || {}).value || "Hello";
       S.endpointPlayground = txt;
       save();
       const r = await api.endpointAction(S.endpointSelected, { action: "playground", prompt: txt });
       const el = document.getElementById("playground-response");
       if (el) el.textContent = JSON.stringify(r.response, null, 2);
-      toast("模拟推理请求成功");
+      toast(B("模拟推理请求成功", "Simulated inference request succeeded"));
       await refreshDomain();
     } catch (e) { toast(e.message, "err"); }
     return;
@@ -260,20 +391,20 @@ async function runAction(a) {
   if (a.startsWith("scale:")) {
     const id = a.split(":")[1];
     const x = (S.endpoints || []).find((e) => e.id === id);
-    modal("调整 Endpoint 弹性副本", `<p>服务：<b>${esc(x ? x.name : id)}</b></p><div class="form-grid"><div class="field"><label>最小副本数</label><input id="scale-min" type="number" min="0" max="16" value="${x ? x.min : 0}"></div><div class="field"><label>最大副本数</label><input id="scale-max" type="number" min="1" max="32" value="${x ? x.max : 1}"></div></div><div class="callout mt16">最小副本数为 0 时，空闲可缩至零；新请求可能出现冷启动延迟。</div>`,
-      btn("取消", "close-modal") + btn("保存策略", "confirm-scale:" + id, "primary"));
+    modal(B("调整 Endpoint 弹性副本", "Edit endpoint scaling"), `<p>${esc(L(B("服务", "Service")))}：<b>${esc(x ? x.name : id)}</b></p><div class="form-grid"><div class="field"><label>${esc(t("cr.field.min"))}</label><input id="scale-min" type="number" min="0" max="16" value="${x ? x.min : 0}"></div><div class="field"><label>${esc(t("cr.field.max"))}</label><input id="scale-max" type="number" min="1" max="32" value="${x ? x.max : 1}"></div></div><div class="callout mt16">${esc(L(B("最小副本数为 0 时，空闲可缩至零；新请求可能出现冷启动延迟。", "With min replicas at 0 the service scales to zero when idle; cold starts may add latency.")))}</div>`,
+      btn(t("common.cancel"), "close-modal") + btn(B("保存策略", "Save policy"), "confirm-scale:" + id, "primary"));
     return;
   }
   if (a.startsWith("confirm-scale:")) {
     const id = a.split(":")[1];
     const min = Number(($("#scale-min") || {}).value), max = Number(($("#scale-max") || {}).value);
-    if (min < 0 || max < 1 || min > max) return toast("副本配置无效", "err");
+    if (min < 0 || max < 1 || min > max) return toast(B("副本配置无效", "Invalid replica config"), "err");
     try {
       await api.endpointAction(id, { action: "scale", min, max });
       closeModal();
       await refreshDomain();
       render();
-      toast("扩缩容策略已更新");
+      toast(B("扩缩容策略已更新", "Scaling policy updated"));
     } catch (e) { toast(e.message, "err"); }
     return;
   }
@@ -281,30 +412,30 @@ async function runAction(a) {
   if (a.startsWith("endpoint-logs:")) {
     try {
       const r = await api.endpointAction(a.split(":")[1], { action: "logs" });
-      modal("Endpoint 请求日志", `<div class="code">${esc(r.logs)}</div>`, btn("关闭", "close-modal"));
+      modal(B("Endpoint 请求日志", "Endpoint request log"), `<div class="code">${esc(r.logs)}</div>`, btn(t("common.close"), "close-modal"));
     } catch (e) { toast(e.message, "err"); }
     return;
   }
-  if (a === "rollback") return toast("已模拟回滚至上一版本");
+  if (a === "rollback") return toast(B("已模拟回滚至上一版本", "Simulated rollback to previous version"));
 
   if (a.startsWith("job:")) {
     const j = (S.jobs || []).find((x) => x.id === a.split(":")[1]);
     if (!j) return;
-    modal("训练任务 · " + esc(j.name), `<div class="grid cols-2">${[["状态", status(j.status)], ["GPU", j.gpu + " × " + j.count], ["数据集", j.dataset], ["运行时长", j.duration], ["训练进度", j.progress + "%"], ["费用估算", money(j.cost)]].map((x) => `<div class="summary-line"><span>${x[0]}</span><b>${x[1]}</b></div>`).join("")}</div><div class="subhead mt16">Checkpoint 进度</div><div class="progress"><span style="width:${j.progress}%"></span></div><div class="code mt16">[INFO] epoch=2 step=1680 loss=0.00012</div>`,
-      btn("关闭", "close-modal") + btn("查看日志", "job-logs:" + j.id));
+    modal(t("job.detail.title") + " · " + esc(j.name), `<div class="grid cols-2">${[[t("common.status"), status(j.status)], [t("common.gpu"), j.gpu + " × " + j.count + " × " + (j.nodes || 1)], [t("job.th.dataset"), j.dataset], [t("job.detail.runtime"), L(j.duration)], [t("job.detail.progress"), j.progress + "%"], [t("job.detail.cost"), money(j.cost || 0)]].map((x) => `<div class="summary-line"><span>${esc(L(x[0]))}</span><b>${x[1]}</b></div>`).join("")}</div><div class="subhead mt16">${esc(t("job.detail.ckpt"))}</div><div class="progress"><span style="width:${j.progress}%"></span></div><div class="code mt16">[INFO] epoch=2 step=1680 loss=0.00012</div>`,
+      btn(t("common.close"), "close-modal") + btn(t("job.btn.logs"), "job-logs:" + j.id));
     return;
   }
   if (a.startsWith("job-logs:")) {
     try {
       const r = await api.jobLogs(a.split(":")[1]);
-      modal("训练日志", `<div class="code">${esc(r.logs)}</div>`, btn("关闭", "close-modal"));
+      modal(t("job.btn.logs"), `<div class="code">${esc(r.logs)}</div>`, btn(t("common.close"), "close-modal"));
     } catch (e) { toast(e.message, "err"); }
     return;
   }
   if (a.startsWith("retry-job:")) {
     try {
       const r = await api.jobRetry(a.split(":")[1]);
-      toast("已创建重试任务 " + r.job.name);
+      toast(B("已创建重试任务 ", "Retry job created ") + r.job.name);
       S.jobTab = "jobs";
       save();
       await refreshDomain();
@@ -312,10 +443,10 @@ async function runAction(a) {
     } catch (e) { toast(e.message, "err"); }
     return;
   }
-  if (a.startsWith("cluster:")) {
+  if (a.startsWith("cluster-detail:") || a.startsWith("cluster:")) {
     const c = (S.clusters || []).find((x) => x.id === a.split(":")[1]);
     if (!c) return;
-    modal("集群拓扑 · " + esc(c.name), `<div class="callout mb16">调度器：${esc(c.scheduler)} · 网络：${esc(c.network)} · ${c.nodes} 个节点 / ${c.count} 张 GPU</div><div class="grid cols-2">${Array.from({ length: c.nodes }, (_, i) => `<div class="option selected"><b><i class='bi bi-graph-up'></i> GPU Node ${i + 1}</b><p>${esc(c.gpu)} × ${Math.round(c.count / c.nodes)}<br>状态：Ready · 共享存储已挂载</p></div>`).join("")}</div><div class="code mt16">squeue   // Slurm 任务队列示意</div>`, btn("关闭", "close-modal"));
+    modal(t("job.cluster.topology") + " · " + esc(c.name), `<div class="callout mb16">${esc(c.scheduler)} · ${esc(c.network)} · ${c.nodes} ${esc(t("job.cl.nodes"))} / ${c.count} GPU · ${esc(c.region)}</div><div class="grid cols-2">${Array.from({ length: c.nodes }, (_, i) => `<div class="option selected"><b><i class='bi bi-hdd-rack'></i> GPU Node ${i + 1}</b><p>${esc(c.gpu)} × ${Math.round(c.count / c.nodes)}<br>${esc(c.cpuPerNode || "—")} vCPU · ${esc(c.ramPerNode || "—")} GB RAM</p></div>`).join("")}</div><div class="callout mt16">${money(c.price || 0)} ${esc(t("common.perHour"))} · ${esc(c.storagePerNode || "—")} ${esc(L(B("每节点", "per node")))}</div>`, btn(t("common.close"), "close-modal"));
     return;
   }
 
@@ -324,18 +455,18 @@ async function runAction(a) {
     const tab = parts[1], i = Number(parts[2]);
     const item = (S.assets[tab] || [])[i];
     if (!item) return;
-    modal("资产详情 · " + esc(item.name), `<div class="grid cols-2">${[["名称", item.name], ["类别", item.type], ["容量", item.size], ["版本", item.version], ["来源", item.source], ["更新时间", item.date]].map((x) => `<div class="summary-line"><span>${x[0]}</span><b>${esc(x[1])}</b></div>`).join("")}</div><div class="subhead mt16">访问 / 挂载示例</div><div class="code">${tab === "volumes" ? "mount -t nfs storage.example.invalid:/volumes/" + item.name + " /mnt/data" : tab === "models" ? "model = " + item.name : tab === "datasets" ? "s3://datasets/" + item.name : "docker pull registry.example.invalid/" + item.name + ":latest"}</div>`, btn("关闭", "close-modal"));
+    modal(t("as.btn.detail") + " · " + esc(item.name), `<div class="grid cols-2">${[[t("common.name"), item.name], [t("common.type"), L(item.type || item.task)], [t("common.size"), item.size], [t("common.version"), item.version], [t("common.source"), item.source], [t("as.th.updated"), item.date]].map((x) => `<div class="summary-line"><span>${esc(L(x[0]))}</span><b>${esc(L(x[1]))}</b></div>`).join("")}</div><div class="subhead mt16">${esc(L(B("访问 / 挂载示例", "Access / mount sample")))}</div><div class="code">${tab === "volumes" ? "mount -t nfs storage.runsuncloud.com:/volumes/" + item.name + " /mnt/data" : tab === "models" ? "model = " + item.name : tab === "datasets" ? "s3://datasets/" + item.name : "docker pull registry.runsuncloud.com/" + item.name + ":latest"}</div>`, btn(t("common.close"), "close-modal"));
     return;
   }
   if (a === "new-asset") {
-    modal("登记资产", `<div class="field"><label>资产名称</label><input id="asset-name" placeholder="例如 my-model-v1"/></div><div class="mt16"><div class="field"><label>资产类型</label><select id="asset-type"><option value="models">模型</option><option value="datasets">数据集</option><option value="images">镜像</option><option value="volumes">存储卷</option></select></div></div>`,
-      btn("取消", "close-modal") + btn("登记资产", "confirm-asset", "primary"));
+    modal(B("登记资产", "Register asset"), `<div class="field"><label>${esc(t("common.name"))}</label><input id="asset-name" placeholder="my-model-v1"/></div><div class="mt16"><div class="field"><label>${esc(t("common.type"))}</label><select id="asset-type"><option value="models">${esc(t("as.tab.models"))}</option><option value="datasets">${esc(t("as.tab.datasets"))}</option><option value="images">${esc(t("as.tab.images"))}</option><option value="volumes">${esc(t("as.tab.volumes"))}</option></select></div></div>`,
+      btn(t("common.cancel"), "close-modal") + btn(B("登记资产", "Register asset"), "confirm-asset", "primary"));
     return;
   }
   if (a === "confirm-asset") {
     const name = (($("#asset-name") || {}).value || "").trim();
     const tab = ($("#asset-type") || {}).value || "models";
-    if (!name) return toast("请输入资产名称", "err");
+    if (!name) return toast(B("请输入资产名称", "Asset name required"), "err");
     try {
       await api.createAsset(name, tab);
       S.assetTab = tab;
@@ -343,89 +474,89 @@ async function runAction(a) {
       closeModal();
       await refreshDomain();
       render();
-      toast("资产已登记");
+      toast(B("资产已登记", "Asset registered"));
     } catch (e) { toast(e.message, "err"); }
     return;
   }
 
   if (a === "new-key") {
-    modal("创建演示 API Key", `<div class="field"><label>密钥名称</label><input id="key-name" placeholder="例如 staging-inference"/></div><div class="callout mt16">实际密钥只应在服务端安全生成、一次性展示。原型不会生成可用凭证。</div>`,
-      btn("取消", "close-modal") + btn("创建", "confirm-key", "primary"));
+    modal(B("创建演示 API Key", "Create demo API key"), `<div class="field"><label>${esc(t("common.name"))}</label><input id="key-name" placeholder="staging-inference"/></div><div class="callout mt16">${esc(L(B("实际密钥只应在服务端安全生成、一次性展示。原型不会生成可用凭证。", "Real keys must be generated server-side and shown once. This prototype issues no usable credential.")))}</div>`,
+      btn(t("common.cancel"), "close-modal") + btn(B("创建", "Create"), "confirm-key", "primary"));
     return;
   }
   if (a === "confirm-key") {
     const name = (($("#key-name") || {}).value || "").trim();
-    if (!name) return toast("请输入密钥名称", "err");
-    try { await api.createKey(name); closeModal(); await refreshDomain(); render(); toast("演示 API Key 已创建"); } catch (e) { toast(e.message, "err"); }
+    if (!name) return toast(B("请输入密钥名称", "Key name required"), "err");
+    try { await api.createKey(name); closeModal(); await refreshDomain(); render(); toast(B("演示 API Key 已创建", "Demo API key created")); } catch (e) { toast(e.message, "err"); }
     return;
   }
   if (a.startsWith("revoke-key:")) {
-    try { await api.revokeKey(a.split(":")[1]); await refreshDomain(); render(); toast("演示密钥已撤销"); } catch (e) { toast(e.message, "err"); }
+    try { await api.revokeKey(a.split(":")[1]); await refreshDomain(); render(); toast(B("演示密钥已撤销", "Demo key revoked")); } catch (e) { toast(e.message, "err"); }
     return;
   }
   if (a === "new-secret") {
-    modal("新增 Secret 元数据", `<div class="field"><label>环境变量名</label><input id="secret-name" placeholder="例如 HF_TOKEN"/></div><div class="callout mt16">本演示不接受 Secret 明文，也不在浏览器存储任何真实凭证。</div>`,
-      btn("取消", "close-modal") + btn("登记", "confirm-secret", "primary"));
+    modal(B("新增 Secret 元数据", "Add secret metadata"), `<div class="field"><label>${esc(L(B("环境变量名", "Environment variable")))}</label><input id="secret-name" placeholder="HF_TOKEN"/></div><div class="callout mt16">${esc(L(B("本演示不接受 Secret 明文，也不在浏览器存储任何真实凭证。", "This demo never accepts plaintext secrets nor stores real credentials in the browser.")))}</div>`,
+      btn(t("common.cancel"), "close-modal") + btn(B("登记", "Register"), "confirm-secret", "primary"));
     return;
   }
   if (a === "confirm-secret") {
     const name = (($("#secret-name") || {}).value || "").trim();
-    if (!name) return toast("请输入变量名", "err");
-    try { await api.createSecret(name); closeModal(); await refreshDomain(); render(); toast("Secret 元数据已登记"); } catch (e) { toast(e.message, "err"); }
+    if (!name) return toast(B("请输入变量名", "Variable name required"), "err");
+    try { await api.createSecret(name); closeModal(); await refreshDomain(); render(); toast(B("Secret 元数据已登记", "Secret metadata registered")); } catch (e) { toast(e.message, "err"); }
     return;
   }
   if (a.startsWith("secret:")) {
     const name = a.split(":")[1];
-    modal("Secret 使用说明", `<div class="code">环境注入：${esc(name)}=********</div><div class="callout mt16">真实密钥值必须由服务端加密存储，并通过权限控制注入运行容器。</div>`, btn("关闭", "close-modal"));
+    modal(B("Secret 使用说明", "Secret usage"), `<div class="code">${esc(name)}=********</div><div class="callout mt16">${esc(L(B("真实密钥值必须由服务端加密存储，并通过权限控制注入运行容器。", "Real secret values must be encrypted server-side and injected into containers under access control.")))}</div>`, btn(t("common.close"), "close-modal"));
     return;
   }
 
   if (a === "new-alert") {
-    modal("创建告警规则", `<div class="field"><label>规则名称</label><input id="alert-name" placeholder="例如 GPU 显存使用率过高"/></div><div class="form-grid mt16"><div class="field"><label>监控指标</label><select id="alert-metric"><option>GPU 利用率</option><option>GPU 显存占用</option><option>Endpoint p95 延迟</option><option>推理错误率</option></select></div><div class="field"><label>告警阈值</label><input id="alert-value" type="number" value="90" min="1"/></div></div>`,
-      btn("取消", "close-modal") + btn("保存规则", "confirm-alert", "primary"));
+    modal(B("创建告警规则", "Create alert rule"), `<div class="field"><label>${esc(t("common.name"))}</label><input id="alert-name" placeholder="${esc(getLang() === "zh" ? "GPU 显存使用率过高" : "GPU memory usage too high")}"/></div><div class="form-grid mt16"><div class="field"><label>${esc(t("mon.title"))}</label><select id="alert-metric"><option>GPU ${esc(t("ov.strip.util"))}</option><option>GPU ${esc(L(B("显存占用", "memory usage")))}</option><option>Endpoint p95</option><option>${esc(t("ep.metric.err"))}</option></select></div><div class="field"><label>${esc(L(B("告警阈值", "Threshold")))}</label><input id="alert-value" type="number" value="90" min="1"/></div></div>`,
+      btn(t("common.cancel"), "close-modal") + btn(B("保存规则", "Save rule"), "confirm-alert", "primary"));
     return;
   }
   if (a === "confirm-alert") {
     const name = (($("#alert-name") || {}).value || "").trim();
-    if (!name) return toast("请输入规则名称", "err");
+    if (!name) return toast(B("请输入规则名称", "Rule name required"), "err");
     try {
       await api.createAlert(name, ($("#alert-metric") || {}).value, ($("#alert-value") || {}).value);
       closeModal();
       await refreshDomain();
       render();
-      toast("告警规则已保存");
+      toast(B("告警规则已保存", "Alert rule saved"));
     } catch (e) { toast(e.message, "err"); }
     return;
   }
   if (a.startsWith("event:")) {
     const e = (S.events || [])[Number(a.split(":")[1])];
     if (!e) return;
-    modal("告警事件详情", `<div class="between">${status(e.level)}<span class="small muted">${esc(e.time)}</span></div><p style="line-height:1.7">${esc(e.text)}</p><div class="callout">建议检查相关 GPU 指标、服务日志和弹性策略。</div>`, btn("关闭", "close-modal"));
+    modal(B("告警事件详情", "Alert detail"), `<div class="between">${status(e.level)}<span class="small muted">${esc(e.time)}</span></div><p style="line-height:1.7">${esc(L(e.text))}</p><div class="callout">${esc(L(B("建议检查相关 GPU 指标、服务日志和弹性策略。", "Check related GPU metrics, service logs and scaling policies.")))}</div>`, btn(t("common.close"), "close-modal"));
     return;
   }
 
   if (a === "recharge") {
-    modal("模拟账户充值", `<div class="callout mb16">充值将调用服务端 /api/billing/recharge，仅修改演示余额。</div><div class="field"><label>模拟充值金额（元）</label><input id="recharge-amount" type="number" min="1" value="1000"/></div>`,
-      btn("取消", "close-modal") + btn("确认模拟充值", "confirm-recharge", "primary"));
+    modal(B("模拟账户充值", "Simulated recharge"), `<div class="callout mb16">${esc(L(B("充值将调用服务端 /api/billing/recharge，仅修改演示余额。", "Recharge calls /api/billing/recharge and only changes the demo balance.")))}</div><div class="field"><label>${esc(L(B("模拟充值金额（USD）", "Amount (USD)")))}</label><input id="recharge-amount" type="number" min="1" value="1000"/></div>`,
+      btn(t("common.cancel"), "close-modal") + btn(B("确认模拟充值", "Confirm recharge"), "confirm-recharge", "primary"));
     return;
   }
   if (a === "confirm-recharge") {
     const amount = Number(($("#recharge-amount") || {}).value);
-    if (!Number.isFinite(amount) || amount <= 0) return toast("金额必须大于 0", "err");
-    try { const r = await api.recharge(amount); closeModal(); await refreshDomain(); render(); toast("演示余额已更新：" + money(r.balance)); } catch (e) { toast(e.message, "err"); }
+    if (!Number.isFinite(amount) || amount <= 0) return toast(B("金额必须大于 0", "Amount must be greater than 0"), "err");
+    try { const r = await api.recharge(amount); closeModal(); await refreshDomain(); render(); toast(B("演示余额已更新：", "Demo balance updated: ") + money(r.balance)); } catch (e) { toast(e.message, "err"); }
     return;
   }
   if (a === "save-budget") {
     const value = Number(($("#budget-input") || {}).value);
-    if (!Number.isFinite(value) || value < 100) return toast("预算必须大于 100", "err");
-    try { await api.setBudget(value); await refreshDomain(); render(); toast("预算设置已保存"); } catch (e) { toast(e.message, "err"); }
+    if (!Number.isFinite(value) || value < 100) return toast(B("预算必须大于 100", "Budget must exceed 100"), "err");
+    try { await api.setBudget(value); await refreshDomain(); render(); toast(B("预算设置已保存", "Budget saved")); } catch (e) { toast(e.message, "err"); }
     return;
   }
 
-  toast("这是原型中的演示入口");
+  toast(B("这是原型中的演示入口", "Demo-only entry point"));
 }
 
-// 事件委托：对齐原型 document 监听
+// 事件委托
 document.addEventListener("click", (e) => {
   const over = e.target.closest("[data-overlay]");
   if (over && e.target === over) return closeModal();
@@ -443,12 +574,21 @@ document.addEventListener("click", (e) => {
   if (mode) { S.create.step = 2; S.create.mode = mode.dataset.modeSelect; S.create.name = "my-" + mode.dataset.modeSelect + "-workload"; save(); render(); return; }
   const im = e.target.closest("[data-image]");
   if (im) { S.create.image = im.dataset.image; save(); render(); return; }
-  const t = e.target.closest("button[data-set][data-value],a[data-set][data-value]");
-  if (t) { e.preventDefault(); set(t.dataset.set, t.dataset.value); render(); }
+  const t2 = e.target.closest("button[data-set][data-value],a[data-set][data-value]");
+  if (t2) { e.preventDefault(); set(t2.dataset.set, t2.dataset.value); render(); }
 });
 
 document.addEventListener("change", (e) => {
   const el = e.target;
+  // 管理端角色下拉
+  if (el.dataset && el.dataset.adminRole) {
+    api.adminUserRole(el.dataset.adminRole, el.value)
+      .then(() => refreshDomain())
+      .then(() => render())
+      .then(() => toast(B("成员角色已更新", "Member role updated")))
+      .catch((err) => toast(err.message, "err"));
+    return;
+  }
   if (el.dataset.check) {
     const p = el.dataset.check.split(".");
     S[p[0]][p[1]] = el.checked;
@@ -478,14 +618,17 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
-// 启动：加载 UI 态 → 目录 → 领域态 → 渲染
 async function boot() {
   loadUI();
+  setLang(S.lang || "zh");
   await refreshCatalog();
   window.__GPU = S.GPU;
   window.__IMAGES = S.IMAGES;
   window.__MODELS = S.MODELS;
+  window.__MODEL_GROUPS = S.MODEL_GROUPS;
+  window.__ENGINES = S.ENGINES;
   window.__REGIONS = S.REGIONS;
+  window.__CLUSTER_SKUS = S.CLUSTER_SKUS;
   await refreshDomain();
   await render();
 }

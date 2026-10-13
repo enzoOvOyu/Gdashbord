@@ -1,9 +1,11 @@
 // Kubernetes GPU 资源业务逻辑：节点运维、调度模拟、配额、机架拓扑、指标序列
 // 对齐 CoreWeave Mission Control 的运维动作语义：cordon / drain / remediate / straggler 检测
+// 事件流与指标文案均为 { zh, en } 双语结构
 import { pushEvent } from "../store.js";
 import { series } from "./workload.js";
 
 const P = (n) => Number(n) || 0;
+const EV = (zh, en) => ({ zh, en });
 
 // 集群总览
 export function k8sSummary(s) {
@@ -49,37 +51,37 @@ export function nodeAction(s, id, action) {
   if (action === "cordon") {
     n.status = "cordoned";
     n.taints = ["node.kubernetes.io/unschedulable:NoSchedule"];
-    pushEvent("warning", `节点 ${id} 已 cordon，停止接收新 Pod`);
+    pushEvent("warning", EV(`节点 ${id} 已 cordon，停止接收新 Pod`, `Node ${id} cordoned, no new pods`));
   } else if (action === "uncordon") {
     n.status = "ready";
-    n.taints = [];
-    pushEvent("success", `节点 ${id} 已 uncordon，恢复调度`);
+    n.taints = ["nvidia.com/gpu.product=" + n.gpu + ":NoSchedule"];
+    pushEvent("success", EV(`节点 ${id} 已 uncordon，恢复调度`, `Node ${id} uncordoned, scheduling resumed`));
   } else if (action === "drain") {
     n.status = "draining";
     const moved = k.pods.filter((p) => p.node === id && p.phase === "running");
-    moved.forEach((p) => { p.node = ""; p.phase = "pending"; p.reason = `节点 ${id} drain 触发重调度`; });
+    moved.forEach((p) => { p.node = ""; p.phase = "pending"; p.reason = EV(`节点 ${id} drain 触发重调度`, `Rescheduled by drain of ${id}`); });
     n.allocated = 0;
     n.pods = 0;
-    pushEvent("info", `节点 ${id} 开始 drain，驱逐 ${moved.length} 个 Pod`);
+    pushEvent("info", EV(`节点 ${id} 开始 drain，驱逐 ${moved.length} 个 Pod`, `Draining ${id}, evicting ${moved.length} pods`));
     return { ok: true, node: n, drained: moved.length };
   } else if (action === "remediate") {
     n.status = "remediation";
     n.health = "Fail";
-    pushEvent("warning", `Mission Control 已对 ${id} 触发自动节点修复`);
+    pushEvent("warning", EV(`Mission Control 已对 ${id} 触发自动节点修复`, `Mission Control triggered remediation on ${id}`));
   } else if (action === "restore") {
     n.status = "ready";
     n.health = "Pass";
     n.straggler = false;
     n.temp = 62;
-    pushEvent("success", `节点 ${id} 修复完成，重新加入调度`);
+    pushEvent("success", EV(`节点 ${id} 修复完成，重新加入调度`, `Node ${id} restored and schedulable`));
   } else if (action === "clear-straggler") {
     n.straggler = false;
     n.health = "Pass";
-    pushEvent("success", `节点 ${id} 的 straggler 标记已清除`);
+    pushEvent("success", EV(`节点 ${id} 的 straggler 标记已清除`, `Straggler flag cleared on ${id}`));
   } else if (action === "delete") {
     k.nodes = k.nodes.filter((x) => x.id !== id);
-    k.pods.forEach((p) => { if (p.node === id) { p.node = ""; p.phase = "pending"; p.reason = `节点 ${id} 已移除`; } });
-    pushEvent("warning", `节点 ${id} 已从集群移除`);
+    k.pods.forEach((p) => { if (p.node === id) { p.node = ""; p.phase = "pending"; p.reason = EV(`节点 ${id} 已移除`, `Node ${id} removed`); } });
+    pushEvent("warning", EV(`节点 ${id} 已从集群移除`, `Node ${id} removed from cluster`));
     return { ok: true, removed: id };
   } else {
     return { ok: false, error: "不支持的动作: " + action };
@@ -132,7 +134,7 @@ function freeByPreemption(k, gpuType, need, requester, cands) {
     if (n) { n.allocated = Math.max(0, n.allocated - v.gpuCount); n.pods = Math.max(0, n.pods - 1); }
     v.node = "";
     v.phase = "pending";
-    v.reason = `被 ${requester} 优先级任务抢占（Preemption）`;
+    v.reason = EV(`被 ${requester} 优先级任务抢占（Preemption）`, `Preempted by a ${requester} priority job`);
     v.gpuUtil = 0;
     k.preempted += 1;
     freed.push(v.name);
@@ -157,7 +159,10 @@ export function dispatch(s) {
     }
     if (!group) {
       const free = cands().reduce((a, n) => a + Math.max(0, n.gpus - n.allocated), 0);
-      p.reason = `0/${k.nodes.length} nodes are available: Insufficient nvidia.com/gpu（需 ${p.gpuCount}，${p.gpu} 可调度 ${free}）`;
+      p.reason = EV(
+        `0/${k.nodes.length} 节点可用：nvidia.com/gpu 不足（需 ${p.gpuCount}，${p.gpu} 可调度 ${free}）`,
+        `0/${k.nodes.length} nodes available: Insufficient nvidia.com/gpu (need ${p.gpuCount}, ${free} schedulable ${p.gpu})`
+      );
       blocked.push({ name: p.name, reason: p.reason });
       continue;
     }
@@ -178,20 +183,22 @@ export function dispatch(s) {
     p.phase = "running";
     p.reason = "";
     p.gpuUtil = 55 + Math.floor(Math.random() * 40);
-    p.age = "刚刚";
-    p.note = group.length > 1 ? `Gang 跨 ${group.length} 个节点（同拓扑域）` : "单节点放置";
+    p.age = EV("刚刚", "just now");
+    p.note = group.length > 1
+      ? EV(`Gang 跨 ${group.length} 个节点（同拓扑域）`, `Gang across ${group.length} nodes (same topology domain)`)
+      : EV("单节点放置", "Placed on a single node");
     placed.push({ name: p.name, node: p.node, gpus: p.gpuCount, nodes: group.length });
   }
 
   if (placed.length) {
     k.scheduled += placed.length;
-    pushEvent("success", `调度器已放置 ${placed.length} 个任务（${placed.reduce((a, x) => a + x.gpus, 0)} GPU）`);
+    pushEvent("success", EV(`调度器已放置 ${placed.length} 个任务（${placed.reduce((a, x) => a + x.gpus, 0)} GPU）`, `Scheduler placed ${placed.length} jobs (${placed.reduce((a, x) => a + x.gpus, 0)} GPUs)`));
   }
   if (preempted.length) {
-    pushEvent("warning", `${preempted.length} 个任务通过抢占获得 GPU`);
+    pushEvent("warning", EV(`${preempted.length} 个任务通过抢占获得 GPU`, `${preempted.length} jobs acquired GPUs via preemption`));
   }
   if (blocked.length) {
-    pushEvent("warning", `${blocked.length} 个任务仍阻塞：可调度 GPU 不足`);
+    pushEvent("warning", EV(`${blocked.length} 个任务仍阻塞：可调度 GPU 不足`, `${blocked.length} jobs still blocked: not enough schedulable GPUs`));
   }
   return { placed, blocked, preempted, summary: k8sSummary(s) };
 }
@@ -207,14 +214,14 @@ export function podAction(s, id, action) {
     p.phase = "running";
     p.reason = "";
     p.gpuUtil = 20 + Math.floor(Math.random() * 40);
-    pushEvent("info", `已重启 ${p.name}（第 ${p.restarts} 次）`);
+    pushEvent("info", EV(`已重启 ${p.name}（第 ${p.restarts} 次）`, `Restarted ${p.name} (${p.restarts}th)`));
   } else if (action === "delete") {
     if (p.node) {
       const n = k.nodes.find((x) => x.id === p.node);
       if (n) { n.allocated = Math.max(0, n.allocated - p.gpuCount); n.pods = Math.max(0, n.pods - 1); }
     }
     k.pods = k.pods.filter((x) => x.id !== id);
-    pushEvent("warning", `工作负载 ${p.name} 已删除并释放 ${p.gpuCount} GPU`);
+    pushEvent("warning", EV(`工作负载 ${p.name} 已删除并释放 ${p.gpuCount} GPU`, `Workload ${p.name} deleted, released ${p.gpuCount} GPUs`));
     return { ok: true, removed: id };
   } else if (action === "preempt") {
     if (p.node) {
@@ -223,9 +230,9 @@ export function podAction(s, id, action) {
     }
     p.node = "";
     p.phase = "pending";
-    p.reason = "被高优先级任务抢占（Preemption）";
+    p.reason = EV("被高优先级任务抢占（Preemption）", "Preempted by a higher-priority job");
     k.preempted += 1;
-    pushEvent("warning", `已抢占 ${p.name}，释放 ${p.gpuCount} GPU 给高优先级任务`);
+    pushEvent("warning", EV(`已抢占 ${p.name}，释放 ${p.gpuCount} GPU 给高优先级任务`, `Preempted ${p.name}, freed ${p.gpuCount} GPUs for high-priority jobs`));
   } else {
     return { ok: false, error: "不支持的动作: " + action };
   }
@@ -241,7 +248,7 @@ export function quotaSet(s, ns, field, value) {
   if (!["gpuLimit", "cpuLimit", "memLimit", "podLimit"].includes(field)) return { ok: false, error: "不支持的配额字段" };
   const old = q[field];
   q[field] = num;
-  pushEvent("info", `命名空间 ${ns} 的 ${field} 由 ${old} 调整为 ${num}`);
+  pushEvent("info", EV(`命名空间 ${ns} 的 ${field} 由 ${old} 调整为 ${num}`, `Namespace ${ns} ${field}: ${old} → ${num}`));
   return { ok: true, quota: q };
 }
 
@@ -261,17 +268,41 @@ export function topology(s) {
   return Object.values(map).sort((a, b) => a.cabinet.localeCompare(b.cabinet));
 }
 
-// 集群指标序列
+// 集群指标序列（values 为双语）
 export function k8sMetrics(tab = "gpu", range = "1h") {
   const n = range === "7d" ? 60 : range === "24h" ? 45 : 35;
   if (tab === "scheduler") {
-    return { primary: series(11, 42, 30, n), secondary: series(13, 12, 10, n), values: ["12 队列", "38m 等待", "128 已调度", "7 抢占"] };
+    return {
+      primary: series(11, 42, 30, n), secondary: series(13, 12, 10, n),
+      values: [
+        EV("12 队列", "12 queued"), EV("38m 等待", "38m wait"),
+        EV("128 已调度", "128 scheduled"), EV("7 抢占", "7 preempted"),
+      ],
+    };
   }
   if (tab === "network") {
-    return { primary: series(17, 320, 110, n), secondary: series(19, 120, 60, n), values: ["382 GB/s", "1.8 µs", "0.02% 丢包", "6 链路降级"] };
+    return {
+      primary: series(17, 320, 110, n), secondary: series(19, 120, 60, n),
+      values: [
+        EV("382 GB/s", "382 GB/s"), EV("1.8 µs", "1.8 µs"),
+        EV("0.02% 丢包", "0.02% loss"), EV("6 链路降级", "6 links degraded"),
+      ],
+    };
   }
   if (tab === "thermal") {
-    return { primary: series(23, 68, 12, n), secondary: series(29, 6400, 900, n), values: ["72℃ 均值", "86℃ 峰值", "6.4 kW/节点", "2 液冷异常"] };
+    return {
+      primary: series(23, 68, 12, n), secondary: series(29, 6400, 900, n),
+      values: [
+        EV("72℃ 均值", "72℃ avg"), EV("86℃ 峰值", "86℃ peak"),
+        EV("6.4 kW/节点", "6.4 kW/node"), EV("2 液冷异常", "2 liquid-cool alerts"),
+      ],
+    };
   }
-  return { primary: series(3, 88, 14, n), secondary: series(5, 76, 18, n), values: ["88% 利用率", "94.6% Goodput", "87.8h MTTF", "3 Straggler"] };
+  return {
+    primary: series(3, 88, 14, n), secondary: series(5, 76, 18, n),
+    values: [
+      EV("88% 利用率", "88% util"), EV("94.6% Goodput", "94.6% goodput"),
+      EV("87.8h MTTF", "87.8h MTTF"), EV("3 Straggler", "3 stragglers"),
+    ],
+  };
 }

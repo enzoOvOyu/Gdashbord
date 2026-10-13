@@ -5,7 +5,7 @@ import { fileURLToPath } from "url";
 import fs from "fs";
 import { config } from "../config.js";
 import { get, set, load, reset } from "./store.js";
-import { GPU, IMAGES, MODELS, REGIONS, NAV } from "./data/catalog.js";
+import { GPU, IMAGES, MODELS, REGIONS, NAV, MODEL_GROUPS, ENGINES, CLUSTER_SKUS, CURRENCY } from "./data/catalog.js";
 import overviewRouter from "./routes/overview.js";
 import marketRouter from "./routes/market.js";
 import workloadsRouter from "./routes/workloads.js";
@@ -16,13 +16,20 @@ import securityRouter from "./routes/security.js";
 import monitorRouter from "./routes/monitor.js";
 import billingRouter from "./routes/billing.js";
 import k8sRouter from "./routes/k8s.js";
+import adminRouter from "./routes/admin.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 app.use(express.json());
 
-// 目录与常量（对齐原型 GPU / IMAGES / MODELS）
-app.get("/api/catalog", (req, res) => res.json({ GPU, IMAGES, MODELS, REGIONS, NAV, appName: config.appName, storageKey: config.storageKey }));
+// 目录与常量（区域 / GPU 型号 / 模型分组 / 集群 SKU，统一 USD 计价）
+app.get("/api/catalog", (req, res) => res.json({
+  GPU, IMAGES, MODELS, REGIONS, NAV,
+  MODEL_GROUPS, ENGINES, CLUSTER_SKUS,
+  currency: CURRENCY,
+  appName: config.appName,
+  storageKey: config.storageKey,
+}));
 
 // 全量领域状态（对齐原型单一状态树 S）
 app.get("/api/state", (req, res) => res.json(get()));
@@ -45,6 +52,7 @@ app.use("/api/security", securityRouter());
 app.use("/api/monitor", monitorRouter());
 app.use("/api/billing", billingRouter());
 app.use("/api/k8s", k8sRouter());
+app.use("/api/admin", adminRouter());
 
 // 托管前端（无构建，对齐原型单文件 → 拆分为模块）
 app.use(express.static(config.publicDir));

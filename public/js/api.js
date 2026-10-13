@@ -1,4 +1,4 @@
-// 前后端联调层：对齐原型常量与动作，统一走 REST API
+// 前后端联调层：统一走 REST API
 const BASE = "/api";
 
 async function req(path, options = {}) {
@@ -23,6 +23,7 @@ export const api = {
 
   overview: () => req("/overview"),
   market: (params) => req("/market" + (params ? "?" + qs(params) : "")),
+  stock: (gpu, region) => req("/market/stock?" + qs({ gpu, region })),
   gpu: (id) => req("/market/" + id),
 
   workloads: () => req("/workloads"),
@@ -49,6 +50,26 @@ export const api = {
   createAlert: (name, metric, value) => req("/monitor/alerts", { method: "POST", body: { name, metric, value } }),
 
   billing: () => req("/billing"),
+  setBudget: (budget) => req("/billing/budget", { method: "POST", body: { budget } }),
+  recharge: (amount) => req("/billing/recharge", { method: "POST", body: { amount } }),
+  exportBill: () => "/api/billing/export",
+
+  // ===== 平台管理后台 =====
+  adminOverview: () => req("/admin/overview"),
+  adminTenants: () => req("/admin/tenants"),
+  adminCapacity: () => req("/admin/capacity"),
+  adminBilling: () => req("/admin/billing"),
+  adminOps: () => req("/admin/ops"),
+  adminClusterSkus: () => req("/admin/cluster-skus"),
+  adminTenantStatus: (id, status) => req("/admin/tenants/" + id + "/status", { method: "POST", body: { status } }),
+  adminTenantQuota: (id, quota) => req("/admin/tenants/" + id + "/quota", { method: "POST", body: { quota } }),
+  adminInvite: (payload) => req("/admin/users", { method: "POST", body: payload }),
+  adminUserRole: (id, role) => req("/admin/users/" + id + "/role", { method: "POST", body: { role } }),
+  adminUserStatus: (id, status) => req("/admin/users/" + id + "/status", { method: "POST", body: { status } }),
+  adminPrice: (id, field, value) => req("/admin/price", { method: "POST", body: { id, field, value } }),
+  adminResolveTicket: (id) => req("/admin/tickets/" + id + "/resolve", { method: "POST" }),
+  adminAnnounce: (payload) => req("/admin/announcements", { method: "POST", body: payload }),
+
   k8sSummary: () => req("/k8s/summary"),
   k8sNodes: (pool, status) => req("/k8s/nodes?" + qs({ pool, status })),
   k8sNode: (id) => req("/k8s/nodes/" + id),
@@ -62,8 +83,4 @@ export const api = {
   k8sTopology: () => req("/k8s/topology"),
   k8sMetrics: (tab, range) => req("/k8s/metrics?" + qs({ tab, range })),
   k8sEvents: () => req("/k8s/events"),
-
-  setBudget: (budget) => req("/billing/budget", { method: "POST", body: { budget } }),
-  recharge: (amount) => req("/billing/recharge", { method: "POST", body: { amount } }),
-  exportBill: () => "/api/billing/export",
 };

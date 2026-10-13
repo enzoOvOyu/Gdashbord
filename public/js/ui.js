@@ -1,43 +1,62 @@
-// UI 组件：严格对齐原型的渲染函数命名与结构
+// UI 组件：渲染函数集合（USD 计价 + 中英双语）
 import { S } from "./store.js";
+import { t, L, statusText } from "./i18n.js";
 
 export const $ = (sel) => document.querySelector(sel);
 
 const ESC_MAP = { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "’": "&#39;", "‘": "&#39;" };
 
+// 转义：若传入服务端 { zh, en } 双语对象，先按当前语言解析
 export function esc(s) {
-  return String(s ?? "").replace(/[&<>"’‘]/g, (c) => ESC_MAP[c]);
+  return String(L(s) ?? "").replace(/[&<>"’‘]/g, (c) => ESC_MAP[c]);
 }
 
-export function money(n) {
-  return "¥ " + Number(n).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+// 金额统一以美元（USD）计价
+export function money(n, digits = 2) {
+  const v = Number(n || 0);
+  return "$ " + v.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+}
+
+// 紧凑金额（用于大数 KPI）
+export function moneyShort(n) {
+  const v = Number(n || 0);
+  if (Math.abs(v) >= 1000000) return "$ " + (v / 1000000).toFixed(2) + "M";
+  if (Math.abs(v) >= 10000) return "$ " + (v / 1000).toFixed(1) + "K";
+  return money(v);
 }
 
 export function gpu(id) {
-  return (S.GPU || []).find((x) => x.id === id) || (S.GPU || [])[0] || { id: id, name: id, vram: 0, price: 0, network: "—" };
+  return (S.GPU || []).find((x) => x.id === id) || (S.GPU || [])[0] || { id: id, name: id, vram: 0, price: 0, network: "—", stock: {} };
 }
 
-const STATUS_MAP = {
-  running: ["运行中", "green"], stopped: ["已停止", "gray"], starting: ["启动中", "blue"], error: ["异常", "red"],
-  healthy: ["健康", "green"], "scaled-zero": ["已缩至零", "gray"], completed: ["已完成", "green"],
-  queued: ["排队中", "amber"], failed: ["失败", "red"], warning: ["告警", "amber"], success: ["成功", "green"], info: ["信息", "blue"],
+export function regionById(id) {
+  return (S.REGIONS || []).find((x) => x.id === id) || { id: id, name: { zh: id, en: id } };
+}
+
+const STATUS_COLOR = {
+  running: "green", stopped: "gray", starting: "blue", error: "red",
+  healthy: "green", "scaled-zero": "gray", completed: "green",
+  queued: "amber", failed: "red", warning: "amber", success: "green", info: "blue",
+  pending: "amber", provisioning: "blue", terminating: "gray",
+  active: "green", suspended: "gray", invited: "blue", resolved: "green",
+  open: "amber", degraded: "amber", maintenance: "blue",
 };
 
 export function status(st) {
-  const x = STATUS_MAP[st] || [st, "gray"];
-  return `<span class="pill ${x[1]}"><i class="dot"></i>${x[0]}</span>`;
+  const color = STATUS_COLOR[st] || "gray";
+  return `<span class="pill ${color}"><i class="dot"></i>${esc(statusText(st))}</span>`;
 }
 
 export function toast(text, kind = "ok") {
   const el = document.createElement("div");
   el.className = "toast " + kind;
-  el.textContent = text;
+  el.textContent = L(text);
   $("#toasts").appendChild(el);
   setTimeout(() => el.remove(), 3300);
 }
 
 export function modal(title, body, actions = "") {
-  $("#modal-root").innerHTML = `<div class="overlay" data-overlay="1"><div class="modal" role="dialog" aria-modal="true"><div class="modal-head"><h2>${title}</h2><button class="btn sm" data-act="close-modal"><i class='bi bi-x-lg'></i></button></div><div class="modal-body">${body}</div>${actions ? `<div class="modal-foot">${actions}</div>` : ""}</div></div>`;
+  $("#modal-root").innerHTML = `<div class="overlay" data-overlay="1"><div class="modal" role="dialog" aria-modal="true"><div class="modal-head"><h2>${esc(L(title))}</h2><button class="btn sm" data-act="close-modal"><i class='bi bi-x-lg'></i></button></div><div class="modal-body">${body}</div>${actions ? `<div class="modal-foot">${actions}</div>` : ""}</div></div>`;
 }
 
 export function closeModal() {
@@ -46,26 +65,26 @@ export function closeModal() {
 
 export function copy(text) {
   if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(text).then(() => toast("已复制到剪贴板")).catch(() => toast("请手动复制内容", "err"));
+    navigator.clipboard.writeText(text).then(() => toast(t("common.copy") + " ✓")).catch(() => toast({ zh: "请手动复制内容", en: "Please copy manually" }, "err"));
   } else {
-    modal("复制内容", `<div class="code">${esc(text)}</div>`, btn("关闭", "close-modal"));
+    modal({ zh: "复制内容", en: "Copy content" }, `<div class="code">${esc(text)}</div>`, btn(t("common.close"), "close-modal"));
   }
 }
 
 export function header(title, sub, buttons = "") {
-  return `<div class="pagehead"><div><div class="eyebrow">RUNSUN CLOUD / THE GPU CLOUD</div><h1>${title}</h1><p>${sub}</p></div><div class="head-actions">${buttons}</div></div>`;
+  return `<div class="pagehead"><div><div class="eyebrow">RUNSUN CLOUD / THE GPU CLOUD</div><h1>${esc(L(title))}</h1><p>${esc(L(sub))}</p></div><div class="head-actions">${buttons}</div></div>`;
 }
 
-export function metric(label, value, desc, icon = "◈", trend = "", cls = "") {
-  return `<div class="card metric ${cls}"><div class="metric-top"><span>${label}</span><span class="metric-icon">${icon}</span></div><div class="metric-value">${value}</div><div class="metric-bottom"><span>${desc}</span><span class="${/^\u2193/.test(String(trend)) ? "down" : "up"}">${trend}</span></div></div>`;
+export function metric(label, value, desc, icon = "<i class='bi bi-dot'></i>", trend = "", cls = "") {
+  return `<div class="card metric ${cls}"><div class="metric-top"><span>${esc(L(label))}</span><span class="metric-icon">${icon}</span></div><div class="metric-value">${value}</div><div class="metric-bottom"><span>${esc(L(desc))}</span><span class="${/^↓/.test(String(trend)) ? "down" : "up"}">${trend}</span></div></div>`;
 }
 
 export function section(title, right = "") {
-  return `<div class="section-title"><h2>${title}</h2>${right}</div>`;
+  return `<div class="section-title"><h2>${esc(L(title))}</h2>${right}</div>`;
 }
 
 export function field(label, control) {
-  return `<div class="field"><label>${label}</label>${control}</div>`;
+  return `<div class="field"><label>${esc(L(label))}</label>${control}</div>`;
 }
 
 export function input(value, path, type = "text", extra = "") {
@@ -73,7 +92,7 @@ export function input(value, path, type = "text", extra = "") {
 }
 
 export function opt(items, val) {
-  return items.map((it) => `<option value="${esc(it[0])}" ${String(it[0]) === String(val) ? "selected" : ""}>${esc(it[1])}</option>`).join("");
+  return items.map((it) => `<option value="${esc(it[0])}" ${String(it[0]) === String(val) ? "selected" : ""}>${esc(L(it[1]))}</option>`).join("");
 }
 
 export function select(items, val, path) {
@@ -81,15 +100,15 @@ export function select(items, val, path) {
 }
 
 export function btn(label, act, cls = "") {
-  return `<button class="btn ${cls}" data-act="${act}">${label}</button>`;
+  return `<button class="btn ${cls}" data-act="${act}">${L(label)}</button>`;
 }
 
 export function segmented(items, val, path) {
-  return `<div class="seg">${items.map((it) => `<button data-set="${path}" data-value="${esc(it[0])}" class="${String(it[0]) === String(val) ? "active" : ""}">${it[1]}</button>`).join("")}</div>`;
+  return `<div class="seg">${items.map((it) => `<button data-set="${path}" data-value="${esc(it[0])}" class="${String(it[0]) === String(val) ? "active" : ""}">${esc(L(it[1]))}</button>`).join("")}</div>`;
 }
 
 export function tabs(items, val, path) {
-  return `<div class="tabs">${items.map((it) => `<button class="tab ${String(it[0]) === String(val) ? "active" : ""}" data-set="${path}" data-value="${esc(it[0])}">${it[1]}</button>`).join("")}</div>`;
+  return `<div class="tabs">${items.map((it) => `<button class="tab ${String(it[0]) === String(val) ? "active" : ""}" data-set="${path}" data-value="${esc(it[0])}">${esc(L(it[1]))}</button>`).join("")}</div>`;
 }
 
 export function chart(data, options = {}) {
@@ -100,8 +119,8 @@ export function chart(data, options = {}) {
   const grid = options.grid || 4;
   const showLabels = options.labels !== false;
   const fill = options.fill !== false;
-  const startText = options.startText || "起始";
-  const endText = options.endText || "现在";
+  const startText = options.startText || t("ep.chart.start");
+  const endText = options.endText || t("ep.chart.end");
   const w = 700, h = height, pad = 16, top = 13, bottom = showLabels ? 22 : 10;
   const all = second ? data.concat(second) : data;
   const max = Math.max(1, ...all) * 1.18, min = 0;
@@ -115,10 +134,10 @@ export function chart(data, options = {}) {
   }).join("");
   const gid = "g" + color.replace("#", "");
   const labels = showLabels
-    ? `<text x="${pad}" y="${h - 3}" fill="#98a0a6" font-size="11">${startText}</text><text x="${w - pad}" y="${h - 3}" fill="#98a0a6" font-size="11" text-anchor="end">${endText}</text>`
+    ? `<text x="${pad}" y="${h - 3}" fill="#98a0a6" font-size="11">${esc(startText)}</text><text x="${w - pad}" y="${h - 3}" fill="#98a0a6" font-size="11" text-anchor="end">${esc(endText)}</text>`
     : "";
   return [
-    `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" class="chart" style="height:${height}px" role="img" aria-label="趋势图">`,
+    `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" class="chart" style="height:${height}px" role="img" aria-label="trend">`,
     `<defs><linearGradient id="${gid}" x1="0" x2="0" y1="0" y2="1"><stop stop-color="${color}" stop-opacity=".16"/><stop offset="1" stop-color="${color}" stop-opacity=".01"/></linearGradient></defs>`,
     gridLines,
     fill ? `<path d="${area}" fill="url(#${gid})"/>` : "",
@@ -129,7 +148,7 @@ export function chart(data, options = {}) {
   ].join("");
 }
 
-// 统一 Loading 骨架屏（对齐 Vercel / shadcn 的加载态）
+// 统一 Loading 骨架屏
 export function skeleton() {
   return [
     '<div class="skel">',
@@ -146,3 +165,5 @@ export function skeleton() {
 export function series(seed = 1, base = 50, amp = 20, n = 35) {
   return Array.from({ length: n }, (_, i) => Math.max(0, base + Math.sin(i * 0.55 + seed) * amp * 0.55 + Math.cos(i * 0.23 + seed) * amp * 0.45 + Math.sin(i * 2.1 + seed) * amp * 0.15));
 }
+
+export { t, L };

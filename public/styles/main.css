@@ -1221,3 +1221,177 @@ select {
 .kv-list { display: grid; gap: var(--s-2); }
 .kv-list > div { display: flex; align-items: flex-start; gap: 10px; font-size: var(--fs-sm); }
 .kv-list b { font-weight: 600; }
+
+/* ==========================================================================
+   V3.3 新增组件样式：部署中心区域/规格联动选择、模型目录、语言切换、价目表编辑
+   沿用既有设计令牌（8px 间距阶梯 / 10px 卡片圆角 / 品牌橙 #FF6000）
+   ========================================================================== */
+
+/* ---------- 部署中心 · 区域选择（RunPod 风格两级联动） ---------- */
+.region-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--s-3);
+}
+.region-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  text-align: left;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  cursor: pointer;
+  transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease), transform var(--dur) var(--ease);
+}
+.region-card:hover { border-color: var(--brand-border); box-shadow: var(--shadow-sm); }
+.region-card.selected {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 2px var(--brand-soft), var(--shadow-sm);
+  background: var(--gradient-brand-soft);
+}
+.rc-top { display: flex; align-items: center; gap: 8px; }
+.rc-top b { font-size: var(--fs-base); color: var(--text); flex: 1; min-width: 0; }
+.rc-flag {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 20px;
+  border-radius: var(--r-xs);
+  background: var(--neutral-soft);
+  color: var(--text-2);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: .3px;
+}
+.region-card.selected .rc-flag { background: var(--brand); color: #fff; }
+.rc-meta { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: var(--fs-xs); color: var(--text-2); }
+.rc-meta span { display: inline-flex; align-items: center; gap: 4px; }
+.rc-meta i { font-size: 11px; color: var(--text-3); }
+.rc-foot {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+}
+.rc-stock { font-size: var(--fs-md); font-weight: 700; color: var(--text); }
+.rc-stock small { font-weight: 400; font-size: var(--fs-xs); color: var(--text-3); margin-left: 3px; }
+.rc-price { font-size: var(--fs-md); font-weight: 700; color: var(--brand-ink); }
+.rc-price small { font-weight: 400; font-size: var(--fs-xs); color: var(--text-3); margin-left: 3px; }
+
+/* ---------- 部署中心 · GPU 规格选择 ---------- */
+.gpu-pick-list { display: flex; flex-direction: column; gap: var(--s-2); }
+.gpu-pick {
+  display: flex;
+  align-items: stretch;
+  gap: var(--s-4);
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+.gpu-pick:hover { border-color: var(--brand-border); background: var(--surface-3); }
+.gpu-pick.selected {
+  border-color: var(--brand);
+  background: var(--gradient-brand-soft);
+  box-shadow: 0 0 0 2px var(--brand-soft), var(--shadow-sm);
+}
+.gpu-pick.disabled { opacity: .5; cursor: not-allowed; }
+.gpu-pick.disabled:hover { border-color: var(--border); background: var(--surface); }
+.gp-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.gp-name { display: flex; align-items: center; gap: 8px; font-size: var(--fs-md); font-weight: 700; color: var(--text); }
+.gp-name .tag { font-weight: 500; }
+.gp-desc { font-size: var(--fs-sm); color: var(--text-2); }
+.gp-specs { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: var(--fs-xs); color: var(--text-3); }
+.gp-specs b { color: var(--text); font-weight: 600; }
+.gp-side {
+  flex: 0 0 172px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 6px;
+  padding-left: var(--s-4);
+  border-left: 1px solid var(--border);
+}
+.gp-price { font-size: var(--fs-lg); font-weight: 700; color: var(--brand-ink); line-height: 1.2; }
+.gp-price small { font-weight: 400; font-size: var(--fs-xs); color: var(--text-3); margin-left: 3px; }
+.gp-stock { font-size: var(--fs-xs); color: var(--success); font-weight: 600; }
+.gp-stock.out { color: var(--text-3); font-weight: 500; }
+.gp-side .progress { width: 100%; }
+
+/* ---------- 分段控件：小尺寸与换行 ---------- */
+.seg.sm button { height: 26px; padding: 0 10px; font-size: var(--fs-xs); }
+.seg.wrap { flex-wrap: wrap; }
+.progress.sm { height: 4px; }
+
+/* ---------- 顶部语言切换 ---------- */
+.lang-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+.lang-toggle:hover { color: var(--brand); border-color: var(--brand-border); background: var(--brand-soft); }
+.lang-toggle i { font-size: 13px; }
+
+/* ---------- 管理端 · 价目表可编辑输入 ---------- */
+.price-input {
+  width: 92px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+}
+.price-input:focus { outline: none; border-color: var(--brand); box-shadow: 0 0 0 2px var(--brand-soft); }
+
+/* ---------- 部署中心 · 右侧摘要 ---------- */
+.summary-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-3);
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--fs-sm);
+}
+.summary-line:last-of-type { border-bottom: none; }
+.summary-line > span { color: var(--text-2); }
+.summary-line > b { color: var(--text); font-weight: 600; text-align: right; }
+
+/* ---------- 表格操作区（多行按钮紧凑排布） ---------- */
+.table-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* ---------- 响应式 ---------- */
+@media (max-width: 1100px) {
+  .region-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+  .gpu-pick { flex-direction: column; gap: var(--s-3); }
+  .gp-side { flex: 1 1 auto; align-items: flex-start; border-left: none; border-top: 1px solid var(--border); padding-left: 0; padding-top: 10px; }
+  .gp-side .progress { max-width: 220px; }
+}
+@media (max-width: 768px) {
+  .region-grid { grid-template-columns: minmax(0, 1fr); }
+  .lang-toggle span { display: none; }
+}

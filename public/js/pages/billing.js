@@ -1,50 +1,55 @@
-// 对齐原型 billingPage() / billingOverview() / billingDetails() / billingBudgets()
+// 费用中心：USD 计价，成本由各模块真实状态实算
 import { api } from "../api.js";
-import { header, metric, section, btn, esc, money, chart, tabs, segmented, field, input } from "../ui.js";
+import { header, metric, section, btn, esc, money, chart, tabs, segmented, field, input, status, t, L } from "../ui.js";
 
-export default async function billingPage(S) {
+const S = (zh, en) => ({ zh, en });
+const colors = ["#ff6000", "#f9a825", "#34383b", "#ffcc32"];
+
+export default async function billingPage(S0) {
   const b = await api.billing();
-  const t = S.billingTab;
-  const colors = ["#2866f6", "#10b9b0", "#8c6ef0", "#f6a24b"];
-  const p = Math.min(100, (b.monthCost / (b.budget || 10000)) * 100);
-  const m = await api.metrics("gpu", S.billingRange === "7d" ? "24h" : "7d");
+  const tab = S0.billingTab;
+  const p = Math.min(100, (b.monthCost / (b.budget || 30000)) * 100);
+  const m = await api.metrics("gpu", S0.billingRange === "7d" ? "24h" : "7d");
 
   return [
-    header("费用中心与 FinOps", "按项目、工作负载和 GPU 规格分析成本，管理预算、用量配额与费用优化。",
-      `<a class="btn" href="/api/billing/export">下载 CSV 账单</a>` + btn("＋ 充值演示", "recharge", "primary")),
-    tabs([["overview", "费用概览"], ["details", "成本明细"], ["budgets", "预算与告警"]], t, "billingTab"),
+    header(S("费用中心与 FinOps", "Billing & FinOps"), S("按项目、工作负载和 GPU 规格分析成本，管理预算、用量配额与费用优化。", "Analyze cost by project, workload and GPU SKU; manage budget, quotas and optimization."),
+      `<a class="btn" href="/api/billing/export">${esc(t("common.copy"))} CSV</a>` + btn(S("＋ 充值演示", "＋ Recharge (demo)"), "recharge", "primary")),
+    tabs([["overview", S("费用概览", "Overview")], ["details", S("成本明细", "Line items")], ["budgets", S("预算与告警", "Budget & alerts")]], tab, "billingTab"),
     `<div class="grid cols-4 mb16">`,
-    metric("账户余额", money(b.balance), "模拟账户 · 不涉及真实支付", "<i class='bi bi-cash-stack'></i>", ""),
-    metric("本月累计消费", money(b.monthCost), "按资源 / 项目归因", "<i class='bi bi-cpu'></i>", "↓ 8.6%"),
-    metric("推理调用成本", money((b.bills[1] || {}).cost || 0), "Serverless / Dedicated", "<i class='bi bi-lightning-charge-fill'></i>", ""),
-    metric("预算使用率", Math.round(p) + "%", "预算 " + money(b.budget), "<i class='bi bi-clock-history'></i>", ""),
+    metric(S("账户余额", "Balance"), money(b.balance), S("模拟账户 · USD", "Demo account · USD"), "<i class='bi bi-cash-stack'></i>", ""),
+    metric(S("月度预估消费", "Monthly estimate"), money(b.monthCost), `${b.hoursPerMonth || 730}h · ${b.gpuCount || 0} GPU`, "<i class='bi bi-cpu'></i>", "↓ 8.6%"),
+    metric(S("当前小时费率", "Current hourly rate"), money(b.hourlyCost || 0), S("含存储与快照", "Incl. storage & snapshots"), "<i class='bi bi-lightning-charge-fill'></i>", ""),
+    metric(S("预算使用率", "Budget used"), Math.round(p) + "%", L(S("月度预算", "Monthly budget")) + " " + money(b.budget), "<i class='bi bi-clock-history'></i>", ""),
     `</div>`,
-    t === "overview"
+    tab === "overview"
       ? [
           `<div class="split-65 mb16">`,
-          `<div class="card card-pad">${section("费用趋势", segmented([["7d", "近7天"], ["30d", "近30天"]], S.billingRange, "billingRange"))}${chart(m.primary, { color: "#2866f6", height: 230 })}<div class="small muted">费用统计按 GPU 计算、存储、服务副本与网络拆分 · 示例数据</div></div>`,
-          `<div class="card card-pad">${section("按工作负载分摊")}<div class="flex" style="gap:20px"><div class="donut"><div class="donut-inner">100%<small>成本分布</small></div></div><div class="legend" style="flex:1">${b.bills.map((x, i) => `<div class="legend-item"><span><i style="background:${colors[i]}"></i>${esc(x.name)}</span><b>${x.pct}%</b></div>`).join("")}</div></div></div>`,
+          `<div class="card card-pad">${section(S("费用趋势", "Spend trend"), segmented([["7d", S("近7天", "7d")], ["30d", S("近30天", "30d")]], S0.billingRange, "billingRange"))}${chart(m.primary, { color: "#ff6000", height: 230 })}<div class="small muted">${esc(t("common.demo"))} · USD</div></div>`,
+          `<div class="card card-pad">${section(S("按工作负载分摊", "Allocation by workload"))}<div class="flex" style="gap:20px"><div class="donut"><div class="donut-inner">100%<small>${esc(L(S("成本分布", "Cost split")))}</small></div></div><div class="legend" style="flex:1">${b.bills.map((x, i) => `<div class="legend-item"><span><i style="background:${colors[i]}"></i>${esc(L(x.name))}</span><b>${x.pct}%</b></div>`).join("")}</div></div></div>`,
           `</div>`,
           `<div class="layout-main-side">`,
-          `<div class="card card-pad">${section("费用构成与资源归因", `<a href="javascript:void(0)" data-set="billingTab" data-value="details">查看明细 →</a>`)}`,
-          b.bills.map((x, i) => `<div style="padding:11px 0"><div class="between"><div><b>${esc(x.name)}</b><div class="small muted" style="margin-top:4px">${esc(x.sub)}</div></div><b>${money(x.cost)}</b></div><div class="progress mt12"><span style="width:${x.pct}%;background:${colors[i]}"></span></div></div>`).join(""),
+          `<div class="card card-pad">${section(S("费用构成与资源归因", "Cost breakdown"), `<a href="javascript:void(0)" data-set="billingTab" data-value="details">${esc(L(S("查看明细 →", "View details →")))}</a>`)}`,
+          b.bills.map((x, i) => `<div style="padding:11px 0"><div class="between"><div><b>${esc(L(x.name))}</b><div class="small muted" style="margin-top:4px">${esc(L(x.sub))}</div></div><b>${money(x.cost)}</b></div><div class="progress mt12"><span style="width:${x.pct}%;background:${colors[i]}"></span></div></div>`).join(""),
           `</div>`,
-          `<div class="card card-pad">${section("成本优化建议")}<div class="callout mb12"><i class='bi bi-lightning-charge-fill'></i> 将低频 Endpoint 的最小副本设置为 0，降低空闲 GPU 成本。</div><div class="callout mb12"><i class='bi bi-clock-history'></i> 开发工作空间开启 2 小时空闲自动关机。</div><div class="callout"><i class='bi bi-box-seam'></i> 大型训练任务可评估预留资源与可中断计算，结合 Checkpoint 降低风险。</div></div></div>`,
+          `<div class="card card-pad">${section(S("成本优化建议", "Optimization tips"))}<div class="callout mb12"><i class='bi bi-lightning-charge-fill'></i> ${esc(L(S("将低频 Endpoint 的最小副本设置为 0，降低空闲 GPU 成本。", "Set min replicas to 0 for low-traffic endpoints to cut idle GPU cost.")))}</div><div class="callout mb12"><i class='bi bi-clock-history'></i> ${esc(L(S("开发工作空间开启 2 小时空闲自动关机。", "Enable 2-hour idle auto-shutdown for dev workspaces.")))}</div><div class="callout"><i class='bi bi-box-seam'></i> ${esc(L(S("大型训练任务可评估预留资源与可中断计算，结合 Checkpoint 降低风险。", "For large training, evaluate reserved and interruptible capacity with checkpointing.")))}</div></div></div>`,
         ].join("")
-      : t === "details"
-      ? `<div class="card card-pad">${section("资源级账单明细", `<span class="small muted">示例账单 · 非真实计费</span>`)}<div class="table-wrap"><table><thead><tr><th>资源名称</th><th>费用类型</th><th>GPU 规格</th><th>用量</th><th>示例单价</th><th>金额</th></tr></thead><tbody>${b.details.map((x) => `<tr><td><strong>${esc(x.name)}</strong></td><td>${esc(x.type)}</td><td>${esc(x.gpu)}</td><td>${x.h} GPU小时(示例)</td><td>${money(x.price)}/h</td><td><strong>${money(x.amount)}</strong></td></tr>`).join("")}</tbody></table></div></div>`
+      : tab === "details"
+      ? `<div class="card card-pad">${section(S("资源级账单明细", "Resource-level line items"), `<span class="small muted">USD · ${b.hoursPerMonth || 730}h</span>`)}<div class="table-wrap"><table><thead><tr><th>${esc(L(S("资源名称", "Resource")))}</th><th>${esc(L(S("费用类型", "Category")))}</th><th>${esc(t("common.gpu"))}</th><th>${esc(t("common.region"))}</th><th>${esc(t("common.status"))}</th><th>${esc(L(S("小时费率", "Hourly")))}</th><th>USD / ${b.hoursPerMonth || 730}h</th></tr></thead><tbody>${b.details.map((x) => `<tr><td><strong>${esc(x.name)}</strong><small>${esc(x.id)}</small></td><td>${esc(L(x.kindLabel))}</td><td>${esc(x.gpu)} × ${x.count}</td><td>${esc(x.region)}</td><td>${status(x.status)}</td><td>${money(x.hourly)}</td><td><strong>${money(x.monthly)}</strong></td></tr>`).join("")}</tbody></table></div></div>`
       : [
           `<div class="layout-main-side">`,
-          `<div class="card card-pad">${section("月度预算与阈值")}<div class="form-grid">`,
-          field("月度预算（元）", `<input id="budget-input" type="number" min="100" step="100" value="${b.budget}"/>`),
-          field("通知阈值", `<select><option>达到 80% 时提醒</option><option>达到 50% 时提醒</option><option>达到 95% 时提醒</option></select>`),
-          `</div><div class="between mt16"><b>已使用 ${money(b.monthCost)}</b><b>${p.toFixed(1)}%</b></div><div class="progress mt12"><span style="width:${p}%"></span></div>`,
-          `<div class="callout mt16">预算不等于硬性消费上限。真实系统应结合项目配额、服务副本上限、实例自动关机与告警通知。</div>`,
-          btn("保存预算设置", "save-budget", "primary mt16"),
+          `<div class="card card-pad">${section(S("月度预算与阈值", "Monthly budget & thresholds"))}<div class="form-grid">`,
+          field(S("月度预算（USD）", "Monthly budget (USD)"), `<input id="budget-input" type="number" min="100" step="100" value="${b.budget}"/>`),
+          field(S("通知阈值", "Alert threshold"), `<select><option>80%</option><option>50%</option><option>95%</option></select>`),
+          `</div><div class="between mt16"><b>${esc(L(S("已使用", "Used")))} ${money(b.monthCost)}</b><b>${p.toFixed(1)}%</b></div><div class="progress mt12"><span style="width:${p}%"></span></div>`,
+          `<div class="callout mt16">${esc(L(S("预算不等于硬性消费上限。真实系统应结合项目配额、服务副本上限、实例自动关机与告警通知。", "A budget is not a hard cap. Production systems combine quotas, replica limits, auto-shutdown and alerts.")))}</div>`,
+          btn(S("保存预算设置", "Save budget"), "save-budget", "primary mt16"),
           `</div>`,
-          `<div class="card card-pad">${section("成本治理")}<div class="grid" style="gap:12px">`,
-          [["项目成本中心", "按项目 / 标签聚合 GPU 消费"], ["用量配额", "GPU 卡数、Endpoint 副本、存储限额"], ["异常消费检测", "费用突增、空闲 GPU、低利用率"], ["资源生命周期", "自动关机、Scale-to-Zero、过期释放"]]
-            .map((x) => `<div class="flex"><span class="pill blue"><i class='bi bi-check2-circle'></i></span><div><b>${x[0]}</b><div class="small muted" style="margin-top:4px">${x[1]}</div></div></div>`).join(""),
+          `<div class="card card-pad">${section(S("成本治理", "Cost governance"))}<div class="grid" style="gap:12px">`,
+          [[S("项目成本中心", "Project cost center"), S("按项目 / 标签聚合 GPU 消费", "Aggregate GPU spend by project / tag")],
+           [S("用量配额", "Usage quotas"), S("GPU 卡数、Endpoint 副本、存储限额", "GPU count, endpoint replicas, storage caps")],
+           [S("异常消费检测", "Anomaly detection"), S("费用突增、空闲 GPU、低利用率", "Spend spikes, idle GPUs, low utilization")],
+           [S("资源生命周期", "Resource lifecycle"), S("自动关机、Scale-to-Zero、过期释放", "Auto-shutdown, scale-to-zero, expiry")]]
+            .map((x) => `<div class="flex"><span class="pill blue"><i class='bi bi-check2-circle'></i></span><div><b>${esc(L(x[0]))}</b><div class="small muted" style="margin-top:4px">${esc(L(x[1]))}</div></div></div>`).join(""),
           `</div></div></div>`,
         ].join(""),
   ].join("");

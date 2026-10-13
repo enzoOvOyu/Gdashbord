@@ -4,6 +4,13 @@
 
 前端为**无构建 ES Module** 架构，后端为 Express REST API + JSON 状态持久化，前后端真实联调。
 
+## 平台规范（全局约束）
+
+- **区域（Region）**：日本 / 泰国 / 美国三地，具体可用区为 `JP-TYO-1` / `TH-BKK-1` / `US-LAX-2` / `US-IAD-1`。
+- **GPU 机型**：限定 `H100` / `H200` / `B200` / `B300` / `GB300` 五种（不再含 A100 / L40S / RTX4090）。
+- **计费币种**：全站统一以美元（USD）计价，金额格式 `$ 1,234.56`。
+- **界面语言**：提供中 / 英双语切换（右上角语言切换），两套文案完整覆盖；`t(key)` 负责 UI 文案，`L({ zh, en })` 负责服务端返回的双语字段。
+
 ---
 
 ## 在线演示
@@ -30,7 +37,7 @@
 
 | 能力 | 说明 |
 |---|---|
-| **节点池与 GPU 节点** | 6 个节点池（H100 SXM / H200 NVL / B200 NVL72 / A100 / L40S / RTX4090），23 个节点的状态机：Ready / Cordoned / Draining / Remediation / NotReady |
+| **节点池与 GPU 节点** | 5 个节点池（H100 SXM / H200 NVL / B200 NVL72 / B300 / GB300 NVL72），按区域分布的 GPU 节点状态机：Ready / Cordoned / Draining / Remediation / NotReady |
 | **节点运维动作** | cordon（封锁）、uncordon、drain（驱逐并触发重调度）、remediate（自动修复）、straggler 标记清除 |
 | **资源分配** | 每节点 GPU / CPU / 内存分配率条形可视化，节点池与命名空间两级水位 |
 | **命名空间配额** | `nvidia.com/gpu`、CPU、内存、Pod 四维配额，Critical / High / BestEffort 三级优先级与抢占策略 |
@@ -42,7 +49,7 @@
 调度队列中的阻塞原因与真实调度器输出一致，例如：
 
 ```text
-0/23 nodes are available: Insufficient nvidia.com/gpu（需 64，H100 可调度 22）
+0/36 nodes are available: Insufficient nvidia.com/gpu（需 64，B200 可调度 22）
 ```
 
 ---
@@ -83,6 +90,25 @@
 | ![1280](docs/screenshots/ui-overview-1280.png) | ![768](docs/screenshots/ui-overview-768.png) |
 
 </details>
+
+## 管理员控制台（Admin Console）
+
+独立完整的后台管理界面，覆盖租户 / 用户、资源与配额、计费与定价、平台运营与审计四块：
+
+| 模块 | 能力 |
+|---|---|
+| **租户与用户** | 租户列表（企业 / 团队）、用户与角色（Owner / Admin / Developer / Viewer / Billing）、项目级 RBAC 矩阵 |
+| **资源与配额** | 区域 GPU 容量（按机型 / 区域分配率）、租户配额、节点池水位、抢占与排队策略 |
+| **计费与定价** | 价格簿（GPU 单价 / 预留 / 竞价 / 存储）、租户账单、充值、发票与 MRR |
+| **平台运营与审计** | 全局 KPI（租户数 / 用户数 / 机队使用率 / MRR / 工单）、服务健康、操作审计日志、公告 |
+
+管理端数值与部署 / 推理 / 训练 / 资产 / 运营模块同源（单一价格簿 + 成本引擎 `server/services/cost.js`），保证全站统计口径一致。
+
+中 / 英双语：右上角一键切换，全站文案两套完整覆盖。英文示例：
+
+| 总览（English） | 管理员控制台（English） |
+|:---:|:---:|
+| ![总览 EN](docs/screenshots/ui-overview-en.png) | ![Admin EN](docs/screenshots/ui-admin-en.png) |
 
 ---
 
@@ -145,7 +171,9 @@
 │   ├── data/k8s.js            # K8s 数据模型：节点池/节点/配额/工作负载/事件
 │   ├── services/workload.js   # 业务逻辑：deploy / instanceAction / series
 │   ├── services/k8s.js        # K8s 业务逻辑：节点运维/Gang 调度/配额/拓扑
-│   └── routes/                # overview market workloads endpoints jobs assets security kubernetes monitor billing
+│   ├── services/admin.js      # 管理后台业务逻辑：租户/配额/价格/审计
+│   ├── services/cost.js       # 单一价格簿 + 成本引擎（OPERATIONS 一致性）
+│   └── routes/                # overview market workloads endpoints jobs assets security kubernetes monitor billing admin
 ├── public/
 │   ├── index.html
 │   ├── styles/{main,dense}.css
@@ -153,7 +181,7 @@
 │       ├── api.js             # 前后端联调
 │       ├── store.js           # 状态（UI 态持久化 + 领域态来自服务端）
 │       ├── ui.js  shell.js  app.js
-│       └── pages/             # 11 个页面模块（含 kubernetes.js）
+│       └── pages/             # 12 个页面模块（含 kubernetes.js、admin.js）
 ├── docs/
 │   ├── demo/                  # 演示 GIF
 │   └── screenshots/           # 页面截图
@@ -188,6 +216,15 @@ ssh -i ~/.ssh/enzo-using.pem -N -L 18080:127.0.0.1:8080 ubuntu@13.158.38.7
 - `GET /api/security`、`POST /api/security/keys`、`DELETE /api/security/keys/:id`、`POST /api/security/secrets`
 - `GET /api/monitor/metrics?tab=&range=`、`GET /api/monitor/events`、`POST /api/monitor/alerts`
 - `GET /api/billing`、`POST /api/billing/budget`、`POST /api/billing/recharge`、`GET /api/billing/export`
+
+**管理员控制台**
+
+- `GET /api/admin/overview` — 全局 KPI（租户 / 用户 / 机队 / MRR / 工单）
+- `GET /api/admin/tenants`、`POST /api/admin/tenants/:id/status`、`POST /api/admin/tenants/:id/quota`、`POST /api/admin/users`、`POST /api/admin/users/:id/role`、`POST /api/admin/users/:id/status` — 租户与用户
+- `GET /api/admin/capacity` — 区域 GPU 容量与分配
+- `GET /api/admin/billing`、`POST /api/admin/price` — 价格簿与账单
+- `GET /api/admin/ops`、`POST /api/admin/tickets/:id/resolve`、`POST /api/admin/announcements` — 运维与审计
+- `GET /api/admin/cluster-skus` — 集群规格价目
 
 **Kubernetes GPU 资源管理**
 

@@ -6,7 +6,7 @@ import { seed } from "./data/seed.js";
 
 const DOMAIN_KEYS = [
   "project", "balance", "budget", "instances", "endpoints", "jobs",
-  "clusters", "assets", "events", "bills", "keys", "secrets", "k8s",
+  "clusters", "assets", "events", "bills", "keys", "secrets", "k8s", "admin",
 ];
 
 let state = null;
@@ -53,7 +53,7 @@ export function set(pathKey, value) {
   return { ok: true, state: s };
 }
 
-// 对齐原型 events 事件流
+// 对齐原型 events 事件流（text 支持 { zh, en } 双语结构）
 export function pushEvent(level, text) {
   const s = load();
   const now = new Date();
