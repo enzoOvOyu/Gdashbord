@@ -35,6 +35,7 @@ export const api = {
 
   jobs: () => req("/jobs"),
   jobRetry: (id) => req("/jobs/" + id + "/retry", { method: "POST" }),
+  clusterToggle: (id) => req("/jobs/" + id + "/toggle", { method: "POST" }),
   jobLogs: (id) => req("/jobs/" + id + "/logs", { method: "POST" }),
 
   assets: () => req("/assets"),

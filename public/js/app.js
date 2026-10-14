@@ -267,9 +267,21 @@ async function runAction(a) {
     save();
     return render();
   }
-  // ===== Instant Clusters：展开/收起集群 Pod 列表 =====
+  // ===== Instant Clusters：展开/收起集群 Pod 列表 + 启停 =====
   if (a.startsWith("cluster-open:")) { S.clusterOpen = a.split(":")[1]; save(); return render(); }
   if (a === "cluster-close") { S.clusterOpen = ""; save(); return render(); }
+  if (a.startsWith("cluster-toggle:")) {
+    const cid = a.split(":")[1];
+    try {
+      const r = await api.clusterToggle(cid);
+      await refreshDomain();
+      render();
+      toast(r.cluster.status === "running"
+        ? B("集群启动指令已下发", "Cluster start submitted")
+        : B("集群停止指令已下发", "Cluster stop submitted"));
+    } catch (e) { toast(e.message, "err"); }
+    return;
+  }
 
   // ===== 模型目录 → 部署 =====
   if (a.startsWith("deploy-model:")) {

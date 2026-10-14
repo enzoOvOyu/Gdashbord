@@ -1764,14 +1764,15 @@ input.field::placeholder { color: #b3b7c5; }
 
 /* ---------- 集群卡（素材包 cluster-card + 拓扑图形） ---------- */
 .cluster-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-.cluster-card { padding: 20px; }
+.cluster-card { padding: 20px; transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease); }
+.cluster-card:hover { border-color: #ffcfb3; box-shadow: var(--shadow-card-hover); }
 .cluster-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
 .icon-btn { border: 0; background: transparent; display: grid; place-items: center; color: #767b91; padding: 7px; border-radius: 8px; cursor: pointer; font-size: 15px; }
 .icon-btn:hover { background: var(--brand-soft); color: var(--brand); }
 .cluster-graphic {
   margin: 20px 0 17px;
   border-radius: 9px;
-  background: #f8f7ff;
+  background: var(--gradient-brand-soft);
   padding: 15px;
   display: flex;
   align-items: center;
@@ -1781,13 +1782,14 @@ input.field::placeholder { color: #b3b7c5; }
 }
 .cluster-node {
   width: 44px; height: 46px;
-  border: 1px solid #ffd9c2;
+  border: 1px solid var(--brand-border);
   border-radius: 8px;
   background: #fff;
   display: grid; place-items: center;
   color: var(--brand);
   position: relative;
   font-size: 17px;
+  box-shadow: 0 2px 6px rgba(255, 96, 0, 0.06);
 }
 .cluster-node::after {
   content: '';
@@ -1797,7 +1799,7 @@ input.field::placeholder { color: #b3b7c5; }
   border-radius: 50%;
   background: #30b881;
 }
-.cluster-connector { width: 18px; height: 1px; background: #ffc9ac; }
+.cluster-connector { width: 18px; height: 1px; background: var(--brand-border); }
 .cluster-spec { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding-top: 14px; border-top: 1px solid #f0f0f5; }
 .cluster-spec small { display: block; color: #a0a4b4; font-size: 9px; margin-bottom: 5px; letter-spacing: 0.5px; }
 .cluster-spec strong { font-size: 11px; color: var(--text); }

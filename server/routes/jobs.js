@@ -26,6 +26,17 @@ export default function jobsRouter() {
     res.json({ ok: true, job: copy });
   });
 
+  // 集群启停（对齐 Instant Clusters Stop/Start）
+  r.post("/:id/toggle", (req, res) => {
+    const s = get();
+    const c = (s.clusters || []).find((x) => x.id === req.params.id);
+    if (!c) return res.status(404).json({ error: "cluster not found" });
+    c.status = c.status === "running" ? "stopped" : "running";
+    pushEvent(c.status === "running" ? "success" : "warning", EV(`集群 ${c.name} 启动指令已下发`, `Cluster ${c.name} start submitted`));
+    save();
+    res.json({ ok: true, cluster: { id: c.id, status: c.status } });
+  });
+
   r.post("/:id/logs", (req, res) => {
     const s = get();
     const j = s.jobs.find((x) => x.id === req.params.id);
