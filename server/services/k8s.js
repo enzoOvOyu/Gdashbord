@@ -15,13 +15,18 @@ export function k8sSummary(s) {
   const poolTotalGpus = k.pools.reduce((a, p) => a + p.gpus * p.nodes, 0);
   const poolTotalNodes = k.pools.reduce((a, p) => a + p.nodes, 0);
   const sampleScale = poolTotalGpus / Math.max(1, nodes.reduce((a, n) => a + n.gpus, 0));
+  // 分配量：优先 state 里由机队实算写入的 cluster.allocatedGpus（与机队/配额闭环）；
+  // 仅当缺失时回退抽样外推。可调度/健康按比例从池总量推导。
+  const baseAllocated = Number(k.cluster.allocatedGpus) > 0
+    ? Math.min(poolTotalGpus, Number(k.cluster.allocatedGpus))
+    : Math.round(nodes.reduce((a, n) => a + n.allocated, 0) * sampleScale);
   const cls = Object.assign({}, k.cluster, {
     totalNodes: poolTotalNodes,
     readyNodes: Math.round(poolTotalNodes * 0.94),
     totalGpus: poolTotalGpus,
-    allocatedGpus: Math.round(nodes.reduce((a, n) => a + n.allocated, 0) * sampleScale),
-    schedulableGpus: Math.round(nodes.filter((n) => n.status === "ready").reduce((a, n) => a + (n.gpus - n.allocated), 0) * sampleScale),
-    healthyGpus: Math.round(nodes.filter((n) => n.health === "Pass").reduce((a, n) => a + n.gpus, 0) * sampleScale),
+    allocatedGpus: baseAllocated,
+    schedulableGpus: Math.max(0, poolTotalGpus - baseAllocated),
+    healthyGpus: Math.round(poolTotalGpus * (nodes.length ? nodes.filter((n) => n.health === "Pass").length / nodes.length : 0.97)),
     stragglers: Math.round(nodes.filter((n) => n.straggler).length * sampleScale),
     remediation: Math.round(nodes.filter((n) => n.status === "remediation" || n.status === "notready").length * sampleScale),
   });
@@ -33,16 +38,23 @@ export function k8sSummary(s) {
     pendingGpus: pending.reduce((a, p) => a + p.gpuCount, 0),
     runningPods: k.pods.filter((p) => p.phase === "running").length,
     quotas: k.quotas,
-    pools: k.pools.map((p) => {
-      const ns = nodes.filter((n) => n.pool === p.id);
-      return Object.assign({}, p, {
-        actualNodes: ns.length,
-        total: ns.reduce((a, n) => a + n.gpus, 0),
-        used: ns.reduce((a, n) => a + n.allocated, 0),
-        free: ns.reduce((a, n) => a + Math.max(0, n.gpus - n.allocated), 0),
-        ready: ns.filter((n) => n.status === "ready").length,
+    pools: (() => {
+      // 池级 used 直接按集群总分配量 × 池容量占比分摊（与 cluster.allocatedGpus 严格闭环）
+      const totalGpus = k.pools.reduce((a, p) => a + p.gpus * p.nodes, 0) || 1;
+      return k.pools.map((p) => {
+        const ns = nodes.filter((n) => n.pool === p.id);
+        const poolTotal = p.gpus * p.nodes;
+        const used = Math.round((cls.allocatedGpus * poolTotal) / totalGpus);
+        return Object.assign({}, p, {
+          actualNodes: p.nodes,
+          total: poolTotal,
+          used,
+          free: poolTotal - used,
+          ready: ns.filter((n) => n.status === "ready").length,
+          sampleNodes: ns.length,
+        });
       });
-    }),
+    })(),
   };
 }
 
@@ -257,17 +269,19 @@ export function quotaSet(s, ns, field, value) {
 }
 
 // 机架拓扑：按 cabinet 聚合节点热度（对齐 Cabinet Visualizer）
+// 口径统一：unhealthy = status !== ready（不可调度），stragglers = health 降级但可调度 —— 与前端格子颜色一致
 export function topology(s) {
   const k = s.k8s;
   const map = {};
   k.nodes.forEach((n) => {
     const key = n.cabinet;
-    if (!map[key]) map[key] = { cabinet: key, rack: n.rack, nodes: [], gpus: 0, used: 0, maxTemp: 0, unhealthy: 0 };
+    if (!map[key]) map[key] = { cabinet: key, rack: n.rack, nodes: [], gpus: 0, used: 0, maxTemp: 0, unhealthy: 0, stragglers: 0 };
     map[key].nodes.push(n.id);
     map[key].gpus += n.gpus;
     map[key].used += n.allocated;
     map[key].maxTemp = Math.max(map[key].maxTemp, n.temp);
-    if (n.health !== "Pass") map[key].unhealthy += 1;
+    if (n.status !== "ready") map[key].unhealthy += 1;
+    if (n.straggler || n.health !== "Pass") map[key].stragglers += 1;
   });
   return Object.values(map).sort((a, b) => a.cabinet.localeCompare(b.cabinet));
 }

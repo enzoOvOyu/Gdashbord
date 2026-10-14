@@ -67,21 +67,28 @@ function overviewTab(sum, cabinets, S) {
     `<div class="table-wrap"><table class="dense"><thead><tr>`,
     `<th>${b("节点池", "Pool")}</th><th>${b("型号", "GPU")}</th><th>${b("单节点", "Per node")}</th><th>${b("节点数", "Nodes")}</th><th>${b("总 GPU", "Total GPUs")}</th><th>${b("已用", "Used")}</th><th>${b("可调度", "Schedulable")}</th><th>${b("分配", "Alloc")}</th><th>${b("互联", "Fabric")}</th><th>${b("用途", "Purpose")}</th>`,
     `</tr></thead><tbody>`,
-    sum.pools.map((p) => `<tr><td>${mono(p.name)}</td><td>${esc(p.gpu)}</td><td>${p.gpus} × ${p.vram}GB</td><td>${p.ready}/${p.actualNodes}</td><td>${p.total}</td><td>${p.used}</td><td>${p.free}</td><td>${allocBar(p.used, p.total)}</td><td class="small">${esc(p.fabric)}</td><td class="small">${esc(L(p.purpose))}</td></tr>`).join(""),
+    sum.pools.map((p) => `<tr><td>${mono(p.name)}</td><td>${esc(p.gpu)}</td><td>${p.gpus} × ${p.vram}GB</td><td>${p.actualNodes}</td><td>${p.total}</td><td>${p.used}</td><td>${p.free}</td><td>${allocBar(p.used, p.total)}</td><td class="small">${esc(p.fabric)}</td><td class="small">${esc(L(p.purpose))}</td></tr>`).join(""),
     `</tbody></table></div></div>`,
     `<div class="card card-pad">${section(b("机架拓扑 · Cabinet", "Rack topology · cabinet"), `<span class="small muted">${b("每格代表一台 GPU 节点，颜色为 GPU 温度", "Each slot is a GPU node, colored by GPU temperature")}</span>`)}`,
     `<div class="racks">`,
     cabinets.map((cb) => {
       const nodes = S.k8sNodes ? S.k8sNodes.filter((n) => n.cabinet === cb.cabinet) : [];
-      return `<div class="rack"><div class="rack-head"><b>${mono(cb.cabinet)}</b><span class="small muted">${cb.used}/${cb.gpus} GPU · ${cb.unhealthy ? cb.unhealthy + " " + b("异常", "unhealthy") : b("正常", "healthy")}</span></div><div class="rack-grid">${
+      // 口径统一：异常 = status !== ready（与格子红色一致）；straggler 单独计（health 检查降级但可调度）
+      const redCount = nodes.filter((n) => n.status !== "ready").length;
+      const stragglerCount = nodes.filter((n) => n.straggler).length;
+      const healthText = redCount > 0 ? `<span class="pill red sm"><i class="dot"></i>${redCount} ${b("异常", "unhealthy")}</span>` : stragglerCount > 0 ? `<span class="pill amber sm"><i class="dot"></i>${stragglerCount} straggler</span>` : `<span class="pill green sm"><i class="dot"></i>${b("正常", "healthy")}</span>`;
+      return `<div class="rack"><div class="rack-head"><b>${mono(cb.cabinet)}</b><span class="small muted">${cb.used}/${cb.gpus} GPU · ${healthText}</span></div><div class="rack-grid">${
         nodes.map((n) => {
+          // 红色仅用于不可调度（cordoned/draining/remediation/notready）；straggler 用黄色边框点缀
           const bg = n.status !== "ready" ? "#d64545" : n.temp >= 82 ? "#e0873a" : n.temp >= 72 ? "#f0b429" : "#3aa76d";
-          return `<i class="slot" title="${esc(n.id)} · ${esc(n.gpu)} ×${n.gpus} · ${n.temp}℃ · ${n.allocated}/${n.gpus}" style="background:${bg}" data-act="node:${n.id}"></i>`;
+          const ring = n.straggler && n.status === "ready" ? "box-shadow:0 0 0 2px #f0b429;" : "";
+          const stLabel = { ready: "Ready", cordoned: "Cordoned", draining: "Draining", remediation: "Remediation", notready: "NotReady" }[n.status] || n.status;
+          return `<i class="slot" title="${esc(n.id)} · ${esc(n.gpu)} ×${n.gpus} · ${stLabel} · ${n.health} · ${n.temp}℃ · ${n.allocated}/${n.gpus}" style="background:${bg};${ring}" data-act="node:${n.id}"></i>`;
         }).join("")
       }</div></div>`;
     }).join(""),
     `</div>`,
-    `<div class="flex small muted mt12"><span><i class="swatch" style="background:#3aa76d"></i> &lt;72℃</span><span><i class="swatch" style="background:#f0b429"></i> 72–81℃</span><span><i class="swatch" style="background:#e0873a"></i> ≥82℃</span><span><i class="swatch" style="background:#d64545"></i> ${b("节点异常", "Node unhealthy")}</span></div>`,
+    `<div class="flex small muted mt12"><span><i class="swatch" style="background:#3aa76d"></i> &lt;72℃ ${b("可调度", "schedulable")}</span><span><i class="swatch" style="background:#f0b429"></i> 72–81℃</span><span><i class="swatch" style="background:#e0873a"></i> ≥82℃</span><span><i class="swatch" style="background:#d64545"></i> ${b("不可调度（封锁/排空/修复/失联）", "Unschedulable (cordoned/draining/remediation/notready)")}</span><span><i class="swatch" style="background:#3aa76d;box-shadow:0 0 0 2px #f0b429"></i> ${b("straggler（降速可调度）", "straggler (degraded, schedulable)")}</span></div>`,
     `</div>`,
   ].join("");
 }
@@ -95,7 +102,7 @@ function nodesTab(nodes, pools, S) {
     `<span class="small muted">${nodes.length} ${b("个节点", "nodes")}</span>`,
     `<span class="top-spacer"></span>${btn("↻ " + b("刷新", "Refresh"), "refresh", "sm")}`,
     `</div>`,
-    `<div class="card card-pad">${section(b("GPU 节点 · Nodes", "GPU nodes"))}`,
+    `<div class="card card-pad">${section(b("GPU 节点 · Nodes", "GPU nodes"), `<span class="small muted">${b("抽样浏览视图 · 全量 ", "Sampled browse view · ")}${"1,100"} ${b("节点按池聚合统计见概览页", "nodes total; aggregate stats on the overview tab")}</span>`)}`,
     `<div class="table-wrap"><table class="dense"><thead><tr>`,
     `<th>${b("节点", "Node")}</th><th>${b("状态", "Status")}</th><th>${b("节点池", "Pool")}</th><th>GPU</th><th>${b("分配", "Alloc")}</th><th>CPU</th><th>${b("内存", "RAM")}</th><th>${b("温度", "Temp")}</th><th>${b("功耗", "Power")}</th><th>${b("机架", "Rack")}</th><th>Pods</th><th>${b("健康", "Health")}</th><th>${b("操作", "Actions")}</th>`,
     `</tr></thead><tbody>`,
@@ -173,7 +180,12 @@ function schedulerTab(sch, S) {
   return [
     `<div class="grid cols-4 mb16">`,
     metric(b("待调度任务", "Pending jobs"), pend.length, `${pend.reduce((a, p) => a + p.gpuCount, 0)} GPU`, "⏳", ""),
-    metric(b("最长等待", "Longest wait"), pend.length ? Math.max(...pend.map((p) => parseInt(p.age) || 0)) + "m" : "0m", b("队首任务", "Head of queue"), "<i class='bi bi-clock-history'></i>", ""),
+    metric(b("最长等待", "Longest wait"), pend.length ? Math.max(...pend.map((p) => {
+      // age 可能是 "42 分钟" / {zh:"42 分钟",en:"42m"} 等形态，统一提取数字（分钟）
+      const raw = String(L(p.age) || "");
+      const num = parseInt(raw.replace(/[^0-9]/g, ""), 10);
+      return Number.isFinite(num) ? num : 0;
+    })) + b(" 分钟", "m") : "0m", b("队首任务", "Head of queue"), "<i class='bi bi-clock-history'></i>", ""),
     metric(b("累计调度", "Scheduled"), sch.scheduled, b("本次会话", "This session"), "<i class='bi bi-check2-circle'></i>", ""),
     metric(b("抢占次数", "Preemptions"), sch.preempted, b("低优先级被抢占", "Low priority preempted"), "<i class='bi bi-arrow-left-right'></i>", ""),
     `</div>`,

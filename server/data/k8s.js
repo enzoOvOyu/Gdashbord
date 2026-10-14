@@ -108,14 +108,16 @@ function buildNodes() {
   return nodes;
 }
 
-// 命名空间配额（Namespace Quota）—— 万卡规模
-function buildQuotas() {
+// 命名空间配额（Namespace Quota）—— 万卡规模：合计 limit ≈ 集群总量 92%，used 合计与集群分配量对齐
+function buildQuotas(allocated) {
+  // 按 5,985 分配量映射到命名空间（与机队实算利用率一致的占比）
+  const a = allocated || 5990;
   return [
-    { ns: "training-prod", team: { zh: "大模型训练组", en: "LLM Training" }, priority: "Critical", gpuLimit: 2400, gpuUsed: 2231, cpuLimit: 33600, cpuUsed: 29012, memLimit: 307200, memUsed: 241000, podLimit: 6000, podUsed: 4870 },
-    { ns: "inference-prod", team: { zh: "在线推理组", en: "Online Inference" }, priority: "Critical", gpuLimit: 1600, gpuUsed: 1418, cpuLimit: 25600, cpuUsed: 18220, memLimit: 204800, memUsed: 138900, podLimit: 8000, podUsed: 6420 },
-    { ns: "research", team: { zh: "算法研究组", en: "Research" }, priority: "High", gpuLimit: 1200, gpuUsed: 1024, cpuLimit: 19200, cpuUsed: 14110, memLimit: 153600, memUsed: 99800, podLimit: 4000, podUsed: 3120 },
-    { ns: "dev-sandbox", team: { zh: "开发沙箱", en: "Dev Sandbox" }, priority: "BestEffort", gpuLimit: 480, gpuUsed: 176, cpuLimit: 7680, cpuUsed: 2210, memLimit: 61440, memUsed: 18200, podLimit: 3000, podUsed: 940 },
-    { ns: "data-pipeline", team: { zh: "数据工程组", en: "Data Engineering" }, priority: "High", gpuLimit: 320, gpuUsed: 142, cpuLimit: 15360, cpuUsed: 8210, memLimit: 122880, memUsed: 54200, podLimit: 2400, podUsed: 1180 },
+    { ns: "training-prod", team: { zh: "大模型训练组", en: "LLM Training" }, priority: "Critical", gpuLimit: 3600, gpuUsed: Math.round(a * 0.52), cpuLimit: 50400, cpuUsed: 43518, memLimit: 460800, memUsed: 361500, podLimit: 9000, podUsed: 7305 },
+    { ns: "inference-prod", team: { zh: "在线推理组", en: "Online Inference" }, priority: "Critical", gpuLimit: 1800, gpuUsed: Math.round(a * 0.22), cpuLimit: 28800, cpuUsed: 20500, memLimit: 230400, memUsed: 156300, podLimit: 12000, podUsed: 9630 },
+    { ns: "research", team: { zh: "算法研究组", en: "Research" }, priority: "High", gpuLimit: 1600, gpuUsed: Math.round(a * 0.15), cpuLimit: 25600, cpuUsed: 18813, memLimit: 204800, memUsed: 133000, podLimit: 6000, podUsed: 4680 },
+    { ns: "dev-sandbox", team: { zh: "开发沙箱", en: "Dev Sandbox" }, priority: "BestEffort", gpuLimit: 1200, gpuUsed: Math.round(a * 0.07), cpuLimit: 19200, cpuUsed: 5525, memLimit: 153600, memUsed: 45500, podLimit: 4500, podUsed: 1410 },
+    { ns: "data-pipeline", team: { zh: "数据工程组", en: "Data Engineering" }, priority: "High", gpuLimit: 1040, gpuUsed: Math.round(a * 0.04), cpuLimit: 16000, cpuUsed: 8552, memLimit: 128000, memUsed: 56600, podLimit: 3600, podUsed: 1770 },
   ];
 }
 
@@ -162,11 +164,10 @@ function buildEvents() {
   ];
 }
 
-// 集群元信息（总量取节点池聚合，反映万卡规模）
-function buildCluster() {
+// 集群元信息（总量取节点池聚合；allocated 从机队实算传入，未传时回退 60% 水位）
+function buildCluster(allocated) {
   const totalGpus = POOLS.reduce((s, p) => s + p.gpus * p.nodes, 0);
-  const allocFactor = 0.86;
-  const allocated = Math.round(totalGpus * allocFactor);
+  const allocatedGpus = Math.min(totalGpus, Math.round(allocated || totalGpus * 0.6));
   const readyPools = POOLS.filter((p) => p.nodes > 0).length;
   return {
     name: "cks-prod-global",
@@ -179,8 +180,8 @@ function buildCluster() {
     totalNodes: POOLS.reduce((s, p) => s + p.nodes, 0),
     readyNodes: Math.round(POOLS.reduce((s, p) => s + p.nodes, 0) * 0.94),
     totalGpus,
-    allocatedGpus: allocated,
-    schedulableGpus: totalGpus - allocated,
+    allocatedGpus: allocatedGpus,
+    schedulableGpus: totalGpus - allocatedGpus,
     healthyGpus: Math.round(totalGpus * 0.97),
     stragglers: 18,
     remediation: 9,
@@ -191,14 +192,14 @@ function buildCluster() {
   };
 }
 
-export function k8sSeed() {
+export function k8sSeed(allocated) {
   const nodes = buildNodes();
   const pods = buildPods(nodes);
   return {
-    cluster: buildCluster(),
+    cluster: buildCluster(allocated),
     pools: POOLS,
     nodes,
-    quotas: buildQuotas(),
+    quotas: buildQuotas(allocated),
     pods,
     events: buildEvents(),
     scheduled: 14820,

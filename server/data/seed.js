@@ -345,7 +345,7 @@ export function seed() {
     assets: genAssets(r),
     events: genEvents(r),
     bills: [],
-    k8s: k8sSeed(),
+    k8s: k8sSeed(f0.allocated), // 集群分配量从机队实算传入，保证 K8s 概览/配额与机队口径闭环
     keys: genKeys(r),
     secrets: genSecrets(r),
   };
