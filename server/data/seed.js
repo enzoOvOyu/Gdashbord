@@ -1,7 +1,7 @@
 // 领域数据种子：区域限定 JP/TH/US，GPU 限定 H100/H200/B200/B300/GB300，金额单位 USD
 // 万卡级：机队由 fleet.js 的集群数组承载（约一万张卡），其余资源为活跃负载抽样；所有 KPI 由 state 实算。
 import { GPU, REGIONS, IMAGES, MODEL_GROUPS, gpu } from "./catalog.js";
-import { buildFleet } from "./fleet.js";
+import { buildFleet, fleetFromState } from "./fleet.js";
 import { k8sSeed } from "./k8s.js";
 import { adminSeed } from "./admin.js";
 
@@ -120,20 +120,44 @@ function genEndpoints(r) {
   return out;
 }
 
-// 生成训练任务
+// 生成训练任务（规模对齐万卡平台：主力训练 128–1024 卡；按池剩余容量封顶，保证可完整放置）
 function genJobs(r, clusters) {
   const out = [];
   const n = 34;
+  // 区域容量加权放置（US-IAD 34% / US-LAX 28% / JP-TYO 24% / TH-BKK 14%，与机队分布一致）
+  const REGION_WEIGHTS = [["US-IAD-1", 34], ["US-LAX-2", 28], ["JP-TYO-1", 24], ["TH-BKK-1", 14]];
+  const weightedRegion = (rr) => {
+    let roll = rr() * 100;
+    for (const [rid, w] of REGION_WEIGHTS) { roll -= w; if (roll <= 0) return rid; }
+    return "US-IAD-1";
+  };
+  // 追踪每个 区域×型号 池的已占用卡数，保证任务规模不超过池容量 × 92%
+  const poolCap = {};
+  clusters.forEach((c) => {
+    if (c.status === "provisioning") return;
+    const k = c.region + ":" + c.gpu;
+    poolCap[k] = (poolCap[k] || 0) + c.count;
+  });
+  const poolUsed = {};
   for (let i = 0; i < n; i++) {
     const t = pick(r, JOB_TYPES);
-    const g = pick(r, GPU_IDS);
+    let g = pick(r, GPU_IDS);
+    let region = weightedRegion(r);
+    // 该池剩余可放置容量不足 8 卡时，换一个有空间的池
+    for (let tries = 0; tries < 8 && (poolCap[region + ":" + g] || 0) - (poolUsed[region + ":" + g] || 0) < 64; tries++) {
+      g = pick(r, GPU_IDS);
+      region = weightedRegion(r);
+    }
+    const avail = (poolCap[region + ":" + g] || 0) - (poolUsed[region + ":" + g] || 0);
+    if (avail < 8) continue; // 全平台已无整池空间，跳过
     const gpNode = g === "GB300" ? 72 : 8;
-    const nodeCounts = g === "GB300" ? [1, 1, 2] : [1, 2, 4, 8, 16, 32];
-    const nodes = pick(r, nodeCounts);
-    const count = nodes * gpNode;
-    const region = pick(r, REGION_IDS);
+    // 目标规模取 剩余空间 与 设计规模 的较小值（大型任务优先占满池）
+    const designed = pick(r, g === "GB300" ? [144, 216, 288] : [512, 640, 768, 896, 1024, 1152, 1280, 1536]);
+    const count = Math.max(8, Math.min(designed, Math.floor(avail / 8) * 8));
+    const nodes = Math.max(1, Math.round(count / gpNode));
+    poolUsed[region + ":" + g] = (poolUsed[region + ":" + g] || 0) + count;
     const statusRoll = r();
-    const status = statusRoll > 0.62 ? "running" : statusRoll > 0.5 ? "queued" : statusRoll > 0.42 ? "completed" : statusRoll > 0.36 ? "failed" : "preempted";
+    const status = statusRoll > 0.32 ? "running" : statusRoll > 0.22 ? "queued" : statusRoll > 0.14 ? "completed" : statusRoll > 0.08 ? "failed" : "preempted";
     const progress = status === "running" ? between(r, 3, 96) : status === "completed" ? 100 : status === "queued" ? 0 : between(r, 10, 80);
     const hours = status === "running" ? between(r, 1, 280) : between(r, 1, 80);
     const price = gpu(g).price;
@@ -287,11 +311,22 @@ export function seed() {
   const fleet = buildFleet(20261013);
   const clusters = fleet.clusters;
 
+  // 生成真实工作负载（实例 / 端点 / 任务）
+  const instances = genInstances(r);
+  const endpoints = genEndpoints(r);
+  const jobs = genJobs(r, clusters);
+
+  // 先构造临时状态，由真实负载推导每集群实算利用率（liveUtil）与库存
+  const tmpState = { clusters, instances, endpoints, jobs };
+  const f0 = fleetFromState(tmpState);
+  clusters.forEach((c) => { c.liveUtil = f0._assigned.get(c.id) ? Math.min(100, Math.round((f0._assigned.get(c.id) / c.count) * 100)) : (c.liveUtil || 0); });
+  fleet.tenantUsage = f0.tenantUsage; // 每租户实算 { used, hourly }（零售价口径）
+
   // 将 GPU.stock 覆写为各区域可立即分配的自由容量（与机队一致）
   const freeByRegionModel = {};
   clusters.forEach((c) => {
     freeByRegionModel[c.region] = freeByRegionModel[c.region] || {};
-    const free = c.status === "running" ? Math.max(0, c.count - Math.round(c.count * (c.util / 100))) : c.count;
+    const free = Math.max(0, c.count - Math.round(c.count * ((c.liveUtil ?? c.util) / 100)));
     freeByRegionModel[c.region][c.gpu] = (freeByRegionModel[c.region][c.gpu] || 0) + free;
   });
   GPU.forEach((g) => {
@@ -299,20 +334,24 @@ export function seed() {
     REGION_IDS.forEach((rid) => { g.stock[rid] = freeByRegionModel[rid]?.[g.id] || 0; });
   });
 
-  return {
+  const state = {
     project: "AI Platform / Production",
     balance: 1284500.5,
     budget: 1500000,
-    instances: genInstances(r),
-    endpoints: genEndpoints(r),
-    jobs: genJobs(r, clusters),
+    instances,
+    endpoints,
+    jobs,
     clusters,
     assets: genAssets(r),
     events: genEvents(r),
     bills: [],
     k8s: k8sSeed(),
-    admin: adminSeed(fleet),
     keys: genKeys(r),
     secrets: genSecrets(r),
   };
+  // admin 依赖真实负载（tenant used/spend 从 instances/endpoints/jobs 实算）
+  state.__tenantUsage = fleet.tenantUsage;
+  state.admin = adminSeed(fleet, state);
+  delete state.__tenantUsage; // 临时字段不入库
+  return state;
 }

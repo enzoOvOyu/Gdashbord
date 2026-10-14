@@ -1584,10 +1584,32 @@ select {
 /* ---------- GPU 筛选行（素材包 gpu-filter-row） ---------- */
 .gpu-filter-row { display: flex; gap: 9px; flex-wrap: wrap; align-items: center; margin-bottom: 15px; }
 .gpu-filter-row .tabs { margin: 0; }
-.gpu-filter-row .field.select { height: 34px; min-width: 130px; font-size: 11.5px; }
-.field { border: 1px solid #e5e6ef; background: #fff; border-radius: 8px; min-height: 36px; padding: 0 11px; color: #35394f; outline: none; min-width: 0; }
-.field:focus { border-color: #ffab73; box-shadow: 0 0 0 3px rgba(255, 96, 0, 0.1); }
-.field::placeholder { color: #b3b7c5; }
+/* kit 输入框样式只作用于真实控件元素（select/input），不影响 .field 表单容器（Chrome 尺寸错位修复） */
+select.field, input.field, textarea.field {
+  border: 1px solid #e5e6ef;
+  background-color: #fff;
+  border-radius: 8px;
+  min-height: 34px;
+  height: 34px;
+  padding: 0 11px;
+  color: #35394f;
+  outline: none;
+  min-width: 130px;
+  font-size: 11.5px;
+}
+select.field {
+  appearance: none;
+  padding-right: 29px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23898ea0' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  cursor: pointer;
+}
+select.field.w100, input.field.w100 { width: 100%; min-width: 0; }
+select.field:focus, input.field:focus { border-color: #ffab73; box-shadow: 0 0 0 3px rgba(255, 96, 0, 0.1); }
+input.field::placeholder { color: #b3b7c5; }
+.form-group select.field { min-width: 0; width: 100%; height: 36px; }
+.field.select { min-width: 130px; }
 
 /* ---------- GPU 卡片网格（素材包 gpu-grid / gpu-card） ---------- */
 .gpu-grid2 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }

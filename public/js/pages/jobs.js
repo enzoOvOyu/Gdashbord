@@ -77,7 +77,7 @@ function jobsView(S, res) {
 function clustersView(S, clusters) {
   const totalGpus = clusters.reduce((a, c) => a + Number(c.count || 0), 0);
   const onlineGpus = clusters.filter((c) => c.status === "running" || c.status === "degraded").reduce((a, c) => a + Number(c.count || 0), 0);
-  const util = totalGpus ? Math.round(clusters.reduce((a, c) => a + (c.status === "running" ? c.count * c.util : 0), 0) / totalGpus) : 0;
+  const util = totalGpus ? Math.round(clusters.reduce((a, c) => a + (c.status === "running" ? c.count * (c.liveUtil ?? c.util) : 0), 0) / totalGpus) : 0;
   const totalPower = clusters.reduce((a, c) => a + Number(c.powerKw || 0), 0);
   const totalJobs = clusters.reduce((a, c) => a + Number(c.jobs || 0), 0);
   const running = clusters.filter((c) => c.status === "running").length;
@@ -111,7 +111,7 @@ function clustersView(S, clusters) {
         <div><small>REGION</small><strong>${esc(c.region)}</strong></div>
       </div>
       <div class="pod-middle">
-        <div><div class="metric-name"><span>Utilization</span><b>${c.util || 0}%</b></div><div class="progress"><span style="width:${c.util || 0}%"></span></div></div>
+        <div><div class="metric-name"><span>Utilization</span><b>${c.liveUtil ?? c.util ?? 0}%</b></div><div class="progress"><span style="width:${c.liveUtil ?? c.util ?? 0}%"></span></div></div>
         <div><div class="metric-name"><span>Nodes</span><b>${nh.healthy ?? c.nodes}/${c.nodes}</b></div><div class="progress green"><span style="width:${Math.round(((nh.healthy ?? c.nodes) / Math.max(1, c.nodes)) * 100)}%"></span></div></div>
         <div><div class="metric-name"><span>Power</span><b>${c.powerKw || 0} kW</b></div><div class="progress"><span style="width:${Math.min(100, (c.powerKw || 0) / 8)}%"></span></div></div>
         <div><div class="metric-name"><span>Temp</span><b>${c.tempC || "—"}°C</b></div><div class="progress${(c.tempC || 0) > 55 ? " orange" : ""}"><span style="width:${Math.min(100, ((c.tempC || 30) / 90) * 100)}%"></span></div></div>

@@ -67,6 +67,6 @@ export function costSummary(s) {
   const monthly = r2(bills.reduce((a, b) => a + b.cost, 0));
   bills.forEach((b) => { b.pct = monthly ? Math.round((b.cost / monthly) * 100) : 0; });
   const hourly = r2(lines.reduce((a, l) => a + l.hourly, 0));
-  const gpuCount = lines.filter((l) => l.kind !== "storage").reduce((a, l) => a + Number(l.count || 0), 0);
+  const gpuCount = lines.filter((l) => l.kind !== "storage" && l.hourly > 0).reduce((a, l) => a + Number(l.count || 0), 0);
   return { bills, lines, monthly, hourly, gpuCount, gpuHours: r2(gpuCount * HOURS_PER_MONTH), currency: CURRENCY };
 }

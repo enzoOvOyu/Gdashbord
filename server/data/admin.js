@@ -1,4 +1,4 @@
-// 平台管理后台数据种子（演示用，全部与目录数据保持一致）
+// 平台管理后台数据种子（与目录数据保持一致；用量从真实工作负载实算）
 import { GPU, REGIONS } from "./catalog.js";
 import { fleetFromState } from "./fleet.js";
 
@@ -9,7 +9,7 @@ export function fleet(s) {
     const models = GPU.map((g) => {
       const cs = clusters.filter((c) => c.region === r.id && c.gpu === g.id);
       const total = cs.reduce((a, c) => a + c.count, 0);
-      const allocated = cs.reduce((a, c) => a + (c.status === "running" ? Math.round(c.count * (c.util / 100)) : c.status === "degraded" ? Math.round(c.count * (c.util / 100) * 0.6) : 0), 0);
+      const allocated = cs.reduce((a, c) => a + (c.liveUtil != null ? Math.round(c.count * (c.liveUtil / 100)) : c.status === "running" ? Math.round(c.count * (c.util / 100)) : 0), 0);
       return { id: g.id, name: g.name, total, free: total - allocated, allocated };
     });
     const total = models.reduce((a, m) => a + m.total, 0);
@@ -27,7 +27,17 @@ export function fleet(s) {
   });
 }
 
-export function adminSeed(fl = {}) {
+// 从真实工作负载实算各租户用量：running 实例 + 端点副本 + running 任务，按 tenant 归属聚合
+export function tenantUsageFromState(s) {
+  const usage = {};
+  const bump = (tenant, n) => { if (n > 0) usage[tenant] = (usage[tenant] || 0) + n; };
+  (s.instances || []).forEach((x) => { if (x.status === "running" && x.tenant) bump(x.tenant, Number(x.count || 0)); });
+  (s.endpoints || []).forEach((x) => { if (x.status !== "scaled-zero" && x.tenant) bump(x.tenant, Number(x.replicas || 0) * Number(x.gpusPerReplica || 1)); });
+  (s.jobs || []).forEach((x) => { if (x.status === "running" && x.tenant) bump(x.tenant, Number(x.count || 0)); });
+  return usage;
+}
+
+export function adminSeed(fl = {}, s = null) {
   const usage = fl.usage || [];
   const tenantDefs = fl.tenants || [];
   let _s = 771;
@@ -39,12 +49,23 @@ export function adminSeed(fl = {}) {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   };
 
+  // 真实负载用量（seed 阶段由 instances/endpoints/jobs 推导；未传时回退 fleet.usage 估算）
+  const liveUsage = s ? tenantUsageFromState(s) : {};
+  const usageMap = {};
+  usage.forEach((x) => (usageMap[x.id] = x));
+
   const tenants = tenantDefs.map((t, i) => {
-    const u = usage.find((x) => x.id === t.id) || { capacity: 0, used: 0 };
-    const plan = u.capacity > 900 ? "Enterprise" : u.capacity > 400 ? "Scale" : u.capacity > 120 ? "Growth" : "Starter";
-    const gpuQuota = Math.max(8, Math.round((u.capacity * 1.12) / 8) * 8);
-    const gpuUsed = u.used;
-    const spend = Math.round(u.used * 1825 * (0.8 + rng() * 0.5) * 100) / 100;
+    const u = usageMap[t.id] || { capacity: 0, used: 0 };
+    // used 从真实工作负载实算；quota = used × 1.25–1.6（向上取整到 8 卡），
+    // 使用率 60–80% 健康水位，配额总和不超过机队容量
+    const liveUsed = liveUsage[t.name] || 0;
+    const gpuUsed = liveUsed || u.used;
+    const plan = gpuUsed > 600 ? "Enterprise" : gpuUsed > 300 ? "Scale" : gpuUsed > 80 ? "Growth" : "Starter";
+    const quotaRaw = gpuUsed * (1.25 + rng() * 0.35);
+    const gpuQuota = Math.max(8, Math.round(quotaRaw / 8) * 8);
+    // 账单从该租户负载零售价实算：hourly × 730h（与费用中心/机队口径闭环）
+    const liveHourly = (s && s.__tenantUsage && s.__tenantUsage[t.name] && s.__tenantUsage[t.name].hourly) || 0;
+    const spend = liveHourly ? Math.round(liveHourly * 730 * 100) / 100 : Math.round(gpuUsed * 1825 * (0.8 + rng() * 0.5) * 100) / 100;
     const status = i === 4 ? "suspended" : i === 5 ? "invited" : "active";
     return {
       id: t.id, name: t.name, plan, region: t.region,

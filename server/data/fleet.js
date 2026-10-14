@@ -203,20 +203,116 @@ export function buildFleet(seed = 20261013) {
   return { clusters, usage: Object.values(usage), tenants: TENANTS };
 }
 
-// 由状态实算机队 KPI
+// 从真实工作负载推导需求：running 实例 + 端点副本 + running 任务 → region -> {gpu -> gpus}
+export function workloadDemand(s) {
+  const demand = {};
+  const add = (region, gpuId, n) => {
+    if (!n || n <= 0) return;
+    demand[region] = demand[region] || {};
+    demand[region][gpuId] = (demand[region][gpuId] || 0) + n;
+  };
+  (s.instances || []).forEach((x) => { if (x.status === "running") add(x.region, x.gpu, Number(x.count || 0)); });
+  (s.endpoints || []).forEach((x) => {
+    if (x.status === "scaled-zero") return;
+    add(x.region, x.gpu, Number(x.replicas || 0) * Number(x.gpusPerReplica || 1));
+  });
+  (s.jobs || []).forEach((x) => { if (x.status === "running") add(x.region, x.gpu, Number(x.count || 0)); });
+  return demand;
+}
+
+// 需求 → 集群分配映射（同区域同型号按容量比例分摊，单集群上限 95%）
+export function assignDemand(clusters, demand) {
+  const assigned = new Map(); // cluster.id -> gpus
+  for (const region of Object.keys(demand)) {
+    for (const gpuId of Object.keys(demand[region])) {
+      const need = demand[region][gpuId];
+      const pool = clusters.filter((c) => c.region === region && c.gpu === gpuId && (c.status === "running" || c.status === "degraded"));
+      const poolCap = pool.reduce((a, c) => a + c.count, 0);
+      if (!poolCap) continue; // 该区域无此型号可用集群：负载无法承载（不应发生）
+      let remain = need;
+      pool.forEach((c) => {
+        const share = Math.min(Math.round((c.count / poolCap) * need), Math.round(c.count * 0.95));
+        assigned.set(c.id, share);
+        remain -= share;
+      });
+      if (remain > 0) pool.forEach((c) => {
+        const extra = Math.min(remain, c.count - (assigned.get(c.id) || 0));
+        assigned.set(c.id, (assigned.get(c.id) || 0) + extra);
+        remain -= extra;
+      });
+      // 池仍放不下（理论不发生：生成端有放置守卫）——按比例记录溢出供诊断
+      if (remain > 0) (demand.__overflow = demand.__overflow || 0, demand.__overflow += remain);
+    }
+  }
+  return assigned;
+}
+
+// 由状态实算机队 KPI —— 分配量从真实工作负载闭环推导（消除悬空分配）：
+// 负载需求 → 按区域/型号聚合 → 分摊到集群 → 实算 util 与机队 KPI
 export function fleetFromState(s) {
   const clusters = (s && s.clusters) || [];
-  let total = 0, online = 0, allocated = 0, reserved = 0;
+  let total = 0, online = 0, reserved = 0;
   const byRegion = {};
   const byModel = {};
   const byZone = {};
   const health = { healthy: 0, degraded: 0, provisioning: 0, maintenance: 0 };
+
+  const demand = workloadDemand(s);
+  const assigned = assignDemand(clusters, demand);
+
+  // 按租户维度记录需求（region -> gpu -> n），用于把集群分配量精确归因到租户
+  const tenantDemand = {};
+  const addT = (tenant, region, gpuId, n) => {
+    if (!n || n <= 0 || !tenant) return;
+    tenantDemand[tenant] = tenantDemand[tenant] || {};
+    tenantDemand[tenant][region] = tenantDemand[tenant][region] || {};
+    tenantDemand[tenant][region][gpuId] = (tenantDemand[tenant][region][gpuId] || 0) + n;
+  };
+  (s.instances || []).forEach((x) => { if (x.status === "running") addT(x.tenant, x.region, x.gpu, Number(x.count || 0)); });
+  (s.endpoints || []).forEach((x) => {
+    if (x.status === "scaled-zero") return;
+    addT(x.tenant, x.region, x.gpu, Number(x.replicas || 0) * Number(x.gpusPerReplica || 1));
+  });
+  (s.jobs || []).forEach((x) => { if (x.status === "running") addT(x.tenant, x.region, x.gpu, Number(x.count || 0)); });
+
+  // 每个资源池（region×gpu）的集群分配总量，按租户需求占比精确归因
+  const poolAssigned = {};
+  clusters.forEach((c) => {
+    const key = c.region + ":" + c.gpu;
+    poolAssigned[key] = (poolAssigned[key] || 0) + (assigned.get(c.id) || 0);
+  });
+  const tenantUsage = {};
+  for (const t of Object.keys(tenantDemand)) {
+    let used = 0;
+    let hourly = 0;
+    for (const region of Object.keys(tenantDemand[t])) {
+      for (const gpuId of Object.keys(tenantDemand[t][region])) {
+        const tNeed = tenantDemand[t][region][gpuId];
+        const totalNeed = (demand[region] && demand[region][gpuId]) || 0;
+        const poolA = poolAssigned[region + ":" + gpuId] || 0;
+        if (totalNeed > 0) used += poolA * (tNeed / totalNeed);
+      }
+    }
+    tenantUsage[t] = { used: Math.round(used), hourly: 0 };
+  }
+  // 租户计费时价：按其负载的目录价逐项实算（与费用中心口径一致）
+  const priceOf = (gpuId) => { const g = GPU.find((x) => x.id === gpuId); return g ? g.price : 0; };
+  for (const t of Object.keys(tenantUsage)) {
+    let hourly = 0;
+    (s.instances || []).forEach((x) => { if (x.tenant === t && x.status === "running") hourly += priceOf(x.gpu) * Number(x.count || 0); });
+    (s.endpoints || []).forEach((x) => { if (x.tenant === t && x.status !== "scaled-zero") hourly += priceOf(x.gpu) * Number(x.replicas || 0) * Number(x.gpusPerReplica || 1); });
+    (s.jobs || []).forEach((x) => { if (x.tenant === t && x.status === "running") hourly += priceOf(x.gpu) * Number(x.count || 0); });
+    tenantUsage[t].hourly = +hourly.toFixed(2);
+  }
+
+  let allocated = 0;
   for (const c of clusters) {
     total += c.count;
     if (c.status === "running" || c.status === "degraded") online += c.count;
-    const used = c.status === "running" ? Math.round(c.count * (c.util / 100)) : c.status === "degraded" ? Math.round(c.count * (c.util / 100) * 0.6) : 0;
+    const used = Math.min(c.count, assigned.get(c.id) || 0);
     allocated += used;
     if (c.billing === "reserved") reserved += used;
+    c.liveUtil = Math.round((used / c.count) * 100);
     byRegion[c.region] = byRegion[c.region] || { region: c.region, total: 0, online: 0, allocated: 0, free: 0 };
     byRegion[c.region].total += c.count;
     byRegion[c.region].online += (c.status === "running" || c.status === "degraded") ? c.count : 0;
@@ -247,6 +343,8 @@ export function fleetFromState(s) {
     byModel: Object.values(byModel),
     byZone: Object.values(byZone),
     health,
+    tenantUsage,
+    _assigned: assigned,
   };
 }
 
