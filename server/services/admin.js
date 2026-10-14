@@ -39,6 +39,13 @@ export function adminOverview(s) {
     },
     fleet: f,
     regions: f.map((r) => ({ region: r.region, name: r.regionName, total: r.total, allocated: r.allocated, free: r.free })),
+    // 客户分层统计（企业/中型/中小，按 plan 划分，用量实算）
+    enterpriseCount: tenants.filter((t) => t.plan === "Enterprise").length,
+    enterpriseGpus: tenants.filter((t) => t.plan === "Enterprise").reduce((a, t) => a + t.gpuUsed, 0),
+    scaleCount: tenants.filter((t) => t.plan === "Scale").length,
+    scaleGpus: tenants.filter((t) => t.plan === "Scale").reduce((a, t) => a + t.gpuUsed, 0),
+    smallCount: tenants.filter((t) => t.plan === "Growth" || t.plan === "Starter").length,
+    smallGpus: tenants.filter((t) => t.plan === "Growth" || t.plan === "Starter").reduce((a, t) => a + t.gpuUsed, 0),
     recentAudit: s.admin.audit.slice(0, 6),
     announcements: s.admin.announcements,
     services: s.admin.services,

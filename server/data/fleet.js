@@ -10,18 +10,33 @@ const MODEL_MIX = { H100: 0.28, H200: 0.24, B200: 0.22, B300: 0.16, GB300: 0.10 
 
 // 租户（与 adminSeed 对应）：集群按就近区域归属
 const TENANTS = [
-  { id: "tn-001", name: "Nexa AI Labs", region: "US-IAD-1" },
-  { id: "tn-002", name: "Sakura Robotics", region: "JP-TYO-1" },
-  { id: "tn-003", name: "Siam Media Tech", region: "TH-BKK-1" },
-  { id: "tn-004", name: "Pacific Vision", region: "US-LAX-2" },
-  { id: "tn-005", name: "Bangkok Fintech", region: "TH-BKK-1" },
-  { id: "tn-006", name: "Orion Research", region: "JP-TYO-1" },
-  { id: "tn-007", name: "Helios Bio", region: "US-IAD-1" },
-  { id: "tn-008", name: "Meridian Auto", region: "US-LAX-2" },
-  { id: "tn-009", name: "Aster Data", region: "US-IAD-1" },
-  { id: "tn-010", name: "Lumen Robotics", region: "JP-TYO-1" },
-  { id: "tn-011", name: "Kestrel Finance", region: "US-LAX-2" },
-  { id: "tn-012", name: "Nova Studios", region: "TH-BKK-1" },
+  // 大型企业客户（专属集群，千卡级）
+  { id: "tn-001", name: "Nexa AI Labs", region: "US-IAD-1", tier: "enterprise" },
+  { id: "tn-007", name: "Helios Bio", region: "US-IAD-1", tier: "enterprise" },
+  { id: "tn-008", name: "Meridian Auto", region: "US-LAX-2", tier: "enterprise" },
+  { id: "tn-011", name: "Kestrel Finance", region: "US-LAX-2", tier: "enterprise" },
+  { id: "tn-002", name: "Sakura Robotics", region: "JP-TYO-1", tier: "enterprise" },
+  { id: "tn-006", name: "Orion Research", region: "JP-TYO-1", tier: "enterprise" },
+  { id: "tn-014", name: "Atlas Frontier", region: "US-IAD-1", tier: "enterprise" },
+  { id: "tn-015", name: "Quantum Grid AI", region: "US-LAX-2", tier: "enterprise" },
+  // 中型客户（数百卡）
+  { id: "tn-003", name: "Siam Media Tech", region: "TH-BKK-1", tier: "scale" },
+  { id: "tn-004", name: "Pacific Vision", region: "US-LAX-2", tier: "scale" },
+  { id: "tn-009", name: "Aster Data", region: "US-IAD-1", tier: "scale" },
+  { id: "tn-010", name: "Lumen Robotics", region: "JP-TYO-1", tier: "scale" },
+  { id: "tn-012", name: "Nova Studios", region: "TH-BKK-1", tier: "scale" },
+  { id: "tn-016", name: "Banyan Compute", region: "TH-BKK-1", tier: "scale" },
+  { id: "tn-017", name: "Cedar Analytics", region: "US-IAD-1", tier: "scale" },
+  { id: "tn-018", name: "Ironwood Labs", region: "JP-TYO-1", tier: "scale" },
+  // 小型客户（数十卡，Serverless 为主）
+  { id: "tn-005", name: "Bangkok Fintech", region: "TH-BKK-1", tier: "starter" },
+  { id: "tn-019", name: "Ratchada Tech", region: "TH-BKK-1", tier: "starter" },
+  { id: "tn-020", name: "Mekong Vision", region: "TH-BKK-1", tier: "starter" },
+  { id: "tn-021", name: "Aichi Robotics", region: "JP-TYO-1", tier: "starter" },
+  { id: "tn-022", name: "Kansai Media", region: "JP-TYO-1", tier: "starter" },
+  { id: "tn-023", name: "Downtown AI", region: "US-LAX-2", tier: "starter" },
+  { id: "tn-024", name: "Beacon ML", region: "US-IAD-1", tier: "starter" },
+  { id: "tn-025", name: "Harbor Genomics", region: "US-LAX-2", tier: "starter" },
 ];
 
 const FABRIC_LABEL = {

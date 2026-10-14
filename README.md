@@ -1,6 +1,10 @@
 # RunSun Cloud 控制台
 
+![Fleet Animation](docs/fleet-animation.svg)
+
 一体化 GPU 云控制台：从 GPU 选购、部署交付（工作空间 / 训练任务 / 推理 Endpoint / 集群）到 **Kubernetes GPU 资源管理**、可观测性与 FinOps 成本分析。
+
+**万卡级机队运营**：平台运营 10,016 张 GPU（103 集群 · 4 区域 · 12 可用区），服务 24 家分层客户（8 家企业专属集群 + 8 家中型节点池 + 8 家中小 Serverless），全部 KPI 由真实工作负载实算闭环。
 
 前端为**无构建 ES Module** 架构，后端为 Express REST API + JSON 状态持久化，前后端真实联调。
 

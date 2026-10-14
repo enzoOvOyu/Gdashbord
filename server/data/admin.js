@@ -54,47 +54,52 @@ export function adminSeed(fl = {}, s = null) {
   const usageMap = {};
   usage.forEach((x) => (usageMap[x.id] = x));
 
+  // ============ 租户：tier 分层驱动（enterprise 千卡级 / scale 数百卡 / growth+starter 数十卡） ============
   const tenants = tenantDefs.map((t, i) => {
     const u = usageMap[t.id] || { capacity: 0, used: 0 };
-    // used 从真实工作负载实算；quota = used × 1.25–1.6（向上取整到 8 卡），
-    // 使用率 60–80% 健康水位，配额总和不超过机队容量
     const liveUsed = liveUsage[t.name] || 0;
     const gpuUsed = liveUsed || u.used;
-    const plan = gpuUsed > 600 ? "Enterprise" : gpuUsed > 300 ? "Scale" : gpuUsed > 80 ? "Growth" : "Starter";
-    const quotaRaw = gpuUsed * (1.25 + rng() * 0.35);
-    const gpuQuota = Math.max(8, Math.round(quotaRaw / 8) * 8);
+    const plan = t.tier === "enterprise" ? "Enterprise" : t.tier === "scale" ? "Scale" : gpuUsed > 24 ? "Growth" : "Starter";
+    const quotaMul = t.tier === "enterprise" ? 1.15 + rng() * 0.15 : t.tier === "scale" ? 1.25 + rng() * 0.25 : 1.3 + rng() * 0.5;
+    const quotaFloor = t.tier === "enterprise" ? 128 : t.tier === "scale" ? 64 : 8;
+    const gpuQuota = Math.max(quotaFloor, Math.round((gpuUsed * quotaMul) / 8) * 8);
     // 账单从该租户负载零售价实算：hourly × 730h（与费用中心/机队口径闭环）
     const liveHourly = (s && s.__tenantUsage && s.__tenantUsage[t.name] && s.__tenantUsage[t.name].hourly) || 0;
     const spend = liveHourly ? Math.round(liveHourly * 730 * 100) / 100 : Math.round(gpuUsed * 1825 * (0.8 + rng() * 0.5) * 100) / 100;
     const status = i === 4 ? "suspended" : i === 5 ? "invited" : "active";
     return {
-      id: t.id, name: t.name, plan, region: t.region,
-      gpuQuota, gpuUsed, members: 4 + Math.floor(rng() * 40),
+      id: t.id, name: t.name, plan, tier: t.tier, region: t.region,
+      gpuQuota, gpuUsed, members: 0, // 生成用户后回填
       spend, status, created: dateAgo(3 + Math.floor(rng() * 20)),
       contact: "ops@" + slug(t.name) + ".com",
     };
   });
 
-  // 用户：跨租户生成（演示用确定性名单 + 随机扩展）
-  const firstNames = ["Mei", "John", "Somchai", "Emily", "Kenji", "Araya", "Liam", "Yuki", "Tom", "Ploy", "Sara", "Wei", "Noah", "Anya", "Hiro", "Mia", "Kai", "Lin", "Omar", "Eve"];
-  const roles = ["owner", "admin", "developer", "developer", "viewer", "billing"];
+  // ============ 用户：分层生成（企业 8-14 人 / 中型 4-8 人 / 小型 1-3 人，平台合计 ~150 人） ============
+  const firstNames = ["Mei", "John", "Somchai", "Emily", "Kenji", "Araya", "Liam", "Yuki", "Tom", "Ploy", "Sara", "Wei", "Noah", "Anya", "Hiro", "Mia", "Kai", "Lin", "Omar", "Eve", "Ryu", "Nate", "Zoe", "Aki", "Boon", "Fong", "Grace", "Hana", "Ivan", "Lena"];
+  const lastNames = ["Tanaka", "Carter", "R.", "Zhang", "Watanabe", "P.", "Smith", "Sato", "Lee", "Chai", "Lopez", "Wang", "Kim", "Nguyen", "Patel", "Silva", "Moreau", "Weber"];
+  const roles = ["owner", "admin", "developer", "developer", "developer", "viewer", "billing"];
   const users = [];
   tenants.forEach((t, ti) => {
-    const n = 2 + Math.floor(rng() * 4);
+    const n = t.plan === "Enterprise" ? 8 + Math.floor(rng() * 7) : t.plan === "Scale" ? 4 + Math.floor(rng() * 5) : 1 + Math.floor(rng() * 3);
     for (let i = 0; i < n; i++) {
       const fn = firstNames[(ti * 3 + i) % firstNames.length];
       users.push({
         id: "u-" + String(users.length + 1).padStart(3, "0"),
-        name: fn + " " + ["Tanaka", "Carter", "R.", "Zhang", "Watanabe", "P.", "Smith", "Sato", "Lee", "Chai", "Lopez", "Wang"][(ti + i) % 12],
-        email: fn.toLowerCase() + "@" + slug(t.name) + ".com",
+        name: fn + " " + lastNames[(ti + i) % lastNames.length],
+        email: fn.toLowerCase() + (i > 0 ? i : "") + "@" + slug(t.name) + ".com",
         tenant: t.name,
         role: i === 0 ? "owner" : roles[(ti + i) % roles.length],
-        mfa: rng() > 0.35,
+        mfa: t.plan === "Enterprise" ? rng() > 0.15 : rng() > 0.45,
         last: ["2 分钟前", "18 分钟前", "1 小时前", "昨天", "3 天前", "12 天前"][Math.floor(rng() * 6)],
         status: t.status === "active" ? "active" : rng() > 0.5 ? "active" : "suspended",
       });
     }
   });
+  // members 与用户列表严格一致（闭环）
+  const byTenant = {};
+  users.forEach((x) => (byTenant[x.tenant] = (byTenant[x.tenant] || 0) + 1));
+  tenants.forEach((t) => (t.members = byTenant[t.name] || 0));
 
   const roleDefs = [
     { id: "owner", name: "Owner", desc: { zh: "租户所有者，拥有全部权限与账单责任", en: "Tenant owner: full access and billing responsibility" } },
@@ -114,17 +119,17 @@ export function adminSeed(fl = {}, s = null) {
     { perm: { zh: "查看审计日志", en: "View audit log" }, owner: 1, admin: 1, developer: 0, viewer: 0, billing: 0 },
   ];
   const plans = [
-    { id: "Starter", gpuLimit: 8, maxNodes: 2, storage: "2 TB", fee: 0 },
-    { id: "Growth", gpuLimit: 128, maxNodes: 16, storage: "40 TB", fee: 499 },
-    { id: "Scale", gpuLimit: 512, maxNodes: 64, storage: "200 TB", fee: 1499 },
-    { id: "Enterprise", gpuLimit: 2048, maxNodes: 256, storage: "2 PB", fee: 4999 },
+    { id: "Starter", gpuLimit: 64, maxNodes: 8, storage: "2 TB", fee: 0, desc: { zh: "个人与初创：Serverless 为主", en: "Individuals & startups: serverless-first" } },
+    { id: "Growth", gpuLimit: 256, maxNodes: 32, storage: "40 TB", fee: 499, desc: { zh: "成长团队：Pod + Serverless", en: "Growing teams: pods + serverless" } },
+    { id: "Scale", gpuLimit: 1024, maxNodes: 128, storage: "200 TB", fee: 1499, desc: { zh: "中型企业：专属节点池", en: "Mid-size: dedicated node pools" } },
+    { id: "Enterprise", gpuLimit: 4096, maxNodes: 512, storage: "2 PB", fee: 4999, desc: { zh: "大型企业：专属集群与 SLA", en: "Large orgs: dedicated clusters & SLA" } },
   ];
   const invoices = tenants.map((t, i) => ({
     id: "INV-2026-09" + String(i + 1).padStart(2, "0"),
     tenant: t.name,
     amount: t.spend,
     period: "2026-09",
-    status: i === 3 ? "unpaid" : i === 4 ? "overdue" : i === 5 ? "unpaid" : "paid",
+    status: i % 9 === 3 ? "unpaid" : i % 12 === 4 ? "overdue" : "paid",
     issued: "2026-10-01",
   }));
   const services = [
@@ -133,7 +138,7 @@ export function adminSeed(fl = {}, s = null) {
     { name: { zh: "推理网关", en: "Inference gateway" }, status: "healthy", p95: "54 ms", uptime: "99.98%" },
     { name: { zh: "对象存储", en: "Object storage" }, status: "degraded", p95: "318 ms", uptime: "99.62%" },
     { name: { zh: "共享文件系统", en: "Shared filesystem" }, status: "healthy", p95: "27 ms", uptime: "99.95%" },
-    { name: { zh: "计费与计量", en: "Metering & billing" }, status: "maintenance", p95: "210 ms", uptime: "99.90%" },
+    { name: { zh: "计费与计量", en: "Metering & billing" }, status: "healthy", p95: "210 ms", uptime: "99.90%" },
     { name: { zh: "推理网关 WAF", en: "Inference WAF" }, status: "healthy", p95: "12 ms", uptime: "99.99%" },
     { name: { zh: "GPU 遥测 Pipeline", en: "GPU telemetry pipeline" }, status: "healthy", p95: "40 ms", uptime: "99.96%" },
   ];
@@ -144,7 +149,9 @@ export function adminSeed(fl = {}, s = null) {
     { id: "TK-5084", title: { zh: "账单导出字段缺失", en: "Invoice export missing fields" }, tenant: "Aster Data", priority: "medium", assignee: "Billing", age: "1d", status: "open" },
     { id: "TK-5079", title: { zh: "对象存储限速告警", en: "Object storage throttling alert" }, tenant: "Sakura Robotics", priority: "medium", assignee: "Storage", age: "2d", status: "resolved" },
     { id: "TK-5077", title: { zh: "新增子账号与配额调整", en: "Add sub-account and raise quota" }, tenant: "Orion Research", priority: "low", assignee: "Support", age: "3d", status: "resolved" },
-    { id: "TK-5075", title: { zh: "曼谷区域网络维护窗口确认", en: "Bangkok maintenance window" }, tenant: "Nova Studios", priority: "low", assignee: "Network", age: "4d", status: "open" },
+    { id: "TK-5085", title: { zh: "Serverless 冷启动延迟优化咨询", en: "Serverless cold-start optimization" }, tenant: "Beacon ML", priority: "low", assignee: "Support", age: "4d", status: "open" },
+    { id: "TK-5086", title: { zh: "专属集群网络隔离配置", en: "Dedicated cluster network isolation" }, tenant: "Atlas Frontier", priority: "medium", assignee: "Network", age: "6h", status: "open" },
+    { id: "TK-5087", title: { zh: "泰语模型微调配额申请", en: "Thai model fine-tune quota request" }, tenant: "Ratchada Tech", priority: "low", assignee: "Support", age: "1d", status: "open" },
   ];
   const announcements = [
     { date: "2026-10-13", title: { zh: "GB300 NVL72 机架在美东 IAD-1 扩容至 14 台", en: "GB300 NVL72 racks expanded to 14 in US-IAD-1" }, level: "info" },

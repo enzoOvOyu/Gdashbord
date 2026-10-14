@@ -17,7 +17,23 @@ const GPU_IDS = GPU.map((g) => g.id);
 const REGION_IDS = REGIONS.map((r) => r.id);
 const IMAGE_IDS = IMAGES.map((i) => i.id);
 
-const TENANT_NAMES = ["Nexa AI Labs", "Sakura Robotics", "Siam Media Tech", "Pacific Vision", "Bangkok Fintech", "Orion Research", "Helios Bio", "Meridian Auto", "Aster Data", "Lumen Robotics", "Kestrel Finance", "Nova Studios"];
+// 租户按 tier 分层采样：大任务主要归企业客户，小负载向中小客户倾斜
+const TENANT_ENTERPRISE = ["Nexa AI Labs", "Helios Bio", "Meridian Auto", "Kestrel Finance", "Sakura Robotics", "Orion Research", "Atlas Frontier", "Quantum Grid AI"];
+const TENANT_SCALE = ["Siam Media Tech", "Pacific Vision", "Aster Data", "Lumen Robotics", "Nova Studios", "Banyan Compute", "Cedar Analytics", "Ironwood Labs"];
+const TENANT_SMALL = ["Bangkok Fintech", "Ratchada Tech", "Mekong Vision", "Aichi Robotics", "Kansai Media", "Downtown AI", "Beacon ML", "Harbor Genomics"];
+const TENANT_NAMES = [...TENANT_ENTERPRISE, ...TENANT_SCALE, ...TENANT_SMALL];
+// 大负载(训练任务) 70% 企业 / 30% 中型；小负载(实例/端点) 40/35/25 分层
+let entCursor = 0;
+const tenantForJob = (r) => {
+  // 前 8 个大任务轮转分给每家企业客户（保底千卡级用量），之后 70/30 抽样
+  if (entCursor < TENANT_ENTERPRISE.length) return TENANT_ENTERPRISE[entCursor++];
+  return (r() < 0.7 ? TENANT_ENTERPRISE : TENANT_SCALE)[Math.floor(r() * (r() < 0.7 ? TENANT_ENTERPRISE.length : TENANT_SCALE.length))];
+};
+const tenantForSmall = (r) => {
+  const roll = r();
+  const pool = roll < 0.4 ? TENANT_ENTERPRISE : roll < 0.75 ? TENANT_SCALE : TENANT_SMALL;
+  return pool[Math.floor(r() * pool.length)];
+};
 
 const DATASETS = ["nlp-corpus-v3", "vision-dataset", "pretrain-tokens", "rlhf-preference", "speech-th-v1", "code-corpus-2t", "multimodal-web-1b", "math-reasoning-9m", "chemistry-mol-44m", "bio-genome-12tb"];
 const TEMPLATES = ["PyTorch DDP", "DeepSpeed ZeRO", "FSDP", "Megatron-Core", "Ray Train", "SLURM Batch", "NeMo"];
@@ -65,7 +81,7 @@ function genInstances(r) {
       disk: pick(r, [100, 200, 500, 1000, 2000]),
       ssh: r() > 0.4,
       jupyter: r() > 0.5,
-      tenant: pick(r, TENANT_NAMES),
+      tenant: tenantForSmall(r),
     });
   }
   return out;
@@ -113,7 +129,7 @@ function genEndpoints(r) {
       gpuUtil: status === "scaled-zero" ? 0 : between(r, 38, 92),
       version: `v${between(r, 1, 3)}.${between(r, 0, 9)}.${between(r, 0, 9)}`,
       created: `2026-${String(between(r, 1, 9)).padStart(2, "0")}-${String(between(r, 1, 28)).padStart(2, "0")}`,
-      tenant: pick(r, TENANT_NAMES),
+      tenant: tenantForSmall(r),
       dailyCost: +(replicas * gpusPerReplica * gpu(g).price * 24).toFixed(2),
     });
   }
@@ -186,7 +202,7 @@ function genJobs(r, clusters) {
       stage: pick(r, [B("预训练", "Pre-train"), B("微调", "Fine-tune"), B("对齐", "Alignment"), B("评估", "Eval")]),
       throughput,
       checkpoint: B(`step ${between(r, 100, 9000)}`, `step ${between(r, 100, 9000)}`),
-      tenant: pick(r, TENANT_NAMES),
+      tenant: tenantForJob(r),
       clusterId: clusters.length ? clusters[Math.floor(r() * clusters.length)].id : null,
     });
   }

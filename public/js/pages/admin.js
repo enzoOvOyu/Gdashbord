@@ -13,10 +13,17 @@ function roleTag(role) {
 function overviewView(ov, cost, platform, admin) {
   const k = ov.kpi;
   return [
-    `<div class="grid cols-3 mb16 kpi-row">`,
+    `<div class="grid cols-4 mb16 kpi-row">`,
     metric("ad.kpi.tenants", `${k.tenants} / ${k.tenantsTotal}`, "ad.kpi.tenants.desc", "<i class='bi bi-buildings'></i>", "", "hero"),
     metric("ad.kpi.users", k.users, `${k.usersActive} ${esc(t("ad.kpi.users.desc"))}`, "<i class='bi bi-people'></i>", "", ""),
     metric("ad.kpi.fleet", (k.fleetTotal || 0).toLocaleString(), "ad.kpi.fleet.desc", "<i class='bi bi-gpu-card'></i>", "", ""),
+    metric("ad.kpi.mrr", moneyShort(k.mrr), "ad.kpi.mrr.desc", "<i class='bi bi-cash-coin'></i>", "", ""),
+    `</div>`,
+    // 客户分层（大客户专属集群 vs 中型节点池 vs 中小 Serverless）
+    `<div class="grid cols-3 mb16">`,
+    metric(B("企业客户 · 专属集群", "Enterprise · dedicated"), ov.enterpriseCount || 0, B(`${ov.enterpriseGpus || 0} GPU · 占机队 ${Math.round(100 * (ov.enterpriseGpus || 0) / Math.max(1, k.fleetTotal))}%`, `${ov.enterpriseGpus || 0} GPUs · ${Math.round(100 * (ov.enterpriseGpus || 0) / Math.max(1, k.fleetTotal))}% of fleet`), "<i class='bi bi-building'></i>", "", ""),
+    metric(B("中型客户 · 节点池", "Scale · node pools"), ov.scaleCount || 0, B(`${ov.scaleGpus || 0} GPU · 占机队 ${Math.round(100 * (ov.scaleGpus || 0) / Math.max(1, k.fleetTotal))}%`, `${ov.scaleGpus || 0} GPUs · ${Math.round(100 * (ov.scaleGpus || 0) / Math.max(1, k.fleetTotal))}% of fleet`), "<i class='bi bi-diagram-3'></i>", "", ""),
+    metric(B("中小客户 · Serverless", "SMB · serverless-first"), ov.smallCount || 0, B(`${ov.smallGpus || 0} GPU · Serverless 为主`, `${ov.smallGpus || 0} GPUs · serverless-first`), "<i class='bi bi-lightning-charge-fill'></i>", "", ""),
     `</div>`,
     `<div class="grid cols-3 mb16 kpi-row">`,
     metric("ad.kpi.util", k.utilization + "%", `${(k.fleetAllocated || 0).toLocaleString()} / ${(k.fleetTotal || 0).toLocaleString()}`, "<i class='bi bi-speedometer2'></i>", "", ""),
@@ -54,7 +61,7 @@ function tenantsView(data, S) {
       <thead><tr><th>${esc(t("ad.tenant.th"))}</th><th>${esc(t("ad.tenant.plan"))}</th><th>${esc(t("ad.tenant.region"))}</th><th>${esc(t("ad.tenant.quota"))}</th><th>${esc(t("ad.tenant.users"))}</th><th>${esc(t("ad.tenant.spend"))}</th><th>${esc(t("ad.tenant.status"))}</th><th>${esc(t("common.actions"))}</th></tr></thead><tbody>`,
     tenants.map((x) => `<tr>
       <td><strong>${esc(x.name)}</strong><small>${esc(x.id)} · ${esc(x.contact)}</small></td>
-      <td><span class="tag">${esc(x.plan)}</span></td>
+      <td><span class="pill ${x.plan === "Enterprise" ? "purple" : x.plan === "Scale" ? "blue" : "gray"} sm"><i class="dot"></i>${esc(x.plan)}</span></td>
       <td>${esc(x.region)}</td>
       <td>${x.gpuUsed} / ${x.gpuQuota}<div class="progress sm"><span style="width:${Math.round((x.gpuUsed / x.gpuQuota) * 100)}%"></span></div></td>
       <td>${x.members}</td>
