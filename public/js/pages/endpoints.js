@@ -42,9 +42,10 @@ export default async function endpointsPage(S) {
 
   // Endpoint 机队表格行
   const rows = list.map((e) => `<tr>
-    <td><strong>${esc(e.name)}</strong><small>${esc(e.model)} · ${esc(e.engine)}</small></td>
-    <td>${esc(e.gpu)} × ${e.gpusPerReplica || 1} × ${e.replicas}</td>
+    <td><div class="endpoint-name"><div class="endpoint-icon"><i class="bi bi-lightning-charge-fill"></i></div><div><strong>${esc(e.name)}</strong><small class="mono">${esc(e.id)} · ${esc(e.model)}</small></div></div></td>
     <td>${status(e.status)}</td>
+    <td>${esc(e.gpu)} × ${e.gpusPerReplica || 1}</td>
+    <td>${e.replicas || 0} / ${e.max || 0}</td>
     <td>${e.qps || 0}</td>
     <td><b>${(e.tokensPerSec || 0).toLocaleString()}</b></td>
     <td>${e.p50 || "—"} / <b>${e.p95 || "—"}</b> ms</td>
@@ -52,7 +53,7 @@ export default async function endpointsPage(S) {
     <td>${e.gpuUtil != null ? e.gpuUtil + "%" : "—"}</td>
     <td>${esc(e.region || "—")}${e.zone ? "<small>" + esc(e.zone) + "</small>" : ""}</td>
     <td>${money(e.dailyCost || 0)}</td>
-    <td>${btn("common.view", "endpoint:" + e.id, "sm")}</td>
+    <td><div class="table-action">${btn("common.view", "endpoint:" + e.id, "sm")}${btn(`<i class="bi bi-${e.status === "healthy" ? "pause" : "play"}"></i>`, "scale:" + e.id, "sm ghost")}</div></td>
   </tr>`).join("");
 
   return [
@@ -66,15 +67,32 @@ export default async function endpointsPage(S) {
     metric(B("日推理成本", "Daily inference cost"), moneyShort(dailyCost), B("平均 P95 " + avgP95 + " ms · 可用性 99.95%", "Avg P95 " + avgP95 + " ms · 99.95% uptime"), "<i class='bi bi-cash-stack'></i>", "↓ 3.1%", ""),
     `</div>`,
 
-    // Endpoint 机队表格（全量）
-    `<div class="card card-pad mb16">${section(B("端点机队", "Endpoint fleet") + " · " + list.length, `<a data-nav="create" data-mode="endpoint" href="javascript:void(0)">${esc(t("ep.cta"))} →</a>`)}`,
+    // Endpoint 机队表格（全量 + table-footer + Auto-scaling 徽标）
+    `<div class="card mb16"><div class="section-head" style="padding:20px 20px 0"><div><div class="card-title">${esc(B("端点机队", "Your endpoints"))}</div><div class="card-sub">${esc(B("管理推理端点与 Worker 自动伸缩", "Manage inference endpoints and worker autoscaling"))}</div></div><span class="pill purple"><i class="bi bi-lightning-charge-fill"></i> ${esc(B("自动伸缩已启用", "Auto-scaling enabled"))}</span></div>`,
     `<div class="table-wrap"><table><thead><tr>`,
     `<th>${esc(t("common.name"))} / ${esc(B("模型 · 引擎", "Model · engine"))}</th>`,
-    `<th>GPU</th><th>${esc(t("common.status"))}</th><th>QPS</th>`,
+    `<th>${esc(t("common.status"))}</th><th>GPU</th><th>${esc(B("WORKERS", "WORKERS"))}</th><th>QPS</th>`,
     `<th>${esc(B("Tokens/s", "Tokens/s"))}</th>`,
     `<th>p50 / p95</th><th>${esc(B("错误率", "Error"))}</th><th>${esc(B("GPU 利用率", "GPU util"))}</th>`,
     `<th>${esc(t("common.region"))}</th><th>${esc(B("日成本", "Daily cost"))}</th><th></th>`,
-    `</tr></thead><tbody>${rows}</tbody></table></div></div>`,
+    `</tr></thead><tbody>${rows}</tbody></table>
+    <div class="table-footer"><span>${list.length} ${esc(B("端点 · 模拟指标", "endpoints · simulated metrics"))}</span><span>${esc(B("显示全部端点", "Showing all endpoints"))}</span></div></div></div>`,
+
+    // Serverless 架构流（素材包 activity 模式）+ 推理请求趋势
+    `<div class="split-65 mb16">`,
+    `<div class="card chart-panel"><div class="section-head"><div><div class="card-title">${esc(B("推理请求量", "Inference requests"))}</div><div class="card-sub">${esc(B("活跃端点请求合计", "Requests across active endpoints"))}</div></div><span class="pill gray">${esc(B("近 24 小时", "Last 24 hours"))}</span></div>`,
+    `<div class="billing-total">${(totalReq / 1_000_000).toFixed(2)}M <span class="pill green">↗ 18.6%</span></div>`,
+    chart(m.primary, { color: "#17a76f", height: 205 }),
+    `<div class="row between tiny-text"><span>${esc(B("起始", "Period start"))}</span><span>${esc(B("当前", "Period end"))}</span></div></div>`,
+    `<div class="card card-pad"><div class="section-head"><div><div class="card-title">${esc(B("Serverless 架构", "Serverless architecture"))}</div><div class="card-sub">${esc(B("自动伸缩工作负载运行机制", "How auto-scaling workloads behave"))}</div></div><i class="bi bi-layers"></i></div>`,
+    `<div class="activity">`,
+    [[B("请求队列", "Request queue"), B("接收并分发推理请求", "Accept and distribute incoming inference requests"), "lightning-charge-fill"],
+     [B("GPU Workers", "GPU workers"), B("按 min–max 副本自动伸缩", "Scale from min to max worker count"), "hdd-stack"],
+     [B("遥测", "Telemetry"), B("跟踪队列延迟、执行时长与错误", "Track queue delay, execution time and errors"), "activity"],
+     [B("按量计费", "Usage-based billing"), B("成本取决于 GPU Worker 与执行时长", "Cost depends on GPU workers and execution"), "wallet2"]]
+      .map((a) => `<div class="activity-item"><div class="activity-icon"><i class="bi bi-${a[2]}"></i></div><div><div class="activity-title">${esc(L(a[0]))}</div><div class="activity-meta">${esc(L(a[1]))}</div></div></div>`).join(""),
+    `</div></div>`,
+    `</div>`,
 
     // 选定端点工作台
     x

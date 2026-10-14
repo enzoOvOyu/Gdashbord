@@ -1,7 +1,7 @@
 // 入口：render() / runAction() / 事件委托（中英双语 + 管理端动作）
 import { S, loadUI, save, set, refreshDomain, refreshCatalog } from "./store.js";
 import { api } from "./api.js";
-import { $, esc, toast, modal, closeModal, copy, btn, status, money, gpu, skeleton, t, L } from "./ui.js";
+import { $, esc, toast, modal, closeModal, copy, btn, status, money, gpu, skeleton, drawer, detailPairs, commandPanel, t, L } from "./ui.js";
 import { getLang, setLang, toggleLang } from "./i18n.js";
 import { shell } from "./shell.js";
 import overview from "./pages/overview.js";
@@ -99,9 +99,116 @@ async function instanceAction(action, id) {
   }
 }
 
+function bindCommandInput(items) {
+  const inp = document.getElementById("command-input");
+  if (!inp || inp.dataset.bound) return;
+  inp.dataset.bound = "1";
+  inp.addEventListener("input", () => {
+    $("#modal-root").innerHTML = commandPanel(items, inp.value);
+    const inp2 = document.getElementById("command-input");
+    if (inp2) { inp2.focus(); inp2.setSelectionRange(inp2.value.length, inp2.value.length); bindCommandInput(items); }
+  });
+}
+
+// Pod 详情抽屉（素材包 drawer 模式）：Overview / Metrics / Logs / Connect 四 tab
+function openPodDrawer(id) {
+  const x = (S.instances || []).find((i) => i.id === id);
+  if (!x) return;
+  S.drawerPod = id;
+  S.drawerTab = S.drawerTab || "overview";
+  save();
+  renderPodDrawer(x);
+}
+
+function renderPodDrawer(x) {
+  const g = gpu(x.gpu);
+  const running = x.status === "running";
+  const seed = (x.id || "x").split("").reduce((a, c) => a + c.charCodeAt(0), 0);
+  const tab = S.drawerTab || "overview";
+  const tabsHTML = `<div class="tabs mb20">${[["overview", B("概览", "Overview")], ["metrics", B("指标", "Metrics")], ["logs", B("日志", "Logs")], ["connect", B("连接", "Connect")]]
+    .map(([v, l]) => `<button class="tab ${tab === v ? "active" : ""}" data-act="drawer-tab:${v}">${esc(L(l))}</button>`).join("")}</div>`;
+  const actionsHTML = btn(`<i class="bi bi-terminal"></i> ${esc(L(B("连接", "Connect")))}`, "connect:" + x.id, "sm", running ? "" : "disabled")
+    + btn(`<i class="bi bi-activity"></i> ${esc(t("job.btn.logs"))}`, "logs:" + x.id, "sm")
+    + btn(`<i class="bi bi-${running ? "pause" : "play"}"></i> ${running ? esc(L(B("停止", "Stop"))) : esc(L(B("启动", "Start")))}`, "toggle-instance:" + x.id, "sm");
+
+  let body = "";
+  if (tab === "overview") {
+    body = `<div class="drawer-section"><h3>${esc(L(B("Pod 配置", "Pod configuration")))}</h3>
+      ${detailPairs([
+        [B("状态", "Status"), status(x.status)],
+        [B("GPU", "GPU"), `${x.count} × ${esc(x.gpu)}`],
+        [B("显存", "VRAM"), (g.vram * x.count) + " GB"],
+        [t("common.region"), esc(x.region)],
+        [B("模板", "Template"), esc(x.image)],
+        [B("类型", "Kind"), esc(L(x.kind))],
+        [B("容器磁盘", "Container disk"), (x.disk || 0) + " GB"],
+        [B("时价", "Hourly price"), money(g.price * x.count) + "/hr"],
+      ])}</div>
+      <div class="row gap8 mt20 mb16">${btn(`<i class="bi bi-trash"></i> ${esc(L(B("终止 Pod", "Terminate Pod")))}`, "delete-instance:" + x.id, "danger sm")}</div>
+      <div class="notice"><i class="bi bi-info-circle"></i> ${esc(L(B("终止将永久删除容器盘数据；持久卷独立保留。", "Terminating permanently deletes container disk data; persistent volumes are retained.")))}</div>`;
+  } else if (tab === "metrics") {
+    const vals = [["GPU", 40 + seed % 55], ["CPU", 25 + (seed + 7) % 60], [B("内存", "Memory"), 30 + (seed + 13) % 55], [B("磁盘", "Disk"), 20 + (seed + 3) % 65]];
+    body = `<div class="drawer-section"><h3>${esc(L(B("资源利用率", "Resource utilization")))}</h3>
+      ${vals.map(([k, v]) => `<div style="margin:0 0 18px"><div class="metric-name"><span>${esc(L(k))}</span><b>${running ? v : 0}%</b></div><div class="progress"><span style="width:${running ? v : 0}%"></span></div></div>`).join("")}
+      <div class="notice"><i class="bi bi-graph-up-arrow"></i> ${esc(L(B("指标每 5 秒采集（DCGM），历史保留 30 天。", "Metrics sampled every 5s (DCGM), 30-day retention.")))}</div></div>`;
+  } else if (tab === "logs") {
+    body = `<div class="drawer-section"><h3>${esc(L(B("容器日志", "Container logs")))}</h3>
+      <div class="terminal">[INFO] region=${esc(x.region)} image=${esc(x.image)}
+<span class="ok">[INFO] GPU ${esc(x.gpu)} × ${x.count} allocated</span>
+[INFO] volume /workspace mounted (${x.disk} GB)
+[INFO] JupyterLab started on :8888
+<span class="warn">[WARN] NCCL_SOCKET_IFNAME=ens1 recommended for multi-node</span>
+<span class="ok">[INFO] workspace ${esc(x.name)} is ready</span></div></div>`;
+  } else {
+    body = `<div class="drawer-section"><h3>${esc(L(B("连接方式", "Connection options")))}</h3>
+      ${detailPairs([
+        [B("SSH 命令", "SSH command"), `<span class="mono">ssh -i ~/.ssh/demo_key ubuntu@${esc(x.ip || "—")}</span>`],
+        [B("JupyterLab", "JupyterLab"), x.jupyter ? `<span class="mono">https://${esc(x.id)}-8888.proxy.runsuncloud.net</span>` : "—"],
+        [B("Web 终端", "Web terminal"), `<span class="mono">https://${esc(x.id)}-7681.proxy.runsuncloud.net</span>`],
+        [B("HTTP 服务", "HTTP services"), `<span class="mono">:8888 JupyterLab · :22 SSH</span>`],
+      ])}
+      <div class="mt16">${btn(`<i class="bi bi-clipboard"></i> ${esc(t("common.copy"))} SSH`, "copy-connect:" + x.id, "sm")}</div>
+      <div class="notice mt16"><i class="bi bi-shield-lock"></i> ${esc(L(B("SSH 需在账户中登记公钥；端口代理经控制台鉴权。", "SSH requires a registered public key; port proxies authenticate via console.")))}</div></div>`;
+  }
+  $("#drawer-root").innerHTML = drawer(x.name, `${x.id} · ${x.gpu} × ${x.count}`, body, tabsHTML, actionsHTML);
+}
+
 async function runAction(a) {
   if (a === "close-modal") return closeModal();
+  if (a === "drawer-close") { S.drawerPod = ""; S.drawerTab = "overview"; save(); const d = $("#drawer-root"); if (d) d.innerHTML = ""; return; }
+  if (a.startsWith("drawer-tab:")) {
+    S.drawerTab = a.split(":")[1];
+    save();
+    const x = (S.instances || []).find((i) => i.id === S.drawerPod);
+    if (x) renderPodDrawer(x);
+    return;
+  }
   if (a === "none") return;
+
+  // ===== ⌘K 命令面板 =====
+  if (a === "open-command") {
+    const items = (S.NAV || []).map((n) => ({ label: t("nav." + n[0]), icon: n[1], act: "cmd-nav:" + n[0], keywords: n[0] }))
+      .concat([
+        { label: B("部署 GPU Pod", "Deploy GPU Pod"), icon: "rocket-takeoff", act: "create-workspace", keywords: "pod deploy" },
+        { label: B("部署推理 Endpoint", "Deploy Endpoint"), icon: "lightning-charge-fill", act: "go-endpoint", keywords: "serverless inference" },
+        { label: B("提交训练任务", "Submit training job"), icon: "cpu", act: "create-job", keywords: "train job" },
+        { label: B("创建集群", "Create cluster"), icon: "hdd-rack", act: "create-cluster", keywords: "cluster slurm" },
+        { label: B("充值演示余额", "Recharge demo balance"), icon: "wallet2", act: "recharge", keywords: "billing balance" },
+        { label: B("切换语言", "Toggle language"), icon: "translate", act: "toggle-lang", keywords: "language i18n" },
+      ]);
+    $("#modal-root").innerHTML = commandPanel(items, "");
+    const inp = document.getElementById("command-input");
+    if (inp) {
+      inp.focus();
+      inp.addEventListener("input", () => {
+        $("#modal-root").innerHTML = commandPanel(items, inp.value);
+        const inp2 = document.getElementById("command-input");
+        if (inp2) { inp2.focus(); inp2.setSelectionRange(inp2.value.length, inp2.value.length); bindCommandInput(items); }
+      });
+    }
+    return;
+  }
+  if (a.startsWith("cmd-nav:")) { closeModal(); return navigate(a.split(":")[1]); }
 
   if (a === "toggle-lang") {
     toggleLang();
@@ -358,7 +465,7 @@ async function runAction(a) {
     closeModal();
     return navigate("create");
   }
-  if (a.startsWith("instance:")) { S.selectedInstance = a.split(":")[1]; save(); return navigate("instances"); }
+  if (a.startsWith("instance:")) { openPodDrawer(a.split(":")[1]); return; }
   if (a.startsWith("toggle-instance:") || a.startsWith("connect:") || a.startsWith("jupyter:") || a.startsWith("logs:") || a.startsWith("restart:") || a.startsWith("monitor:") || a.startsWith("delete-instance:")) {
     const parts = a.split(":");
     const act = parts[0], id = parts[1];
@@ -578,6 +685,8 @@ async function runAction(a) {
 document.addEventListener("click", (e) => {
   const over = e.target.closest("[data-overlay]");
   if (over && e.target === over) return closeModal();
+  const dOver = e.target.closest("[data-drawer-overlay]");
+  if (dOver && e.target === dOver) { const d = $("#drawer-root"); if (d) d.innerHTML = ""; return; }
   const act = e.target.closest("[data-act]");
   if (act) { e.preventDefault(); runAction(act.dataset.act); return; }
   const n = e.target.closest("[data-nav]");
@@ -635,7 +744,7 @@ document.addEventListener("change", (e) => {
 });
 
 document.addEventListener("keydown", (e) => {
-  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); ($("#global-search") || {}).focus && $("#global-search").focus(); }
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); runAction("open-command"); }
   if (e.key === "Escape") closeModal();
   if (e.key === "Enter" && e.target.id === "global-search") {
     const q = e.target.value.trim();

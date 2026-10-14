@@ -24,8 +24,14 @@ export default async function billingPage(S0) {
     tab === "overview"
       ? [
           `<div class="split-65 mb16">`,
-          `<div class="card card-pad">${section(S("费用趋势", "Spend trend"), segmented([["7d", S("近7天", "7d")], ["30d", S("近30天", "30d")]], S0.billingRange, "billingRange"))}${chart(m.primary, { color: "#ff6000", height: 230 })}<div class="small muted">${esc(t("common.demo"))} · USD</div></div>`,
-          `<div class="card card-pad">${section(S("按工作负载分摊", "Allocation by workload"))}<div class="flex" style="gap:20px"><div class="donut"><div class="donut-inner">100%<small>${esc(L(S("成本分布", "Cost split")))}</small></div></div><div class="legend" style="flex:1">${b.bills.map((x, i) => `<div class="legend-item"><span><i style="background:${colors[i]}"></i>${esc(L(x.name))}</span><b>${x.pct}%</b></div>`).join("")}</div></div></div>`,
+          `<div class="card card-pad">${section(S("费用趋势", "Cost over time"), segmented([["7d", S("近7天", "7d")], ["30d", S("近30天", "30d")]], S0.billingRange, "billingRange"))}`,
+          `<div class="billing-total">${money(b.monthCost)} <span class="pill orange">+ 12.6%</span></div>`,
+          `${chart(m.primary, { color: "#ff6000", height: 205 })}<div class="row between tiny-text"><span>${esc(L(S("期初", "Period start")))}</span><span>${esc(L(S("期末", "Period end")))}</span></div><div class="small muted mt12">${esc(t("common.demo"))} · USD</div></div>`,
+          `<div class="card card-pad">${section(S("按工作负载分摊", "Cost breakdown"))}`,
+          `<div class="stacked">${b.bills.map((x, i) => `<i style="width:${x.pct}%;background:${colors[i]}"></i>`).join("")}</div>`,
+          `<div class="bill-breakdown">${b.bills.map((x, i) => `<div class="bill-row"><span class="bill-mark" style="background:${colors[i]}"></span><span class="bill-name">${esc(L(x.name))} <span class="tiny-text">${x.pct}%</span></span><span class="bill-val">${money(x.cost)}</span></div>`).join("")}</div>`,
+          `<div class="separator"></div>`,
+          `<div class="notice"><i class="bi bi-info-circle"></i> ${esc(L(S("成本按工作负载实算（集群容量不计入独立行，避免与运行负载重复）。", "Costs computed from live workloads (cluster capacity excluded to avoid double counting).")))} </div></div>`,
           `</div>`,
           `<div class="layout-main-side">`,
           `<div class="card card-pad">${section(S("费用构成与资源归因", "Cost breakdown"), `<a href="javascript:void(0)" data-set="billingTab" data-value="details">${esc(L(S("查看明细 →", "View details →")))}</a>`)}`,

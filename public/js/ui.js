@@ -55,6 +55,34 @@ export function toast(text, kind = "ok") {
   setTimeout(() => el.remove(), 3300);
 }
 
+// 右侧详情抽屉（素材包 drawer 模式：tabs + detail-pairs + terminal）
+export function drawer(title, subtitle, bodyHTML, tabsHTML, actionsHTML = "") {
+  return `<div class="drawer-overlay" data-drawer-overlay="1"><div class="drawer" role="dialog" aria-modal="true">
+    <div class="drawer-head"><div><h2>${esc(L(title))}</h2><p class="mono">${esc(L(subtitle))}</p></div><button class="icon-btn" data-act="drawer-close"><i class="bi bi-x-lg"></i></button></div>
+    <div class="drawer-body">
+      ${actionsHTML ? `<div class="drawer-actions">${actionsHTML}</div>` : ""}
+      ${tabsHTML}
+      ${bodyHTML}
+    </div>
+  </div></div>`;
+}
+
+// detail-pairs（抽屉内 KV 双列）
+export function detailPairs(pairs) {
+  return `<div class="detail-pairs">${pairs.map(([k, v]) => `<div><label>${esc(L(k))}</label><strong>${v}</strong></div>`).join("")}</div>`;
+}
+
+// ⌘K 命令面板（素材包 keyboard-modal 模式）
+export function commandPanel(items, query) {
+  const q = (query || "").toLowerCase();
+  const filtered = items.filter((x) => String(x.label).toLowerCase().includes(q) || String(x.keywords || "").toLowerCase().includes(q));
+  return `<div class="keyboard-modal" data-overlay="1" data-command-overlay="1"><div class="command-panel">
+    <div class="command-search"><i class="bi bi-search"></i><input id="command-input" value="${esc(query || "")}" placeholder="${esc(t("shell.search"))}" autofocus/><span class="tiny-text">ESC</span></div>
+    <div class="command-items">${filtered.length ? filtered.map((x) => `<button class="command-item" data-act="${x.act}"><i class="bi bi-${x.icon}"></i> ${esc(L(x.label))} <i class="bi bi-arrow-right"></i></button>`).join("") : `<div class="empty-state" style="padding:24px">${esc(t("common.none"))}</div>`}</div>
+    <div class="command-foot">⌘K · ${esc(L({ zh: "页面与快捷操作 · Esc 关闭", en: "Pages & quick actions · Esc to close" }))}</div>
+  </div></div>`;
+}
+
 export function modal(title, body, actions = "") {
   $("#modal-root").innerHTML = `<div class="overlay" data-overlay="1"><div class="modal" role="dialog" aria-modal="true"><div class="modal-head"><h2>${esc(L(title))}</h2><button class="btn sm" data-act="close-modal"><i class='bi bi-x-lg'></i></button></div><div class="modal-body">${body}</div>${actions ? `<div class="modal-foot">${actions}</div>` : ""}</div></div>`;
 }
