@@ -3,11 +3,21 @@ import { S } from "./store.js";
 import { esc, t, L } from "./ui.js";
 import { getLang } from "./i18n.js";
 
+// 侧栏导航徽标数：运行中的资源计数（kit side-link count 模式）
+function navCount(id) {
+  if (id === "instances") return (S.instances || []).filter((x) => x.status === "running").length;
+  if (id === "endpoints") return (S.endpoints || []).filter((x) => x.status === "healthy").length;
+  if (id === "jobs") return (S.jobs || []).filter((x) => x.status === "running").length;
+  if (id === "admin") return (S.admin?.tickets || []).filter((x) => x.status === "open").length;
+  return 0;
+}
+
 export function nav(n) {
   const id = n[0], icon = n[1], key = n[2];
   const label = t("nav." + id);
+  const count = navCount(id);
   const mini = id === "admin" ? `<span class="mini">ADMIN</span>` : "";
-  return `<button class="nav ${S.page === id ? "active" : ""}" data-nav="${id}" title="${esc(label)}" aria-current="${S.page === id ? "page" : "false"}"><span class="nav-icon"><i class="bi bi-${icon}"></i></span><span>${esc(label)}</span>${mini}</button>`;
+  return `<button class="nav ${S.page === id ? "active" : ""}" data-nav="${id}" title="${esc(label)}" aria-current="${S.page === id ? "page" : "false"}"><span class="nav-icon"><i class="bi bi-${icon}"></i></span><span>${esc(label)}</span>${count ? `<span class="count">${count}</span>` : ""}${mini}</button>`;
 }
 
 export function shell() {
@@ -19,11 +29,13 @@ export function shell() {
     `<div class="app${collapsed ? " collapsed" : ""}">`,
     `<aside class="sidebar">`,
     `<div class="brand"><div class="brandlogo"><i class='bi bi-gpu-card'></i></div><div><b>${esc(t("shell.brand"))}</b><small>${esc(t("shell.slogan"))}</small></div></div>`,
+    `<div class="nav-scroll">`,
     `<div class="nav-section">${esc(t("nav.section.workspace"))}</div>${list.slice(0, 4).map(nav).join("")}`,
     `<div class="nav-section">${esc(t("nav.section.platform"))}</div>${list.slice(4, 8).map(nav).join("")}`,
     `<div class="nav-section">${esc(t("nav.section.operations"))}</div>${list.slice(8, 11).map(nav).join("")}`,
     `<div class="nav-section">${esc(t("nav.section.admin"))}</div>${list.slice(11).map(nav).join("")}`,
-    `<div class="side-bottom"><div class="promo"><h3>${esc(t("shell.promo.title"))}</h3><p>${t("shell.promo.body")}</p><button data-act="go-create">${esc(t("shell.promo.cta"))}</button></div><div style="padding:12px 4px 2px;color:#5b6779;font-size:10px">DEMO PROTOTYPE · V3.2</div></div>`,
+    `</div>`,
+    `<div class="side-bottom"><div class="promo"><h3>${esc(t("shell.promo.title"))}</h3><p>${t("shell.promo.body")}</p><button data-act="go-create">${esc(t("shell.promo.cta"))}</button></div><div style="padding:12px 4px 2px;color:#686f8a;font-size:10px;letter-spacing:1.2px">RUNSUN CLOUD · V4</div></div>`,
     `</aside>`,
     `<div class="main">`,
     `<div class="topbar">`,

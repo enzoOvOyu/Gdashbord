@@ -61,23 +61,27 @@ export default async function overview(S) {
   return [
     header("ov.title", "ov.sub", btn("ov.cta.create", "go-create", "primary") + btn("ov.cta.guide", "about")),
 
-    // 运营横幅：万卡规模宣言
-    `<div class="banner mb16"><div><div style="font-size:10px;letter-spacing:1.8px;opacity:.8;margin-bottom:7px">${esc(t("ov.banner.eyebrow"))}</div><h2>${esc(t("ov.banner.title"))}</h2><p>${t("ov.banner.body")}</p></div>${btn("<i class='bi bi-lightning-charge-fill'></i> " + t("ov.banner.cta"), "go-endpoint", "primary")}</div>`,
+    // 运营横幅：万卡规模宣言（素材包 hero 模式：装饰图形 + 双 CTA）
+    `<div class="banner mb16"><div><div style="font-size:10px;letter-spacing:1.8px;opacity:.8;margin-bottom:7px">${esc(t("ov.banner.eyebrow"))}</div><h2>${esc(t("ov.banner.title"))}</h2><p>${t("ov.banner.body")}</p><div class="flex" style="gap:8px;margin-top:14px">${btn("<i class='bi bi-rocket-takeoff'></i> " + t("ov.cta.create"), "go-create", "primary")}${btn(t("ov.banner.cta") + " <i class='bi bi-arrow-right'></i>", "go-endpoint")}</div></div><div class="hero-art"><div class="hero-orbit"></div><div class="hero-orbit two"></div><div class="hero-chip"><i class="bi bi-gpu-card"></i></div></div></div>`,
 
-    // 机队级 KPI（4 张）
+    // 机队级 KPI（4 张，含 sparkline 趋势）
     `<div class="grid cols-4 mb16 kpi-row">`,
     metric(B("GPU 机队总规模", "Total GPU fleet"), total.toLocaleString(),
       B(`在线 ${online.toLocaleString()} · 利用率 ${util}%`, `Online ${online.toLocaleString()} · ${util}% utilized`),
-      "<i class='bi bi-cpu'></i>", `↗ ${regionTotal} ${esc(t("common.region"))}`, "hero"),
+      "<i class='bi bi-cpu'></i>", `↗ ${regionTotal} ${esc(t("common.region"))}`, "hero",
+      { data: [62, 66, 71, 69, 76, 82, 84, 88, 92, 96, 98, 100], color: "#ff6000" }),
     metric(B("机队利用率", "Fleet utilization"), util + "%",
       B(`已分配 ${allocated.toLocaleString()} · 可分配 ${free.toLocaleString()}`, `Allocated ${allocated.toLocaleString()} · free ${free.toLocaleString()}`),
-      "<i class='bi bi-speedometer2'></i>", "↗ 2.1%"),
+      "<i class='bi bi-speedometer2'></i>", "↗ 2.1%", "",
+      { data: [48, 52, 50, 57, 55, 61, 58, 63, 60, 62, 61, 62], color: "#17a76f" }),
     metric(B("集群 / 节点池", "Clusters"), f.clusters || 0,
       B(`${regionTotal} 区域 · ${zoneTotal} 可用区 · ${H.healthy || 0} 健康`, `${regionTotal} regions · ${zoneTotal} zones · ${H.healthy || 0} healthy`),
-      "<i class='bi bi-diagram-3'></i>", `${healthyPct}%`),
+      "<i class='bi bi-diagram-3'></i>", `${healthyPct}%`, "",
+      { data: [72, 76, 80, 84, 86, 88, 90, 92, 94, 96, 99, 103], color: "#f9a825" }),
     metric(B("月度经常性收入", "MRR"), moneyShort(M.mrr || 0),
       B(`${M.tenants || 0} 活跃租户 · ${M.users || 0} 用户`, `${M.tenants || 0} tenants · ${M.users || 0} users`),
-      "<i class='bi bi-graph-up-arrow'></i>", "↗ 6.4%"),
+      "<i class='bi bi-graph-up-arrow'></i>", "↗ 6.4%", "",
+      { data: [55, 58, 63, 67, 70, 74, 78, 83, 87, 92, 98, 105], color: "#ff6000" }),
     `</div>`,
 
     // 运营状态条：服务水位 / 在线 / 可分配 / 作业 / 调度 / 消费

@@ -285,8 +285,8 @@ export default async function createPage(S) {
      ["cr.summary.image", c.mode === "endpoint" ? c.engine : c.image],
      ["cr.summary.data", c.mode === "workspace" ? c.dataset : c.mode === "job" ? "Checkpoint + Dataset" : c.mode === "cluster" ? B("共享存储", "Shared storage") : B("模型缓存卷", "Model cache volume")]]
       .map((x) => `<div class="summary-line"><span>${esc(t(x[0]))}</span><b>${esc(L(x[1]))}</b></div>`).join(""),
-    `<div style="margin-top:19px"><div class="between"><span class="muted small">${esc(t("cr.summary.price"))}</span><span class="price">${money(est)}<small> / ${esc(t("common.perHour"))}</small></span></div>`,
-    `<div class="between mt12"><span class="muted small">${esc(t("ov.cost.month"))} · 730h</span><b>${money(est * 730)}</b></div>`,
+    `<div style="margin-top:19px" class="price-summary-total"><div class="between"><span class="muted small">${esc(t("cr.summary.price"))}</span><span class="price">${money(est)}<small> / ${esc(t("common.perHour"))}</small></span></div>`,
+    `<div class="summary-line" style="margin-top:10px"><span>${esc(t("ov.cost.month"))} · 730h</span><b>${money(est * 730)}</b></div>`,
     `<div class="small muted mt12">${esc(t(c.mode === "endpoint" ? "cr.summary.note.ep" : "cr.summary.note"))}</div></div>`,
     `<div class="divider"></div>`,
     c.step === 4
