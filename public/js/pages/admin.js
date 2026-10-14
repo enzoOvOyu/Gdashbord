@@ -2,6 +2,7 @@
 import { api } from "../api.js";
 import { header, metric, section, btn, esc, status, tabs, money, moneyShort, t, L } from "../ui.js";
 
+const B = (zh, en) => ({ zh, en });
 const ROLE_KEY = { owner: "ad.role.owner", admin: "ad.role.admin", developer: "ad.role.developer", viewer: "ad.role.viewer", billing: "ad.role.billing" };
 const ROLE_PILL = { owner: "purple", admin: "blue", developer: "green", viewer: "gray", billing: "amber" };
 
