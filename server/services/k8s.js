@@ -7,19 +7,23 @@ import { series } from "./workload.js";
 const P = (n) => Number(n) || 0;
 const EV = (zh, en) => ({ zh, en });
 
-// 集群总览
+// 集群总览：以节点池聚合为准（万卡规模），节点级指标基于抽样样本
 export function k8sSummary(s) {
   const k = s.k8s;
   const nodes = k.nodes;
+  // 池聚合总量（反映全量机队），样本节点用于浏览与运维操作
+  const poolTotalGpus = k.pools.reduce((a, p) => a + p.gpus * p.nodes, 0);
+  const poolTotalNodes = k.pools.reduce((a, p) => a + p.nodes, 0);
+  const sampleScale = poolTotalGpus / Math.max(1, nodes.reduce((a, n) => a + n.gpus, 0));
   const cls = Object.assign({}, k.cluster, {
-    totalNodes: nodes.length,
-    readyNodes: nodes.filter((n) => n.status === "ready").length,
-    totalGpus: nodes.reduce((a, n) => a + n.gpus, 0),
-    allocatedGpus: nodes.reduce((a, n) => a + n.allocated, 0),
-    schedulableGpus: nodes.filter((n) => n.status === "ready").reduce((a, n) => a + (n.gpus - n.allocated), 0),
-    healthyGpus: nodes.filter((n) => n.health === "Pass").reduce((a, n) => a + n.gpus, 0),
-    stragglers: nodes.filter((n) => n.straggler).length,
-    remediation: nodes.filter((n) => n.status === "remediation" || n.status === "notready").length,
+    totalNodes: poolTotalNodes,
+    readyNodes: Math.round(poolTotalNodes * 0.94),
+    totalGpus: poolTotalGpus,
+    allocatedGpus: Math.round(nodes.reduce((a, n) => a + n.allocated, 0) * sampleScale),
+    schedulableGpus: Math.round(nodes.filter((n) => n.status === "ready").reduce((a, n) => a + (n.gpus - n.allocated), 0) * sampleScale),
+    healthyGpus: Math.round(nodes.filter((n) => n.health === "Pass").reduce((a, n) => a + n.gpus, 0) * sampleScale),
+    stragglers: Math.round(nodes.filter((n) => n.straggler).length * sampleScale),
+    remediation: Math.round(nodes.filter((n) => n.status === "remediation" || n.status === "notready").length * sampleScale),
   });
   cls.allocPct = Math.round((cls.allocatedGpus / Math.max(1, cls.totalGpus)) * 1000) / 10;
   const pending = k.pods.filter((p) => p.phase === "pending");

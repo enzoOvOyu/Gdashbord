@@ -1,97 +1,318 @@
 // 领域数据种子：区域限定 JP/TH/US，GPU 限定 H100/H200/B200/B300/GB300，金额单位 USD
+// 万卡级：机队由 fleet.js 的集群数组承载（约一万张卡），其余资源为活跃负载抽样；所有 KPI 由 state 实算。
+import { GPU, REGIONS, IMAGES, MODEL_GROUPS, gpu } from "./catalog.js";
+import { buildFleet } from "./fleet.js";
 import { k8sSeed } from "./k8s.js";
 import { adminSeed } from "./admin.js";
 
+function rng(seed) {
+  let x = seed;
+  return () => ((x = (x * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+}
+const B = (zh, en) => ({ zh, en });
+const pick = (r, arr) => arr[Math.floor(r() * arr.length)];
+const between = (r, a, b) => a + Math.floor(r() * (b - a + 1));
+
+const GPU_IDS = GPU.map((g) => g.id);
+const REGION_IDS = REGIONS.map((r) => r.id);
+const IMAGE_IDS = IMAGES.map((i) => i.id);
+
+const TENANT_NAMES = ["Nexa AI Labs", "Sakura Robotics", "Siam Media Tech", "Pacific Vision", "Bangkok Fintech", "Orion Research", "Helios Bio", "Meridian Auto", "Aster Data", "Lumen Robotics", "Kestrel Finance", "Nova Studios"];
+
+const DATASETS = ["nlp-corpus-v3", "vision-dataset", "pretrain-tokens", "rlhf-preference", "speech-th-v1", "code-corpus-2t", "multimodal-web-1b", "math-reasoning-9m", "chemistry-mol-44m", "bio-genome-12tb"];
+const TEMPLATES = ["PyTorch DDP", "DeepSpeed ZeRO", "FSDP", "Megatron-Core", "Ray Train", "SLURM Batch", "NeMo"];
+const JOB_TYPES = [
+  { id: "pretrain", name: B("分布式预训练", "Distributed pre-training") },
+  { id: "sft", name: B("监督微调 SFT", "Supervised fine-tune") },
+  { id: "lora", name: B("LoRA 微调", "LoRA fine-tune") },
+  { id: "rlhf", name: B("RLHF / 对齐", "RLHF / alignment") },
+  { id: "eval", name: B("批量评估", "Batch evaluation") },
+  { id: "inference-train", name: B("推理蒸馏", "Distillation") },
+  { id: "multimodal", name: B("多模态训练", "Multimodal training") },
+];
+
+function gpuForVram(vram) {
+  if (vram >= 600) return pick(Math.random, ["B300", "GB300"]) ? "B300" : "GB300";
+  if (vram >= 240) return "B200";
+  if (vram >= 120) return "H200";
+  return "H100";
+}
+
+// 生成工作空间实例
+function genInstances(r) {
+  const kinds = [
+    B("开发工作空间", "Workspace"), B("AI 应用环境", "AI app runtime"), B("数据处理", "Data processing"),
+    B("训练开发", "Training dev"), B("大规模实验", "Large-scale lab"), B("推理调试", "Inference debug"),
+  ];
+  const out = [];
+  const n = 26;
+  for (let i = 0; i < n; i++) {
+    const g = pick(r, GPU_IDS);
+    const region = pick(r, REGION_IDS);
+    const count = [1, 1, 2, 4, 8][Math.floor(r() * 5)];
+    const status = r() > 0.16 ? "running" : "stopped";
+    out.push({
+      id: "ws-" + String(i + 1).padStart(3, "0"),
+      name: `${pick(r, ["llm", "vision", "data", "finetune", "agent", "rag", "moec", "diffusion", "asr", "rl"])}_${pick(r, ["lab", "ws", "dev", "exp", "srv", "nb"])}${between(r, 1, 99)}`,
+      gpu: g,
+      count,
+      region,
+      image: pick(r, IMAGE_IDS),
+      status,
+      kind: pick(r, kinds),
+      age: B(`${between(r, 1, 30)}天 ${between(r, 1, 23)}小时`, `${between(r, 1, 30)}d ${between(r, 1, 23)}h`),
+      ip: status === "running" ? `203.0.113.${between(r, 10, 250)}` : "—",
+      disk: pick(r, [100, 200, 500, 1000, 2000]),
+      ssh: r() > 0.4,
+      jupyter: r() > 0.5,
+      tenant: pick(r, TENANT_NAMES),
+    });
+  }
+  return out;
+}
+
+// 生成推理端点
+function genEndpoints(r) {
+  const allModels = MODEL_GROUPS.flatMap((g) => g.models.map((m) => ({ ...m, group: g.id })));
+  const out = [];
+  const n = 22;
+  for (let i = 0; i < n; i++) {
+    const m = pick(r, allModels);
+    const engine = (m.engines || ["vLLM"]).find((e) => e !== "Proxy") || "vLLM";
+    const g = gpuForVram(m.vram || 40);
+    const gpusPerReplica = m.vram >= 600 ? between(r, 4, 8) : m.vram >= 240 ? between(r, 2, 4) : between(r, 1, 2);
+    const region = pick(r, REGION_IDS);
+    const statusRoll = r();
+    const status = statusRoll > 0.86 ? "degraded" : statusRoll > 0.8 ? "scaled-zero" : statusRoll > 0.74 ? "warming" : "healthy";
+    const min = r() > 0.5 ? 0 : between(r, 1, 2);
+    const max = between(r, 4, 32);
+    const replicas = status === "scaled-zero" ? 0 : between(r, min, Math.min(max, 8));
+    const qps = +(r() * 240).toFixed(1);
+    const p95 = between(r, 90, 1200);
+    const p50 = Math.round(p95 * (0.4 + r() * 0.2));
+    const requests = between(r, 4000, 2_400_000);
+    const tps = Math.round(qps * between(r, 80, 2400));
+    out.push({
+      id: "ep-" + String(i + 1).padStart(3, "0"),
+      name: `${m.id}-${pick(r, ["prod", "staging", "v1", "edge", "eu", "us", "jp", "th"])}`,
+      modelId: m.id,
+      model: m.name,
+      group: m.group,
+      engine,
+      gpu: g,
+      gpusPerReplica,
+      region,
+      zone: REGIONS.find((x) => x.id === region)?.zones[between(r, 0, 2)]?.id || region,
+      status,
+      min, max,
+      qps, p50, p95,
+      replicas,
+      requests,
+      tokensPerSec: tps,
+      errorRate: +(r() * (status === "degraded" ? 4.5 : 0.8)).toFixed(2),
+      gpuUtil: status === "scaled-zero" ? 0 : between(r, 38, 92),
+      version: `v${between(r, 1, 3)}.${between(r, 0, 9)}.${between(r, 0, 9)}`,
+      created: `2026-${String(between(r, 1, 9)).padStart(2, "0")}-${String(between(r, 1, 28)).padStart(2, "0")}`,
+      tenant: pick(r, TENANT_NAMES),
+      dailyCost: +(replicas * gpusPerReplica * gpu(g).price * 24).toFixed(2),
+    });
+  }
+  return out;
+}
+
+// 生成训练任务
+function genJobs(r, clusters) {
+  const out = [];
+  const n = 34;
+  for (let i = 0; i < n; i++) {
+    const t = pick(r, JOB_TYPES);
+    const g = pick(r, GPU_IDS);
+    const gpNode = g === "GB300" ? 72 : 8;
+    const nodeCounts = g === "GB300" ? [1, 1, 2] : [1, 2, 4, 8, 16, 32];
+    const nodes = pick(r, nodeCounts);
+    const count = nodes * gpNode;
+    const region = pick(r, REGION_IDS);
+    const statusRoll = r();
+    const status = statusRoll > 0.62 ? "running" : statusRoll > 0.5 ? "queued" : statusRoll > 0.42 ? "completed" : statusRoll > 0.36 ? "failed" : "preempted";
+    const progress = status === "running" ? between(r, 3, 96) : status === "completed" ? 100 : status === "queued" ? 0 : between(r, 10, 80);
+    const hours = status === "running" ? between(r, 1, 280) : between(r, 1, 80);
+    const price = gpu(g).price;
+    const cost = +((status === "completed" || status === "running" || status === "failed") ? count * price * hours : 0).toFixed(2);
+    const throughput = g === "GB300" ? between(r, 8000, 26000) : between(r, 800, 9000);
+    out.push({
+      id: "job-" + String(i + 1).padStart(3, "0"),
+      name: `${pick(r, ["moe", "llama", "qwen", "deepseek", "nemotron", "vision", "diffusion", "rlhf", "multimodal", "pretrain", "sft", "rl"])}_${pick(r, ["1t", "70b", "235b", "stage2", "v3", "x", "pro", "exp"])}_${between(r, 1, 99)}`,
+      type: t.name,
+      typeId: t.id,
+      gpu: g,
+      count,
+      nodes,
+      region,
+      status,
+      progress,
+      duration: B(status === "running" ? `${between(r, 1, 200)}天 ${between(r, 1, 23)}小时` : status === "queued" ? "—" : `${between(r, 1, 40)}小时`, status === "running" ? `${between(r, 1, 200)}d ${between(r, 1, 23)}h` : status === "queued" ? "—" : `${between(r, 1, 40)}h`),
+      eta: status === "running" ? B(`${between(r, 1, 72)}小时`, `${between(r, 1, 72)}h`) : "—",
+      dataset: pick(r, DATASETS),
+      goodput: status === "running" ? between(r, 52, 97) : status === "completed" ? between(r, 70, 96) : 0,
+      cost,
+      priority: pick(r, [B("Critical", "Critical"), B("High", "High"), B("Normal", "Normal"), B("Low", "Low")]),
+      template: pick(r, TEMPLATES),
+      image: pick(r, IMAGE_IDS),
+      epoch: between(r, 1, 4),
+      stage: pick(r, [B("预训练", "Pre-train"), B("微调", "Fine-tune"), B("对齐", "Alignment"), B("评估", "Eval")]),
+      throughput,
+      checkpoint: B(`step ${between(r, 100, 9000)}`, `step ${between(r, 100, 9000)}`),
+      tenant: pick(r, TENANT_NAMES),
+      clusterId: clusters.length ? clusters[Math.floor(r() * clusters.length)].id : null,
+    });
+  }
+  return out;
+}
+
+// 生成资产
+function genAssets(r) {
+  const models = [
+    { name: "Qwen3-235B-A22B", task: B("通用 LLM", "General LLM"), params: "235B MoE", license: "Apache-2.0", size: "470 GB", version: "v1.2", source: "Hugging Face", date: B("今天 10:42", "Today 10:42"), downloads: 1284, acl: B("组织内可读", "Org read") },
+    { name: "DeepSeek-R1-0528", task: B("推理增强", "Reasoning"), params: "671B MoE", license: "MIT", size: "1.4 TB", version: "v1.0", source: "Model Registry", date: B("昨天 18:20", "Yesterday 18:20"), downloads: 642, acl: B("私有", "Private") },
+    { name: "FLUX.1-dev", task: B("图像生成", "Image generation"), params: "12B", license: "Non-commercial", size: "23 GB", version: "v2.1", source: "Hugging Face", date: B("今天 09:05", "Today 09:05"), downloads: 3186, acl: B("公开只读", "Public read") },
+    { name: "BGE-M3", task: B("Embedding", "Embedding"), params: "568M", license: "MIT", size: "2.4 GB", version: "v1.0", source: "Hugging Face", date: B("10月09日", "Oct 09"), downloads: 2941, acl: B("组织内可读", "Org read") },
+    { name: "Qwen2.5-VL-72B", task: B("多模态", "Multimodal"), params: "72B", license: "Apache-2.0", size: "152 GB", version: "v0.9", source: "Model Registry", date: B("10月08日", "Oct 08"), downloads: 873, acl: B("私有", "Private") },
+    { name: "Whisper-Large-v3", task: B("语音识别", "ASR"), params: "1.5B", license: "MIT", size: "6.2 GB", version: "v3", source: "Hugging Face", date: B("10月06日", "Oct 06"), downloads: 1502, acl: B("公开只读", "Public read") },
+    { name: "Llama-4-Maverick", task: B("通用 LLM", "General LLM"), params: "400B MoE", license: "Llama 4 Community", size: "760 GB", version: "v0.1", source: "Model Registry", date: B("10月11日", "Oct 11"), downloads: 980, acl: B("私有", "Private") },
+    { name: "Qwen3-32B", task: B("轻量 LLM", "Small LLM"), params: "32B", license: "Apache-2.0", size: "64 GB", version: "v2.0", source: "Hugging Face", date: B("10月03日", "Oct 03"), downloads: 4512, acl: B("组织内可读", "Org read") },
+    { name: "DeepSeek-V3-0324", task: B("通用 LLM", "General LLM"), params: "671B MoE", license: "MIT", size: "1.3 TB", version: "v1.1", source: "Model Registry", date: B("10月05日", "Oct 05"), downloads: 1520, acl: B("私有", "Private") },
+    { name: "Wan2.2-T2V-A14B", task: B("视频生成", "Video generation"), params: "14B", license: "Apache-2.0", size: "34 GB", version: "v1.0", source: "Hugging Face", date: B("10月01日", "Oct 01"), downloads: 2210, acl: B("公开只读", "Public read") },
+    { name: "Qwen3-EMB-8B", task: B("Embedding", "Embedding"), params: "8B", license: "Apache-2.0", size: "16 GB", version: "v1.0", source: "Model Registry", date: B("09月28日", "Sep 28"), downloads: 1320, acl: B("组织内可读", "Org read") },
+    { name: "InternVL3-78B", task: B("多模态", "Multimodal"), params: "78B", license: "MIT", size: "162 GB", version: "v0.3", source: "Hugging Face", date: B("09月25日", "Sep 25"), downloads: 612, acl: B("私有", "Private") },
+    { name: "GPT-OSS-120B", task: B("推理增强", "Reasoning"), params: "120B MoE", license: "Apache-2.0", size: "240 GB", version: "v1.0", source: "Hugging Face", date: B("09月22日", "Sep 22"), downloads: 1980, acl: B("组织内可读", "Org read") },
+    { name: "Stable-Diffusion-3.5", task: B("图像生成", "Image generation"), params: "8B", license: "Community", size: "18 GB", version: "v1.0", source: "Hugging Face", date: B("09月20日", "Sep 20"), downloads: 4021, acl: B("公开只读", "Public read") },
+    { name: "Qwen3-ASR-1.7B", task: B("语音识别", "ASR"), params: "1.7B", license: "Apache-2.0", size: "3.4 GB", version: "v1.0", source: "Model Registry", date: B("09月18日", "Sep 18"), downloads: 870, acl: B("组织内可读", "Org read") },
+    { name: "Phi-4-14B", task: B("轻量 LLM", "Small LLM"), params: "14B", license: "MIT", size: "28 GB", version: "v1.0", source: "Hugging Face", date: B("09月15日", "Sep 15"), downloads: 2630, acl: B("公开只读", "Public read") },
+  ];
+  const datasets = [
+    { name: "nlp-corpus-v3", type: B("文本语料", "Text corpus"), rows: "84 亿 tokens", format: "JSONL / Parquet", license: "CC-BY-4.0", size: "1.8 TB", gb: 1843, storageClass: B("对象存储", "Object storage"), region: "JP-TYO-1", source: "内部采集", date: B("今天 09:15", "Today 09:15") },
+    { name: "vision-dataset", type: B("图像数据", "Image data"), rows: "1,240 万张", format: "WebDataset", license: "内部", size: "640 GB", gb: 640, storageClass: B("共享文件系统", "Shared filesystem"), region: "US-LAX-2", source: "标注平台", date: B("10月10日", "Oct 10") },
+    { name: "pretrain-tokens", type: B("预训练语料", "Pre-training corpus"), rows: "2.6 万亿 tokens", format: "Parquet", license: "内部", size: "12.4 TB", gb: 12698, storageClass: B("对象存储", "Object storage"), region: "US-IAD-1", source: "数据工程组", date: B("10月08日", "Oct 08") },
+    { name: "rlhf-preference", type: B("偏好数据", "Preference data"), rows: "86 万条", format: "JSONL", license: "内部", size: "42 GB", gb: 42, storageClass: B("共享文件系统", "Shared filesystem"), region: "JP-TYO-1", source: "标注平台", date: B("10月05日", "Oct 05") },
+    { name: "speech-th-v1", type: B("泰语语音", "Thai speech"), rows: "3,200 小时", format: "WAV / JSON", license: "CC-BY-SA", size: "310 GB", gb: 310, storageClass: B("对象存储", "Object storage"), region: "TH-BKK-1", source: "合作方授权", date: B("10月02日", "Oct 02") },
+    { name: "code-corpus-2t", type: B("代码语料", "Code corpus"), rows: "2 万亿 tokens", format: "Parquet", license: "内部", size: "9.1 TB", gb: 9318, storageClass: B("对象存储", "Object storage"), region: "US-IAD-1", source: "开源清洗", date: B("09月30日", "Sep 30") },
+    { name: "multimodal-web-1b", type: B("多模态数据", "Multimodal"), rows: "10 亿样本", format: "WebDataset", license: "内部", size: "22 TB", gb: 22528, storageClass: B("对象存储", "Object storage"), region: "US-LAX-2", source: "爬虫管线", date: B("09月26日", "Sep 26") },
+    { name: "math-reasoning-9m", type: B("数学推理", "Math reasoning"), rows: "900 万题", format: "JSONL", license: "内部", size: "120 GB", gb: 120, storageClass: B("共享文件系统", "Shared filesystem"), region: "JP-TYO-1", source: "合成生成", date: B("09月23日", "Sep 23") },
+    { name: "chemistry-mol-44m", type: B("分子数据", "Molecular"), rows: "4,400 万分子", format: "SDF / Parquet", license: "CC-BY", size: "380 GB", gb: 380, storageClass: B("对象存储", "Object storage"), region: "US-LAX-2", source: "合作实验室", date: B("09月19日", "Sep 19") },
+    { name: "bio-genome-12tb", type: B("基因组数据", "Genomics"), rows: "3.2 万样本", format: "BAM / Parquet", license: "受限", size: "12 TB", gb: 12288, storageClass: B("共享文件系统", "Shared filesystem"), region: "US-IAD-1", source: "医学合作", date: B("09月16日", "Sep 16") },
+  ];
+  const images = [
+    { name: "pytorch-2.6-cu128", type: B("官方镜像", "Official"), base: "Ubuntu 24.04", cuda: "CUDA 12.8", size: "12.8 GB", version: "v2.6", scan: B("无高危漏洞", "No critical CVE"), source: "Registry", date: B("今天 11:20", "Today 11:20"), pulls: 4821 },
+    { name: "vllm-openai-server", type: B("推理镜像", "Inference"), base: "Ubuntu 22.04", cuda: "CUDA 12.8", size: "9.2 GB", version: "v0.9", scan: B("2 个中危", "2 medium CVE"), source: "Registry", date: B("10月11日", "Oct 11"), pulls: 2140 },
+    { name: "sglang-runtime", type: B("推理镜像", "Inference"), base: "Ubuntu 22.04", cuda: "CUDA 12.8", size: "8.6 GB", version: "v0.4", scan: B("无高危漏洞", "No critical CVE"), source: "Registry", date: B("10月09日", "Oct 09"), pulls: 1188 },
+    { name: "comfyui-stable", type: B("社区镜像", "Community"), base: "Ubuntu 22.04", cuda: "CUDA 12.4", size: "18.6 GB", version: "v1.4", scan: B("5 个中危", "5 medium CVE"), source: "Registry", date: B("10月08日", "Oct 08"), pulls: 3672 },
+    { name: "megatron-nemo2", type: B("训练镜像", "Training"), base: "Ubuntu 22.04", cuda: "CUDA 12.8", size: "16.4 GB", version: "v2.1", scan: B("无高危漏洞", "No critical CVE"), source: "Registry", date: B("10月06日", "Oct 06"), pulls: 964 },
+    { name: "deepspeed-0712", type: B("训练镜像", "Training"), base: "Ubuntu 22.04", cuda: "CUDA 12.8", size: "15.1 GB", version: "v0.16", scan: B("1 个中危", "1 medium CVE"), source: "Registry", date: B("10月04日", "Oct 04"), pulls: 1422 },
+    { name: "jax-paxml", type: B("训练镜像", "Training"), base: "Debian 12", cuda: "CUDA 12.8", size: "13.8 GB", version: "v1.3", scan: B("无高危漏洞", "No critical CVE"), source: "Registry", date: B("10月02日", "Oct 02"), pulls: 522 },
+    { name: "ray-train-2.4", type: B("分布式训练", "Distributed"), base: "Ubuntu 22.04", cuda: "CUDA 12.8", size: "11.2 GB", version: "v2.4", scan: B("无高危漏洞", "No critical CVE"), source: "Registry", date: B("09月29日", "Sep 29"), pulls: 877 },
+    { name: "tensorrt-llm", type: B("推理镜像", "Inference"), base: "Ubuntu 22.04", cuda: "CUDA 12.8", size: "14.0 GB", version: "v1.0", scan: B("3 个中危", "3 medium CVE"), source: "Registry", date: B("09月27日", "Sep 27"), pulls: 1633 },
+    { name: "jupyter-ds", type: B("数据科学", "Data science"), base: "Ubuntu 22.04", cuda: "CUDA 12.8", size: "9.8 GB", version: "v3.2", scan: B("无高危漏洞", "No critical CVE"), source: "Registry", date: B("09月24日", "Sep 24"), pulls: 5210 },
+  ];
+  const volumes = [
+    { name: "shared-model-cache", type: B("高性能共享存储", "High-perf shared"), size: "8 TB", gb: 8192, used: 62, mount: "/models", mode: "RWX", iops: "120K", region: "JP-TYO-1", encrypted: true, snapshot: B("每日 02:00", "Daily 02:00"), date: B("今天 10:10", "Today 10:10") },
+    { name: "training-checkpoints", type: B("持久卷", "Persistent volume"), size: "40 TB", gb: 40960, used: 47, mount: "/checkpoints", mode: "RWX", iops: "80K", region: "US-IAD-1", encrypted: true, snapshot: B("每 6 小时", "Every 6h"), date: B("10月09日", "Oct 09") },
+    { name: "team-datasets", type: B("对象存储桶", "Object bucket"), size: "120 TB", gb: 122880, used: 38, mount: "s3://team-datasets", mode: "S3", iops: "—", region: "US-LAX-2", encrypted: true, snapshot: B("版本控制已开启", "Versioning on"), date: B("10月08日", "Oct 08") },
+    { name: "bkk-scratch", type: B("本地高速盘", "Local scratch"), size: "4 TB", gb: 4096, used: 21, mount: "/scratch", mode: "RWO", iops: "500K", region: "TH-BKK-1", encrypted: false, snapshot: B("无", "None"), date: B("10月04日", "Oct 04") },
+    { name: "inference-weights", type: B("高性能共享存储", "High-perf shared"), size: "16 TB", gb: 16384, used: 73, mount: "/weights", mode: "RWX", iops: "140K", region: "US-IAD-1", encrypted: true, snapshot: B("每日 04:00", "Daily 04:00"), date: B("10月03日", "Oct 03") },
+    { name: "europe-model-mirror", type: B("对象存储桶", "Object bucket"), size: "60 TB", gb: 61440, used: 51, mount: "s3://eu-mirror", mode: "S3", iops: "—", region: "US-LAX-2", encrypted: true, snapshot: B("版本控制已开启", "Versioning on"), date: B("09月30日", "Sep 30") },
+    { name: "pretrain-corpus-cache", type: B("高性能共享存储", "High-perf shared"), size: "96 TB", gb: 98304, used: 64, mount: "/corpus", mode: "RWX", iops: "200K", region: "US-IAD-1", encrypted: true, snapshot: B("每日 03:00", "Daily 03:00"), date: B("09月28日", "Sep 28") },
+    { name: "tokyo-fast-ssd", type: B("本地高速盘", "Local scratch"), size: "8 TB", gb: 8192, used: 44, mount: "/local", mode: "RWO", iops: "480K", region: "JP-TYO-1", encrypted: true, snapshot: B("无", "None"), date: B("09月26日", "Sep 26") },
+    { name: "multimodal-blob", type: B("对象存储桶", "Object bucket"), size: "220 TB", gb: 225280, used: 29, mount: "s3://mm-blob", mode: "S3", iops: "—", region: "US-LAX-2", encrypted: true, snapshot: B("版本控制已开启", "Versioning on"), date: B("09月22日", "Sep 22") },
+    { name: "genomics-fs", type: B("共享文件系统", "Shared filesystem"), size: "28 TB", gb: 28672, used: 58, mount: "/genomics", mode: "RWX", iops: "90K", region: "US-IAD-1", encrypted: true, snapshot: B("每 12 小时", "Every 12h"), date: B("09月20日", "Sep 20") },
+    { name: "bkk-dataset-fs", type: B("共享文件系统", "Shared filesystem"), size: "12 TB", gb: 12288, used: 41, mount: "/data", mode: "RWX", iops: "70K", region: "TH-BKK-1", encrypted: true, snapshot: B("每日 05:00", "Daily 05:00"), date: B("09月18日", "Sep 18") },
+    { name: "backup-archive", type: B("归档存储", "Archive"), size: "320 TB", gb: 327680, used: 67, mount: "s3://backup", mode: "S3-Glacier", iops: "—", region: "US-IAD-1", encrypted: true, snapshot: B("生命周期归档", "Lifecycle"), date: B("09月15日", "Sep 15") },
+  ];
+  const acl = [
+    { resource: "shared-model-cache", grantee: B("算法研究组", "Research group"), perm: B("读写", "Read/Write"), scope: B("项目内", "Project"), expire: "—" },
+    { resource: "training-checkpoints", grantee: B("训练流水线 SA", "Training pipeline SA"), perm: B("读写", "Read/Write"), scope: B("组织", "Organization"), expire: "—" },
+    { resource: "DeepSeek-R1-0528", grantee: B("Nexa AI Labs", "Nexa AI Labs"), perm: B("只读", "Read"), scope: B("外部租户", "External tenant"), expire: "2026-12-31" },
+    { resource: "team-datasets", grantee: B("数据工程组", "Data engineering"), perm: B("管理", "Admin"), scope: B("组织", "Organization"), expire: "—" },
+    { resource: "FLUX.1-dev", grantee: B("公开访问", "Public"), perm: B("只读", "Read"), scope: B("互联网", "Internet"), expire: "—" },
+    { resource: "pretrain-corpus-cache", grantee: B("大模型训练组", "LLM Training"), perm: B("读写", "Read/Write"), scope: B("组织", "Organization"), expire: "—" },
+    { resource: "inference-weights", grantee: B("在线推理组", "Online Inference"), perm: B("读写", "Read/Write"), scope: B("项目内", "Project"), expire: "—" },
+    { resource: "genomics-fs", grantee: B("Helios Bio", "Helios Bio"), perm: B("读写", "Read/Write"), scope: B("外部租户", "External tenant"), expire: "2027-03-01" },
+  ];
+  return { models, datasets, images, volumes, acl };
+}
+
+// 生成事件流
+function genEvents(r) {
+  const base = [
+    { level: "warning", text: B("qwen-chat-prod p95 延迟超过 200ms", "qwen-chat-prod p95 latency above 200ms") },
+    { level: "success", text: B("训练任务 moe-1t-pretrain 已保存 checkpoint", "Job moe-1t-pretrain saved a checkpoint") },
+    { level: "info", text: B("image-generation 自动扩容至 2 副本", "image-generation autoscaled to 2 replicas") },
+    { level: "info", text: B("共享卷 shared-model-cache 已挂载到 3 个工作空间", "shared-model-cache mounted into 3 workspaces") },
+    { level: "warning", text: B("曼谷区域 B300 库存为 0，任务转入排队", "Bangkok B300 inventory is 0, job queued") },
+    { level: "success", text: B("GB300 机架 cl-0012 通过 NCCL 带宽自检", "GB300 rack cl-0012 passed NCCL bandwidth test") },
+    { level: "warning", text: B("美东 IAD-1 区域电力使用率突破 91%", "US-IAD-1 power usage exceeded 91%") },
+    { level: "info", text: B("推理网关完成灰度发布 v3.4.1", "Inference gateway rolled out v3.4.1") },
+    { level: "success", text: B("节点池 gpu-h100-iad 自动扩容 +12 节点", "Pool gpu-h100-iad autoscaled +12 nodes") },
+    { level: "error", text: B("节点 cks-b200-iad-g007 NVLink 链路降级", "Node cks-b200-iad-g007 NVLink link degraded") },
+    { level: "info", text: B("对象存储团队数据集桶开启版本控制", "Object bucket team-datasets versioning enabled") },
+    { level: "warning", text: B("租户 Aster Data 配额使用率 94%", "Tenant Aster Data quota at 94%") },
+    { level: "success", text: B("月度账单已生成并推送至 12 个租户", "Monthly invoices generated for 12 tenants") },
+    { level: "info", text: B("新租户 Nova Studios 完成入驻与配额下发", "Tenant Nova Studios onboarded with quota") },
+    { level: "warning", text: B("东京区域液冷回路温度波动 +3°C", "Tokyo liquid-cooling loop temp +3°C") },
+    { level: "success", text: B("GB300 NVL72 机架在 IAD-1 扩容至 14 台", "GB300 NVL72 racks expanded to 14 in IAD-1") },
+  ];
+  // 打散并生成时间
+  return base.map((e, i) => ({ ...e, time: `${String(23 - Math.floor(i / 2)).padStart(2, "0")}:${String(between(r, 1, 59)).padStart(2, "0")}` }));
+}
+
+// 生成密钥与 Secret
+function genKeys(r) {
+  const names = ["production-inference", "research-notebook", "bkk-batch-pipeline", "staging-eval", "ml-platform-sa", "edge-inference", "data-engineering", "training-orchestrator"];
+  return names.map((nm, i) => ({
+    id: "key-" + String(i + 1).padStart(3, "0"),
+    name: nm,
+    prefix: "gpc_" + ["prod", "dev", "stage", "eval", "sa", "edge", "data", "orch"][i] + "_••••" + ["7D3K", "9P2A", "4K8M", "2X1Q", "8R5N", "6T3B", "1W9C", "5Y7H"][i],
+    created: `2026-${String(between(r, 1, 9)).padStart(2, "0")}-${String(between(r, 1, 28)).padStart(2, "0")}`,
+    last: B([["2 分钟前", "2 min ago"], ["昨天", "Yesterday"], ["3 小时前", "3 hours ago"], ["1 周前", "1 week ago"], ["刚刚", "Just now"], ["5 天前", "5 days ago"], ["12 小时前", "12h ago"], ["2 周前", "2 weeks ago"]][i][0], [["2 分钟前", "2 min ago"], ["昨天", "Yesterday"], ["3 小时前", "3 hours ago"], ["1 周前", "1 week ago"], ["刚刚", "Just now"], ["5 天前", "5 days ago"], ["12 小时前", "12h ago"], ["2 周前", "2 weeks ago"]][i][1]),
+    active: i !== 6,
+  }));
+}
+function genSecrets(r) {
+  const names = ["HF_TOKEN", "WANDB_API_KEY", "S3_ENDPOINT_CRED", "OPENAI_PROXY_KEY", "SLACK_WEBHOOK", "GRAFANA_TOKEN", "NEXUS_REGISTRY_PWD", "DB_CONNECTION_STR"];
+  const scopes = ["AI Platform / Production", "Research / Sandbox", "AI Platform / Production", "Inference / Edge", "Ops / Alerting", "Observability", "Registry", "Data Platform"];
+  return names.map((nm, i) => ({ name: nm, scope: scopes[i], updated: `2026-${String(between(r, 1, 9)).padStart(2, "0")}-${String(between(r, 1, 28)).padStart(2, "0")}` }));
+}
+
 export function seed() {
+  const r = rng(20261013);
+  const fleet = buildFleet(20261013);
+  const clusters = fleet.clusters;
+
+  // 将 GPU.stock 覆写为各区域可立即分配的自由容量（与机队一致）
+  const freeByRegionModel = {};
+  clusters.forEach((c) => {
+    freeByRegionModel[c.region] = freeByRegionModel[c.region] || {};
+    const free = c.status === "running" ? Math.max(0, c.count - Math.round(c.count * (c.util / 100))) : c.count;
+    freeByRegionModel[c.region][c.gpu] = (freeByRegionModel[c.region][c.gpu] || 0) + free;
+  });
+  GPU.forEach((g) => {
+    g.stock = {};
+    REGION_IDS.forEach((rid) => { g.stock[rid] = freeByRegionModel[rid]?.[g.id] || 0; });
+  });
+
   return {
     project: "AI Platform / Production",
-    balance: 26840.5,
-    budget: 30000,
-    instances: [
-      { id: "ws-001", name: "llm-research-lab", gpu: "H100", count: 2, region: "JP-TYO-1", image: "pytorch-2.6", status: "running", kind: { zh: "开发工作空间", en: "Workspace" }, age: { zh: "3天 12小时", en: "3d 12h" }, ip: "203.0.113.24", disk: 500, ssh: true, jupyter: true },
-      { id: "ws-002", name: "comfyui-studio", gpu: "H200", count: 1, region: "US-LAX-2", image: "comfyui", status: "running", kind: { zh: "AI 应用环境", en: "AI app runtime" }, age: { zh: "12小时", en: "12h" }, ip: "203.0.113.36", disk: 200, ssh: true, jupyter: false },
-      { id: "ws-003", name: "data-prep", gpu: "H100", count: 1, region: "TH-BKK-1", image: "jupyter", status: "stopped", kind: { zh: "数据处理", en: "Data processing" }, age: { zh: "1天 4小时", en: "1d 4h" }, ip: "—", disk: 100, ssh: false, jupyter: true },
-      { id: "ws-004", name: "finetune-experiment", gpu: "B200", count: 4, region: "US-IAD-1", image: "pytorch-2.6", status: "running", kind: { zh: "训练开发", en: "Training dev" }, age: { zh: "2天 6小时", en: "2d 6h" }, ip: "203.0.113.88", disk: 1000, ssh: true, jupyter: false },
-      { id: "ws-005", name: "gb300-moe-lab", gpu: "GB300", count: 8, region: "US-LAX-2", image: "pytorch-2.6", status: "running", kind: { zh: "大规模实验", en: "Large-scale lab" }, age: { zh: "8小时", en: "8h" }, ip: "203.0.113.102", disk: 2000, ssh: true, jupyter: true },
-    ],
-    endpoints: [
-      { id: "ep-001", name: "qwen-chat-prod", modelId: "qwen3-235b", model: "Qwen3-235B-A22B", engine: "vLLM", gpu: "H200", gpusPerReplica: 4, region: "JP-TYO-1", status: "healthy", min: 1, max: 8, qps: 42.6, p95: 189, replicas: 3, requests: 186400, version: "v1.3.2" },
-      { id: "ep-002", name: "image-generation", modelId: "flux1-dev", model: "FLUX.1-dev", engine: "ComfyUI", gpu: "H100", gpusPerReplica: 1, region: "US-LAX-2", status: "healthy", min: 0, max: 4, qps: 5.8, p95: 820, replicas: 2, requests: 21800, version: "v2.1.0" },
-      { id: "ep-003", name: "embedding-dev", modelId: "bge-m3", model: "BGE-M3", engine: "Triton", gpu: "H100", gpusPerReplica: 1, region: "TH-BKK-1", status: "scaled-zero", min: 0, max: 2, qps: 0, p95: 0, replicas: 0, requests: 8700, version: "v0.8.1" },
-      { id: "ep-004", name: "deepseek-reasoning", modelId: "deepseek-r1", model: "DeepSeek-R1-0528", engine: "SGLang", gpu: "B200", gpusPerReplica: 8, region: "US-IAD-1", status: "healthy", min: 1, max: 4, qps: 18.2, p95: 412, replicas: 2, requests: 64200, version: "v1.0.4" },
-      { id: "ep-005", name: "vision-qwen-vl", modelId: "qwen25-vl-72b", model: "Qwen2.5-VL-72B", engine: "vLLM", gpu: "H200", gpusPerReplica: 2, region: "JP-TYO-1", status: "healthy", min: 1, max: 6, qps: 12.4, p95: 268, replicas: 2, requests: 31900, version: "v0.9.1" },
-    ],
-    jobs: [
-      { id: "job-001", name: "qwen3-lora-finetune", type: { zh: "LoRA 微调", en: "LoRA fine-tune" }, gpu: "H100", count: 8, nodes: 1, region: "JP-TYO-1", status: "running", progress: 68, duration: "2h 14m", dataset: "nlp-corpus-v3", goodput: 61, cost: 33.86, priority: "High", template: "PyTorch DDP", image: "pytorch-2.6", epoch: 3 },
-      { id: "job-002", name: "image-classifier-eval", type: { zh: "批量评估", en: "Batch evaluation" }, gpu: "H100", count: 2, nodes: 1, region: "TH-BKK-1", status: "completed", progress: 100, duration: "38m", dataset: "vision-dataset", goodput: 54, cost: 1.94, priority: "Normal", template: "Custom Container", image: "pytorch-2.6", epoch: 1 },
-      { id: "job-003", name: "moe-1t-pretrain", type: { zh: "分布式预训练", en: "Distributed pre-training" }, gpu: "B300", count: 32, nodes: 4, region: "US-IAD-1", status: "queued", progress: 0, duration: "—", dataset: "pretrain-tokens", goodput: 0, cost: 0, priority: "Critical", template: "DeepSpeed ZeRO", image: "pytorch-2.6", epoch: 1 },
-      { id: "job-004", name: "feature-extract", type: { zh: "批处理", en: "Batch processing" }, gpu: "H100", count: 1, nodes: 1, region: "US-LAX-2", status: "failed", progress: 34, duration: "12m", dataset: "vision-dataset", goodput: 42, cost: 0.5, priority: "Normal", template: "Ray Train", image: "pytorch-2.6", epoch: 1 },
-      { id: "job-005", name: "gb300-scale-test", type: { zh: "多机扩展性测试", en: "Multi-node scaling test" }, gpu: "GB300", count: 72, nodes: 1, region: "US-LAX-2", status: "running", progress: 41, duration: "6h 52m", dataset: "pretrain-tokens", goodput: 78, cost: 376.3, priority: "Critical", template: "DeepSpeed ZeRO", image: "pytorch-2.6", epoch: 1 },
-      { id: "job-006", name: "rlhf-reward-model", type: { zh: "RLHF 奖励模型", en: "RLHF reward model" }, gpu: "H200", count: 4, nodes: 1, region: "JP-TYO-1", status: "running", progress: 22, duration: "48m", dataset: "rlhf-preference", goodput: 57, cost: 5.24, priority: "High", template: "PyTorch DDP", image: "pytorch-2.6", epoch: 2 },
-    ],
-    clusters: [
-      { id: "cl-001", name: "training-fabric-iad", sku: "sku-b300-32", nodes: 4, gpu: "B300", count: 32, region: "US-IAD-1", status: "running", scheduler: "Slurm", network: "800G InfiniBand", util: 84, price: 191.68, cpuPerNode: 288, ramPerNode: 4096, storagePerNode: "15.36 TB NVMe", jobs: 3 },
-      { id: "cl-002", name: "k8s-inference-pool", sku: "sku-h200-8", nodes: 3, gpu: "H200", count: 24, region: "JP-TYO-1", status: "running", scheduler: "Kubernetes", network: "400G InfiniBand", util: 61, price: 78.96, cpuPerNode: 224, ramPerNode: 2048, storagePerNode: "7.68 TB NVMe", jobs: 5 },
-      { id: "cl-003", name: "gb300-rack-lax", sku: "sku-gb300-72", nodes: 1, gpu: "GB300", count: 72, region: "US-LAX-2", status: "running", scheduler: "Slurm", network: { zh: "NVL72 全域 NVLink", en: "NVL72 full NVLink domain" }, util: 92, price: 539.28, cpuPerNode: 5184, ramPerNode: 73728, storagePerNode: "276 TB NVMe", jobs: 2 },
-      { id: "cl-004", name: "dev-fabric-bkk", sku: "sku-h100-8", nodes: 2, gpu: "H100", count: 16, region: "TH-BKK-1", status: "provisioning", scheduler: "Kubernetes", network: "200G InfiniBand", util: 0, price: 39.84, cpuPerNode: 208, ramPerNode: 2048, storagePerNode: "7.68 TB NVMe", jobs: 0 },
-    ],
-    assets: {
-      models: [
-        { name: "Qwen3-235B-A22B", task: { zh: "通用 LLM", en: "General LLM" }, params: "235B MoE", license: "Apache-2.0", size: "470 GB", version: "v1.2", source: "Hugging Face", date: { zh: "今天 10:42", en: "Today 10:42" }, downloads: 1284, acl: { zh: "组织内可读", en: "Org read" } },
-        { name: "DeepSeek-R1-0528", task: { zh: "推理增强", en: "Reasoning" }, params: "671B MoE", license: "MIT", size: "1.4 TB", version: "v1.0", source: "Model Registry", date: { zh: "昨天 18:20", en: "Yesterday 18:20" }, downloads: 642, acl: { zh: "私有", en: "Private" } },
-        { name: "FLUX.1-dev", task: { zh: "图像生成", en: "Image generation" }, params: "12B", license: "Non-commercial", size: "23 GB", version: "v2.1", source: "Hugging Face", date: { zh: "今天 09:05", en: "Today 09:05" }, downloads: 3186, acl: { zh: "公开只读", en: "Public read" } },
-        { name: "BGE-M3", task: { zh: "Embedding", en: "Embedding" }, params: "568M", license: "MIT", size: "2.4 GB", version: "v1.0", source: "Hugging Face", date: { zh: "10月09日", en: "Oct 09" }, downloads: 2941, acl: { zh: "组织内可读", en: "Org read" } },
-        { name: "Qwen2.5-VL-72B", task: { zh: "多模态", en: "Multimodal" }, params: "72B", license: "Apache-2.0", size: "152 GB", version: "v0.9", source: "Model Registry", date: { zh: "10月08日", en: "Oct 08" }, downloads: 873, acl: { zh: "私有", en: "Private" } },
-        { name: "Whisper-Large-v3", task: { zh: "语音识别", en: "ASR" }, params: "1.5B", license: "MIT", size: "6.2 GB", version: "v3", source: "Hugging Face", date: { zh: "10月06日", en: "Oct 06" }, downloads: 1502, acl: { zh: "公开只读", en: "Public read" } },
-      ],
-      datasets: [
-        { name: "nlp-corpus-v3", type: { zh: "文本语料", en: "Text corpus" }, rows: "84 亿 tokens", format: "JSONL / Parquet", license: "CC-BY-4.0", size: "1.8 TB", gb: 1843, storageClass: { zh: "对象存储", en: "Object storage" }, region: "JP-TYO-1", source: "内部采集", date: { zh: "今天 09:15", en: "Today 09:15" } },
-        { name: "vision-dataset", type: { zh: "图像数据", en: "Image data" }, rows: "1,240 万张", format: "WebDataset", license: "内部", size: "640 GB", gb: 640, storageClass: { zh: "共享文件系统", en: "Shared filesystem" }, region: "US-LAX-2", source: "标注平台", date: { zh: "10月10日", en: "Oct 10" } },
-        { name: "pretrain-tokens", type: { zh: "预训练语料", en: "Pre-training corpus" }, rows: "2.6 万亿 tokens", format: "Parquet", license: "内部", size: "12.4 TB", gb: 12698, storageClass: { zh: "对象存储", en: "Object storage" }, region: "US-IAD-1", source: "数据工程组", date: { zh: "10月08日", en: "Oct 08" } },
-        { name: "rlhf-preference", type: { zh: "偏好数据", en: "Preference data" }, rows: "86 万条", format: "JSONL", license: "内部", size: "42 GB", gb: 42, storageClass: { zh: "共享文件系统", en: "Shared filesystem" }, region: "JP-TYO-1", source: "标注平台", date: { zh: "10月05日", en: "Oct 05" } },
-        { name: "speech-th-v1", type: { zh: "泰语语音", en: "Thai speech" }, rows: "3,200 小时", format: "WAV / JSON", license: "CC-BY-SA", size: "310 GB", gb: 310, storageClass: { zh: "对象存储", en: "Object storage" }, region: "TH-BKK-1", source: "合作方授权", date: { zh: "10月02日", en: "Oct 02" } },
-      ],
-      images: [
-        { name: "pytorch-2.6-cu128", type: { zh: "官方镜像", en: "Official" }, base: "Ubuntu 24.04", cuda: "CUDA 12.8", size: "12.8 GB", version: "v2.6", scan: { zh: "无高危漏洞", en: "No critical CVE" }, source: "Registry", date: { zh: "今天 11:20", en: "Today 11:20" }, pulls: 4821 },
-        { name: "vllm-openai-server", type: { zh: "推理镜像", en: "Inference" }, base: "Ubuntu 22.04", cuda: "CUDA 12.8", size: "9.2 GB", version: "v0.9", scan: { zh: "2 个中危", en: "2 medium CVE" }, source: "Registry", date: { zh: "10月11日", en: "Oct 11" }, pulls: 2140 },
-        { name: "sglang-runtime", type: { zh: "推理镜像", en: "Inference" }, base: "Ubuntu 22.04", cuda: "CUDA 12.8", size: "8.6 GB", version: "v0.4", scan: { zh: "无高危漏洞", en: "No critical CVE" }, source: "Registry", date: { zh: "10月09日", en: "Oct 09" }, pulls: 1188 },
-        { name: "comfyui-stable", type: { zh: "社区镜像", en: "Community" }, base: "Ubuntu 22.04", cuda: "CUDA 12.4", size: "18.6 GB", version: "v1.4", scan: { zh: "5 个中危", en: "5 medium CVE" }, source: "Registry", date: { zh: "10月08日", en: "Oct 08" }, pulls: 3672 },
-        { name: "megatron-nemo2", type: { zh: "训练镜像", en: "Training" }, base: "Ubuntu 22.04", cuda: "CUDA 12.8", size: "16.4 GB", version: "v2.1", scan: { zh: "无高危漏洞", en: "No critical CVE" }, source: "Registry", date: { zh: "10月06日", en: "Oct 06" }, pulls: 964 },
-      ],
-      volumes: [
-        { name: "shared-model-cache", type: { zh: "高性能共享存储", en: "High-perf shared" }, size: "8 TB", gb: 8192, used: 62, mount: "/models", mode: "RWX", iops: "120K", region: "JP-TYO-1", encrypted: true, snapshot: { zh: "每日 02:00", en: "Daily 02:00" }, date: { zh: "今天 10:10", en: "Today 10:10" } },
-        { name: "training-checkpoints", type: { zh: "持久卷", en: "Persistent volume" }, size: "40 TB", gb: 40960, used: 47, mount: "/checkpoints", mode: "RWX", iops: "80K", region: "US-IAD-1", encrypted: true, snapshot: { zh: "每 6 小时", en: "Every 6h" }, date: { zh: "10月09日", en: "Oct 09" } },
-        { name: "team-datasets", type: { zh: "对象存储桶", en: "Object bucket" }, size: "120 TB", gb: 122880, used: 38, mount: "s3://team-datasets", mode: "S3", iops: "—", region: "US-LAX-2", encrypted: true, snapshot: { zh: "版本控制已开启", en: "Versioning on" }, date: { zh: "10月08日", en: "Oct 08" } },
-        { name: "bkk-scratch", type: { zh: "本地高速盘", en: "Local scratch" }, size: "4 TB", gb: 4096, used: 21, mount: "/scratch", mode: "RWO", iops: "500K", region: "TH-BKK-1", encrypted: false, snapshot: { zh: "无", en: "None" }, date: { zh: "10月04日", en: "Oct 04" } },
-      ],
-      acl: [
-        { resource: "shared-model-cache", grantee: { zh: "算法研究组", en: "Research group" }, perm: { zh: "读写", en: "Read/Write" }, scope: { zh: "项目内", en: "Project" }, expire: "—" },
-        { resource: "training-checkpoints", grantee: { zh: "训练流水线 SA", en: "Training pipeline SA" }, perm: { zh: "读写", en: "Read/Write" }, scope: { zh: "组织", en: "Organization" }, expire: "—" },
-        { resource: "DeepSeek-R1-0528", grantee: { zh: "Nexa AI Labs", en: "Nexa AI Labs" }, perm: { zh: "只读", en: "Read" }, scope: { zh: "外部租户", en: "External tenant" }, expire: "2026-12-31" },
-        { resource: "team-datasets", grantee: { zh: "数据工程组", en: "Data engineering" }, perm: { zh: "管理", en: "Admin" }, scope: { zh: "组织", en: "Organization" }, expire: "—" },
-        { resource: "FLUX.1-dev", grantee: { zh: "公开访问", en: "Public" }, perm: { zh: "只读", en: "Read" }, scope: { zh: "互联网", en: "Internet" }, expire: "—" },
-      ],
-    },
-    events: [
-      { level: "warning", time: "23:31", text: { zh: "qwen-chat-prod p95 延迟超过 200ms", en: "qwen-chat-prod p95 latency above 200ms" } },
-      { level: "success", time: "23:18", text: { zh: "训练任务 moe-1t-pretrain 已保存 checkpoint", en: "Job moe-1t-pretrain saved a checkpoint" } },
-      { level: "info", time: "22:54", text: { zh: "image-generation 自动扩容至 2 副本", en: "image-generation autoscaled to 2 replicas" } },
-      { level: "info", time: "21:12", text: { zh: "共享卷 shared-model-cache 已挂载到 3 个工作空间", en: "shared-model-cache mounted into 3 workspaces" } },
-      { level: "warning", time: "20:41", text: { zh: "曼谷区域 B300 库存为 0，任务转入排队", en: "Bangkok B300 inventory is 0, job queued" } },
-      { level: "success", time: "19:36", text: { zh: "GB300 机架 cl-003 通过 NCCL 带宽自检", en: "GB300 rack cl-003 passed NCCL bandwidth test" } },
-    ],
+    balance: 1284500.5,
+    budget: 1500000,
+    instances: genInstances(r),
+    endpoints: genEndpoints(r),
+    jobs: genJobs(r, clusters),
+    clusters,
+    assets: genAssets(r),
+    events: genEvents(r),
     bills: [],
     k8s: k8sSeed(),
-    admin: adminSeed(),
-    keys: [
-      { id: "key-001", name: "production-inference", prefix: "gpc_prod_••••7D3K", created: "2026-10-01", last: { zh: "2 分钟前", en: "2 min ago" }, active: true },
-      { id: "key-002", name: "research-notebook", prefix: "gpc_dev_••••9P2A", created: "2026-09-22", last: { zh: "昨天", en: "Yesterday" }, active: true },
-      { id: "key-003", name: "bkk-batch-pipeline", prefix: "gpc_dev_••••4K8M", created: "2026-10-06", last: { zh: "3 小时前", en: "3 hours ago" }, active: true },
-    ],
-    secrets: [
-      { name: "HF_TOKEN", scope: "Research / Sandbox", updated: "2026-10-10" },
-      { name: "WANDB_API_KEY", scope: "AI Platform / Production", updated: "2026-10-08" },
-      { name: "S3_ENDPOINT_CRED", scope: "AI Platform / Production", updated: "2026-10-05" },
-    ],
+    admin: adminSeed(fleet),
+    keys: genKeys(r),
+    secrets: genSecrets(r),
   };
 }

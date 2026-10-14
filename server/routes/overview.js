@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { get } from "../store.js";
 import { costSummary } from "../services/cost.js";
+import { fleetFromState } from "../data/fleet.js";
 
 export default function overviewRouter() {
   const r = Router();
@@ -8,27 +9,45 @@ export default function overviewRouter() {
   r.get("/", (req, res) => {
     const s = get();
     const cost = costSummary(s);
-    const runningGpus = (s.instances || []).filter((x) => x.status === "running").reduce((a, x) => a + Number(x.count || 0), 0)
-      + (s.jobs || []).filter((x) => x.status === "running").reduce((a, x) => a + Number(x.count || 0) * Number(x.nodes || 0), 0)
-      + (s.clusters || []).filter((x) => x.status === "running").reduce((a, x) => a + Number(x.count || 0), 0);
+    const f = fleetFromState(s);
+
+    const runningGpus = f.allocated;
     const endpointGpus = (s.endpoints || []).reduce((a, x) => a + Number(x.replicas || 0) * Number(x.gpusPerReplica || 1), 0);
     const done = (s.jobs || []).filter((x) => x.status === "completed").length;
     const failed = (s.jobs || []).filter((x) => x.status === "failed").length;
     const rate = (done + failed) ? Math.round((done / (done + failed)) * 1000) / 10 : 96.8;
 
+    const tenants = s.admin?.tenants || [];
+    const users = s.admin?.users || [];
+    const mrr = tenants.reduce((a, t) => a + Number(t.spend || 0), 0);
+    const activeTenants = tenants.filter((t) => t.status === "active").length;
+    const runningJobs = (s.jobs || []).filter((x) => x.status === "running").length;
+    const queuedJobs = (s.jobs || []).filter((x) => x.status === "queued").length;
+
     res.json({
       metrics: {
         workspaces: (s.instances || []).filter((x) => x.status === "running").length,
         endpoints: (s.endpoints || []).filter((x) => x.status === "healthy").length,
-        jobsRunning: (s.jobs || []).filter((x) => x.status === "running").length,
+        endpointsTotal: (s.endpoints || []).length,
+        jobsRunning: runningJobs,
+        jobsQueued: queuedJobs,
         jobSuccessRate: rate + "%",
         monthCost: cost.monthly,
         hourlyCost: cost.hourly,
-        runningGpus: runningGpus + endpointGpus,
-        gpuUtilization: 76,
+        runningGpus,
+        fleetTotal: f.total,
+        fleetOnline: f.online,
+        fleetFree: f.free,
+        gpuUtilization: f.utilization,
+        clusters: f.clusters,
+        regions: f.byRegion.length,
+        tenants: activeTenants,
+        users: users.length,
+        mrr,
       },
-      instances: (s.instances || []).slice(0, 4),
-      endpoints: (s.endpoints || []).slice(0, 2),
+      fleet: f,
+      instances: (s.instances || []).slice(0, 5),
+      endpoints: (s.endpoints || []).slice(0, 3),
       events: s.events,
       bills: cost.bills,
       balance: s.balance,

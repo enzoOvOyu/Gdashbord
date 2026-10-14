@@ -11,6 +11,7 @@ export const init = {
   market: { query: "", gpu: "all", region: "all", sort: "recommended", mode: "all" },
   create: {
     mode: "workspace", step: 1, name: "dev-workspace", gpu: "H100", count: 1, region: "JP-TYO-1",
+    zone: "", scenario: "all",
     image: "pytorch-2.6", dataset: "nlp-corpus-v3", disk: 200, autoStop: "2", ssh: true, jupyter: true,
     modelId: "qwen3-235b", model: "Qwen3-235B-A22B", engine: "vLLM", minReplicas: 1, maxReplicas: 4, auth: true,
     jobTemplate: "PyTorch DDP", epochs: 3, spot: false, nodes: 1, scheduler: "Slurm",

@@ -137,6 +137,7 @@ async function runAction(a) {
   if (a.startsWith("pick-region:")) {
     const region = a.split(":")[1];
     S.create.region = region;
+    S.create.zone = ""; // 切换区域时清空可用区选择
     // 若当前 GPU 在该区域无库存，自动切换到该区域有库存的最优型号
     const gpus = window.__GPU || [];
     const cur = gpus.find((g) => g.id === S.create.gpu);
@@ -150,6 +151,9 @@ async function runAction(a) {
   if (a.startsWith("pick-gpu:")) { S.create.gpu = a.split(":")[1]; save(); return render(); }
   if (a.startsWith("pick-count:")) { S.create.count = Number(a.split(":")[1]); save(); return render(); }
   if (a.startsWith("pick-price:")) { S.create.priceKind = a.split(":")[1]; save(); return render(); }
+  // ===== 部署中心（万卡级）：可用区 / 场景筛选 =====
+  if (a.startsWith("pick-zone:")) { S.create.zone = a.split(":")[1]; save(); return render(); }
+  if (a.startsWith("pick-scenario:")) { S.create.scenario = a.split(":")[1]; save(); return render(); }
 
   // ===== 模型目录 → 部署 =====
   if (a.startsWith("deploy-model:")) {
@@ -446,7 +450,12 @@ async function runAction(a) {
   if (a.startsWith("cluster-detail:") || a.startsWith("cluster:")) {
     const c = (S.clusters || []).find((x) => x.id === a.split(":")[1]);
     if (!c) return;
-    modal(t("job.cluster.topology") + " · " + esc(c.name), `<div class="callout mb16">${esc(c.scheduler)} · ${esc(c.network)} · ${c.nodes} ${esc(t("job.cl.nodes"))} / ${c.count} GPU · ${esc(c.region)}</div><div class="grid cols-2">${Array.from({ length: c.nodes }, (_, i) => `<div class="option selected"><b><i class='bi bi-hdd-rack'></i> GPU Node ${i + 1}</b><p>${esc(c.gpu)} × ${Math.round(c.count / c.nodes)}<br>${esc(c.cpuPerNode || "—")} vCPU · ${esc(c.ramPerNode || "—")} GB RAM</p></div>`).join("")}</div><div class="callout mt16">${money(c.price || 0)} ${esc(t("common.perHour"))} · ${esc(c.storagePerNode || "—")} ${esc(L(B("每节点", "per node")))}</div>`, btn(t("common.close"), "close-modal"));
+    const nodeCount = Math.min(Number(c.nodes) || 1, 12);
+    const nodeHealth = c.nodeHealth || {};
+    const healthPill = c.status === "running"
+      ? `<span class="pill green"><i class="dot"></i>${esc(B("节点健康 ", "Nodes healthy "))}${nodeHealth.healthy ?? c.nodes}/${c.nodes}</span>`
+      : status(c.status);
+    modal(t("job.cluster.topology") + " · " + esc(c.name), `<div class="callout mb16">${esc(c.scheduler)} · ${esc(c.network)} · ${esc(c.topo || "")} · ${c.nodes} ${esc(t("job.cl.nodes"))} / ${c.count} GPU · ${esc(c.region)}${c.zone ? " · " + esc(c.zone) : ""} · ${healthPill}</div><div class="grid cols-2">${Array.from({ length: nodeCount }, (_, i) => `<div class="option selected"><b><i class='bi bi-hdd-rack'></i> GPU Node ${i + 1}</b><p>${esc(c.gpu)} × ${Math.round(c.count / c.nodes)}<br>${esc(c.cpuPerNode || "—")} vCPU · ${esc(c.ramPerNode || "—")} GB RAM</p></div>`).join("")}${nodeCount < Number(c.nodes) ? `<div class="option"><b>… ${c.nodes - nodeCount} ${esc(B("更多节点", "more nodes"))}</b><p>${esc(B("拓扑视图抽样展示，全量见 K8s 节点列表", "Sampled topology; full list in K8s nodes"))}</p></div>` : ""}</div><div class="grid cols-2 mt16">${[[B("每节点存储", "Storage / node"), c.storagePerNode || "—"], [B("互联带宽", "Bandwidth"), c.bandwidth || "—"], [B("功耗", "Power"), (c.powerKw || 0) + " kW"], [B("碳排", "Carbon"), (c.carbon || 0) + " kg CO₂e/h"], [B("上架天数", "Uptime days"), c.uptimeDays || "—"], [B("MTTBF", "MTTBF"), (c.mttbf || "—") + " h"], [B("租户", "Tenant"), c.tenantName || c.tenant || "—"], [B("计费方式", "Billing"), c.billing === "reserved" ? t("common.reserved") : c.billing === "spot" ? t("common.spot") : t("common.onDemand")]].map((x) => `<div class="summary-line"><span>${esc(L(x[0]))}</span><b>${esc(L(x[1]))}</b></div>`).join("")}</div><div class="callout mt16">${money(c.priceEff || c.price || 0)} ${esc(t("common.perHour"))} · ${esc(B("目录价", "list"))} ${money(c.price || 0)} · ${esc(c.fabric || "")}</div>`, btn(t("common.close"), "close-modal"));
     return;
   }
 

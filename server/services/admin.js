@@ -15,7 +15,7 @@ function audit(s, actor, action, target, result = "success") {
 
 // ===== 概览统计：由真实状态实算，保证与各业务模块一致 =====
 export function adminOverview(s) {
-  const f = fleet();
+  const f = fleet(s);
   const total = f.reduce((a, r) => a + r.total, 0);
   const allocated = f.reduce((a, r) => a + r.allocated, 0);
   const free = f.reduce((a, r) => a + r.free, 0);

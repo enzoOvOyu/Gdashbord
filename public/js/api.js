@@ -54,6 +54,10 @@ export const api = {
   recharge: (amount) => req("/billing/recharge", { method: "POST", body: { amount } }),
   exportBill: () => "/api/billing/export",
 
+  // ===== 万卡机队 =====
+  fleet: () => req("/fleet"),
+  fleetCapacity: () => req("/fleet/capacity"),
+
   // ===== 平台管理后台 =====
   adminOverview: () => req("/admin/overview"),
   adminTenants: () => req("/admin/tenants"),

@@ -3,7 +3,7 @@
 
 export const CURRENCY = "USD";
 
-// ===== 区域：固定为日本 / 泰国 / 美国 =====
+// ===== 区域：固定为日本 / 泰国 / 美国（每个区域含多个可用区）=====
 export const REGIONS = [
   {
     id: "JP-TYO-1",
@@ -15,6 +15,11 @@ export const REGIONS = [
     power: { zh: "绿电 68%", en: "68% renewable" },
     compliance: ["ISO 27001", "SOC 2", "PIPA"],
     fabric: "400G InfiniBand",
+    zones: [
+      { id: "JP-TYO-1a", az: "1a", power: { zh: "绿电 71%", en: "71% renewable" }, cooling: { zh: "液冷", en: "Liquid" } },
+      { id: "JP-TYO-1b", az: "1b", power: { zh: "绿电 65%", en: "65% renewable" }, cooling: { zh: "风冷", en: "Air" } },
+      { id: "JP-TYO-1c", az: "1c", power: { zh: "绿电 68%", en: "68% renewable" }, cooling: { zh: "液冷", en: "Liquid" } },
+    ],
   },
   {
     id: "TH-BKK-1",
@@ -26,6 +31,10 @@ export const REGIONS = [
     power: { zh: "绿电 41%", en: "41% renewable" },
     compliance: ["ISO 27001", "PDPA"],
     fabric: "200G InfiniBand",
+    zones: [
+      { id: "TH-BKK-1a", az: "1a", power: { zh: "绿电 44%", en: "44% renewable" }, cooling: { zh: "风冷", en: "Air" } },
+      { id: "TH-BKK-1b", az: "1b", power: { zh: "绿电 38%", en: "38% renewable" }, cooling: { zh: "风冷", en: "Air" } },
+    ],
   },
   {
     id: "US-LAX-2",
@@ -37,6 +46,11 @@ export const REGIONS = [
     power: { zh: "绿电 55%", en: "55% renewable" },
     compliance: ["SOC 2", "HIPAA", "ISO 27001"],
     fabric: "400G InfiniBand",
+    zones: [
+      { id: "US-LAX-2a", az: "2a", power: { zh: "绿电 58%", en: "58% renewable" }, cooling: { zh: "液冷", en: "Liquid" } },
+      { id: "US-LAX-2b", az: "2b", power: { zh: "绿电 52%", en: "52% renewable" }, cooling: { zh: "液冷", en: "Liquid" } },
+      { id: "US-LAX-2c", az: "2c", power: { zh: "绿电 55%", en: "55% renewable" }, cooling: { zh: "风冷", en: "Air" } },
+    ],
   },
   {
     id: "US-IAD-1",
@@ -48,8 +62,17 @@ export const REGIONS = [
     power: { zh: "绿电 62%", en: "62% renewable" },
     compliance: ["FedRAMP", "SOC 2", "HIPAA", "PCI DSS"],
     fabric: "800G InfiniBand",
+    zones: [
+      { id: "US-IAD-1a", az: "1a", power: { zh: "绿电 64%", en: "64% renewable" }, cooling: { zh: "液冷", en: "Liquid" } },
+      { id: "US-IAD-1b", az: "1b", power: { zh: "绿电 60%", en: "60% renewable" }, cooling: { zh: "液冷", en: "Liquid" } },
+      { id: "US-IAD-1c", az: "1c", power: { zh: "绿电 62%", en: "62% renewable" }, cooling: { zh: "风冷", en: "Air" } },
+      { id: "US-IAD-1d", az: "1d", power: { zh: "绿电 61%", en: "61% renewable" }, cooling: { zh: "液冷", en: "Liquid" } },
+    ],
   },
 ];
+
+// 区域简称前缀（用于集群命名）
+export const REGION_PREFIX = { "JP-TYO-1": "tyo", "TH-BKK-1": "bkk", "US-LAX-2": "lax", "US-IAD-1": "iad" };
 
 // ===== GPU 型号：H100 / H200 / B200 / B300 / GB300（价格单位 USD / 卡·小时）=====
 export const GPU = [
@@ -291,8 +314,21 @@ export const NAV = [
   ["admin", "shield-check", "平台管理后台"],
 ];
 
+// GPU 定位分级：用于部署中心按场景筛选
+export const GPU_TIERS = {
+  H100: { tier: "general", tierLabel: { zh: "通用训练 / 推理", en: "General training & inference" } },
+  H200: { tier: "longctx", tierLabel: { zh: "长上下文推理", en: "Long-context inference" } },
+  B200: { tier: "frontier", tierLabel: { zh: "前沿预训练", en: "Frontier pre-training" } },
+  B300: { tier: "moe", tierLabel: { zh: "超大 MoE / 推理", en: "Large MoE & inference" } },
+  GB300: { tier: "rackscale", tierLabel: { zh: "机架级一体化", en: "Rack-scale integrated" } },
+};
+
 export function gpu(id) {
   return GPU.find((x) => x.id === id) || GPU[0];
+}
+
+export function gpuTier(id) {
+  return GPU_TIERS[id]?.tier || "general";
 }
 
 export function region(id) {

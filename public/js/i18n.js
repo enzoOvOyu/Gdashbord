@@ -115,8 +115,8 @@ const STR = {
     "shell.slogan": "The GPU Cloud",
 
     // ===== 总览 =====
-    "ov.title": "云上 AI 工作台",
-    "ov.sub": "从 GPU 开发到训练与推理：统一查看工作负载、服务健康、资源消耗与成本。",
+    "ov.title": "万卡级 GPU 机队总览",
+    "ov.sub": "10,000 卡级 GPU 云运营：机队容量、集群健康、区域分布、型号构成、负载与成本，统一口径实时呈现。",
     "ov.cta.create": "＋ 创建工作负载",
     "ov.cta.guide": "查看使用指南",
     "ov.banner.eyebrow": "RUNSUN CLOUD · THE GPU CLOUD",
@@ -734,8 +734,8 @@ STR.en = {
   "shell.brand": "RunSun Cloud",
   "shell.slogan": "The GPU Cloud",
 
-  "ov.title": "AI Workbench",
-  "ov.sub": "From GPU development to training and inference: workloads, service health, usage and cost in one place.",
+  "ov.title": "10K-GPU Fleet Overview",
+  "ov.sub": "Ten-thousand-GPU cloud operations: fleet capacity, cluster health, regional distribution, model mix, workloads and cost — one consistent source of truth.",
   "ov.cta.create": "＋ Create workload",
   "ov.cta.guide": "View guide",
   "ov.banner.eyebrow": "RUNSUN CLOUD · THE GPU CLOUD",

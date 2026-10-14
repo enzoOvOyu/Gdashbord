@@ -19,7 +19,7 @@ export function hourlyRate(item) {
     return unit * Number(item.replicas || 0) * Number(item.gpusPerReplica || 1);
   }
   if (item.kindType === "job") {
-    return item.status === "running" ? unit * Number(item.count || 1) * Number(item.nodes || 1) : 0;
+    return item.status === "running" ? unit * Number(item.count || 1) : 0;
   }
   if (item.kindType === "cluster") {
     const total = Number(item.count || 0);
@@ -41,12 +41,9 @@ export function costLines(s) {
   });
   (s.jobs || []).forEach((x) => {
     const h = hourlyRate({ ...x, kindType: "job" });
-    lines.push({ id: x.id, kind: "job", kindLabel: { zh: "训练任务", en: "Training job" }, name: x.name, gpu: x.gpu, count: Number(x.count || 1) * Number(x.nodes || 1), region: x.region, status: x.status, hourly: r2(h), monthly: r2(h * HOURS_PER_MONTH) });
+    lines.push({ id: x.id, kind: "job", kindLabel: { zh: "训练任务", en: "Training job" }, name: x.name, gpu: x.gpu, count: Number(x.count || 1), region: x.region, status: x.status, hourly: r2(h), monthly: r2(h * HOURS_PER_MONTH) });
   });
-  (s.clusters || []).forEach((x) => {
-    const h = hourlyRate({ ...x, kindType: "cluster" });
-    lines.push({ id: x.id, kind: "cluster", kindLabel: { zh: "分布式集群", en: "Cluster" }, name: x.name, gpu: x.gpu, count: x.count, region: x.region, status: x.status, hourly: r2(h), monthly: r2(h * HOURS_PER_MONTH) });
-  });
+  // 注：clusters 为物理机队容量，其上的工作负载（实例 / 端点 / 任务）已单独计费，避免重复计算。
   const volGb = (s.assets?.volumes || []).reduce((a, v) => a + Number(v.gb || 0), 0);
   const storageMonthly = r2(volGb * STORAGE_PRICE_PER_GB);
   lines.push({ id: "storage", kind: "storage", kindLabel: { zh: "存储与快照", en: "Storage & snapshots" }, name: "Persistent volumes", gpu: "—", count: volGb, region: "multi-region", status: "running", hourly: r2(storageMonthly / HOURS_PER_MONTH), monthly: storageMonthly });
