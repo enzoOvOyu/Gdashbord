@@ -237,10 +237,10 @@ function priceSummary(c, cap) {
     <div class="summary-line"><span>${esc(B("GPU 计算", "GPU compute"))}</span><b>${money(gpuCost)}/hr</b></div>
     <div class="summary-line"><span>${esc(B("容器磁盘", "Container disk"))}</span><b>${money(diskCost)}/hr</b></div>
     <div class="summary-line total"><span>${esc(B("预估合计", "Estimated total"))}</span><b>${money(total)}<small>/hr</small></b></div>
-    <div class="summary-note">${esc(B("按量价格为实时估算，部署后开始计费；预留/抢占价按所选计价方式生效。", "On-demand prices are live estimates; billing starts after deployment. Spot/reserved pricing applies per selection."))}</div>
+    <div class="summary-note">${esc(B("价格为实时估算，部署后开始计费；预留/抢占价按所选计价方式生效。", "Prices are live estimates; billing starts after deployment. Spot/reserved pricing applies per selection."))}</div>
     ${btn("<i class='bi bi-rocket-takeoff'></i> " + (freeOfGpu > 0 ? B("立即部署", "Deploy Pod") : B("到货后部署", "Deploy when available")), "deploy", "primary w100")}
     ${btn("<i class='bi bi-book'></i> " + B("查看文档", "View documentation"), "about", "ghost w100")}
-    <div class="caption mt20">${esc(B("演示环境：不连接真实云 API，不产生实际费用。", "Demo environment: no real cloud API, no actual charges."))}</div>
+    <div class="caption mt20">${esc(B("部署后按秒计费，费用明细见费用中心。", "Billed per second after deployment; see Billing for the breakdown."))}</div>
   </aside>`;
 }
 

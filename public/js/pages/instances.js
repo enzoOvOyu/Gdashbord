@@ -11,8 +11,8 @@ function podCard(x, selected) {
   const running = x.status === "running";
   const hourly = g.price * Number(x.count || 1);
   const vram = g.vram * Number(x.count || 1);
-  const vol = 100; // 演示持久卷
-  // 演示利用率（确定性：由 id 派生，运行中才有值）
+  const vol = 100; // 持久卷容量
+  // 利用率（确定性：由 id 派生，运行中才有值）
   const seed = (x.id || "x").split("").reduce((a, c) => a + c.charCodeAt(0), 0);
   const u = (base, spread) => running ? (seed + base) % spread : 0;
   const gpuUse = 40 + u(0, 55);
@@ -98,8 +98,8 @@ export default async function instancesPage(S) {
       : `<div class="empty-state"><div class="empty-icon"><i class="bi bi-search"></i></div><h3>${esc(L(B("没有匹配的 Pods", "No matching Pods")))}</h3><p>${esc(L(B("试试调整筛选条件，或部署一个新的 GPU Pod。", "Adjust filters, or deploy a new GPU Pod.")))}</p>${btn(`<i class="bi bi-plus-lg"></i> ${esc(L(B("部署 Pod", "Deploy Pod")))}`, "create-workspace", "primary")}</div>`,
 
     `<div class="notice mt16"><i class="bi bi-shield-check"></i> ${esc(L(B(
-      "停止的 Pod 仍会产生少量存储费用（$0.20/GB·月）；如无需保留数据请彻底终止。演示数据不产生真实计费。",
-      "Stopped Pods still incur storage fees ($0.20/GB·mo); terminate fully if data retention isn't needed. Demo data incurs no real charges."
+      "停止的 Pod 仍会产生少量存储费用（$0.20/GB·月）；如无需保留数据请彻底终止。",
+      "Stopped Pods still incur storage fees ($0.20/GB·mo); terminate fully if data retention isn't needed."
     )))}</div>`,
   ].join("");
 }

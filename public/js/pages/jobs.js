@@ -13,7 +13,49 @@ function jobsView(S, res) {
   const avgGoodput = running.length ? Math.round(running.reduce((a, j) => a + (j.goodput || 0), 0) / running.length) : 0;
   const spend = jobs.reduce((a, j) => a + Number(j.cost || 0), 0);
   const hourly = running.reduce((a, j) => a + gpu(j.gpu).price * Number(j.count || 0), 0);
-  const totalThroughput = running.reduce((a, j) => a + (j.throughput || 0), 0);
+
+  // Instant Clusters 式任务卡：拓扑小图（节点方块）+ 3 列规格 + 指标条 + 操作排
+  const jobCard = (j) => {
+    const isActive = j.status === "running";
+    const nodes = Math.min(Number(j.nodes) || 1, 6);
+    const nodeIcons = Array.from({ length: nodes }, (_, i) =>
+      `${i ? '<span class="cluster-connector"></span>' : ""}<span class="cluster-node"><i class="bi bi-hdd-network"></i></span>`).join("");
+    const ckpt = j.checkpoint ? L(j.checkpoint) : "—";
+    const eta = j.status === "running" && j.eta ? L(j.eta) : "—";
+    return `
+    <div class="card job-card">
+      <div class="cluster-top">
+        <div>
+          <div class="row gap8"><strong style="font-size:14px">${esc(j.name)}</strong>${status(j.status)}</div>
+          <div class="pod-id mono" style="margin-top:8px">${esc(j.id)} · ${esc(L(j.type))} · ${esc(j.template || "PyTorch")} · ${esc(L(j.priority || B("普通", "Normal")))}</div>
+        </div>
+        <div class="pod-gpu">
+          <div class="pod-gpu-name">${esc(j.gpu)} × ${j.count}</div>
+          <div class="pod-price">${money(gpu(j.gpu).price * Number(j.count || 0))}/hr${esc(j.region ? " · " + j.region : "")}</div>
+        </div>
+      </div>
+      <div class="cluster-graphic">${nodeIcons}${Number(j.nodes) > 6 ? `<span class="tiny-text" style="margin-left:6px">+${j.nodes - 6}</span>` : ""}</div>
+      <div class="cluster-spec">
+        <div><small>NODES</small><strong>${j.nodes || 1} × ${esc(j.gpu)}</strong></div>
+        <div><small>THROUGHPUT</small><strong>${j.throughput ? (j.throughput >= 1000 ? (j.throughput / 1000).toFixed(1) + "K tok/s" : j.throughput + " tok/s") : "—"}</strong></div>
+        <div><small>TENANT</small><strong>${esc(j.tenant || "—")}</strong></div>
+      </div>
+      <div class="pod-middle">
+        <div><div class="metric-name"><span>Progress</span><b>${j.progress || 0}%</b></div><div class="progress"><span style="width:${j.progress || 0}%"></span></div></div>
+        <div><div class="metric-name"><span>Goodput</span><b>${j.goodput || 0}%</b></div><div class="progress green"><span style="width:${j.goodput || 0}%"></span></div></div>
+        <div><div class="metric-name"><span>Checkpoint</span><b style="font-size:10px">${esc(ckpt)}</b></div><div class="progress"><span style="width:${j.progress || 0}%;background:#f9a825"></span></div></div>
+        <div><div class="metric-name"><span>ETA</span><b style="font-size:10px">${esc(eta)}</b></div><div class="progress${isActive ? "" : " orange"}"><span style="width:${isActive ? Math.min(100, (j.progress || 0)) : 100}%"></span></div></div>
+      </div>
+      <div class="pod-footer">
+        <span class="tiny-text">${esc(L(j.duration || B("—", "—")))} · ${money(j.cost || 0)} ${esc(B("累计", "spent"))}</span>
+        <div class="row gap8">
+          ${btn("job.btn.detail", "job:" + j.id, "sm")}
+          ${btn("job.btn.logs", "job-logs:" + j.id, "sm")}
+          ${j.status === "failed" ? btn("job.btn.retry", "retry-job:" + j.id, "sm primary") : ""}
+        </div>
+      </div>
+    </div>`;
+  };
 
   return [
     `<div class="grid cols-4 mb16 kpi-row">`,
@@ -22,29 +64,12 @@ function jobsView(S, res) {
     metric("job.kpi.goodput", avgGoodput + "%", "job.kpi.goodput.desc", "<i class='bi bi-speedometer2'></i>", "↗ 1.8%", ""),
     metric(B("运行成本", "Run cost"), moneyShort(spend), money(hourly) + " / " + t("common.perHour"), "<i class='bi bi-cash-stack'></i>", "", ""),
     `</div>`,
-    `<div class="layout-wide-side">`,
-    `<div class="card"><div class="table-wrap"><table><thead><tr>
-      <th>${esc(t("job.th.name"))}</th><th>${esc(t("job.th.resource"))}</th><th>${esc(t("job.th.nodes"))}</th><th>${esc(t("common.region"))}</th>
-      <th>${esc(B("吞吐", "Throughput"))}</th><th>${esc(B("Checkpoint", "Checkpoint"))}</th><th>${esc(B("ETA", "ETA"))}</th>
-      <th>${esc(t("common.status"))}</th><th>${esc(t("job.th.progress"))}</th><th>${esc(B("租户", "Tenant"))}</th><th>${esc(t("job.th.cost"))}</th><th>${esc(t("common.actions"))}</th></tr></thead><tbody>`,
-    jobs.map((j) => `<tr>
-      <td><a href="javascript:void(0)" data-act="job:${j.id}"><strong>${esc(j.name)}</strong></a><small>${esc(L(j.type))} · ${esc(j.id)} · ${esc(L(j.priority || B("普通", "Normal")))}</small></td>
-      <td>${esc(j.gpu)} × ${j.count}<small>${esc(j.template || "")}</small></td>
-      <td>${j.nodes || 1}</td>
-      <td>${esc(j.region)}</td>
-      <td>${j.throughput ? (j.throughput >= 1000 ? (j.throughput / 1000).toFixed(1) + "K tok/s" : j.throughput + " tok/s") : "—"}</td>
-      <td><small>${esc(L(j.checkpoint || B("—", "—")))}</small></td>
-      <td>${j.status === "running" ? `<small>${esc(L(j.eta || B("—", "—")))}</small>` : "—"}</td>
-      <td>${status(j.status)}</td>
-      <td style="min-width:120px">${BAR(j.progress || 0)}<small>${j.progress || 0}%</small></td>
-      <td><small>${esc(j.tenant || "—")}</small></td>
-      <td>${money(j.cost || 0)}<small>${money(gpu(j.gpu).price * Number(j.count || 0))}/h</small></td>
-      <td><div class="table-actions">${btn("job.btn.detail", "job:" + j.id, "sm")}${btn("job.btn.logs", "job-logs:" + j.id, "sm")}${btn("job.btn.retry", "retry-job:" + j.id, "sm")}</div></td></tr>`).join(""),
-    `</tbody></table></div></div>`,
-    `<div class="card card-pad">${section("job.chain.title")}<div class="grid" style="gap:9px">`,
-    [["1", "job.chain.1", "job.chain.1.d"], ["2", "job.chain.2", "job.chain.2.d"], ["3", "job.chain.3", "job.chain.3.d"], ["4", "job.chain.4", "job.chain.4.d"], ["5", "job.chain.5", "job.chain.5.d"]]
-      .map((x) => `<div class="chain-step"><span class="step-num">${x[0]}</span><div><b>${esc(t(x[1]))}</b><div class="small muted" style="margin-top:3px">${esc(t(x[2]))}</div></div></div>`).join(""),
-    `</div><div class="callout mt16">${esc(t("job.chain.tip"))}</div></div></div>`,
+
+    // 任务运行链路（横向流程）
+    `<div class="notice mb16"><i class="bi bi-info-circle"></i> ${esc(t("job.chain.tip"))}</div>`,
+
+    // 任务卡片流（双列）
+    `<div class="cluster-grid">${jobs.map(jobCard).join("")}</div>`,
   ].join("");
 }
 

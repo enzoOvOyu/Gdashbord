@@ -76,8 +76,8 @@ export default async function market(S) {
     `</div>`,
 
     `<div class="notice mt16"><i class="bi bi-info-circle"></i> ${esc(L(B(
-      "价格与库存为演示数据；按需 / 抢占 / 预留三种计价在部署中心可选。库存来自机队调度器实时视图。",
-      "Prices and inventory are demo data; on-demand / spot / reserved pricing available in the deploy center. Inventory from the live fleet scheduler view."
+      "按需 / 抢占 / 预留三种计价在部署中心可选；库存来自机队调度器实时视图。",
+      "On-demand / spot / reserved pricing available in the deploy center; inventory from the live fleet scheduler view."
     )))}</div>`,
   ].join("");
 }

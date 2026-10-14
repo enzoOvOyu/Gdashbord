@@ -13,7 +13,7 @@ export default async function billingPage(S0) {
 
   return [
     header(S("费用中心与 FinOps", "Billing & FinOps"), S("按项目、工作负载和 GPU 规格分析成本，管理预算、用量配额与费用优化。", "Analyze cost by project, workload and GPU SKU; manage budget, quotas and optimization."),
-      `<a class="btn" href="/api/billing/export">${esc(t("common.copy"))} CSV</a>` + btn(S("＋ 充值演示", "＋ Recharge (demo)"), "recharge", "primary")),
+      `<a class="btn" href="/api/billing/export">${esc(t("common.copy"))} CSV</a>` + btn(S("＋ 账户充值", "＋ Add credits"), "recharge", "primary")),
     tabs([["overview", S("费用概览", "Overview")], ["details", S("成本明细", "Line items")], ["budgets", S("预算与告警", "Budget & alerts")]], tab, "billingTab"),
     `<div class="grid cols-4 mb16 kpi-row">`,
     metric(S("账户余额", "Balance"), money(b.balance), S("模拟账户 · USD", "Demo account · USD"), "<i class='bi bi-cash-stack'></i>", "", "hero"),

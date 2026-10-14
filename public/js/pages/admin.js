@@ -94,7 +94,7 @@ function capacityView(cap) {
         r.models.map((m) => `<td>${m.free}<small class="muted">/${m.total}</small></td>`).join("") +
         `<td>${r.free} / ${r.total}</td><td style="min-width:110px"><div class="progress sm"><span style="width:${pct}%"></span></div><small>${pct}%</small></td></tr>`;
     }).join(""),
-    `</tbody></table></div><div class="small muted mt12">${esc(t("common.demo"))} · ${esc(t("ad.demo"))}</div></div>`,
+    `</tbody></table></div><div class="small muted mt12">${esc(t("ad.demo"))}</div></div>`,
     `<div class="split-65">`,
     `<div class="card card-pad">${section("ad.quota.title")}<div class="table-wrap"><table><thead><tr><th>${esc(t("ad.quota.plan"))}</th><th>${esc(t("ad.quota.gpu"))}</th><th>${esc(t("ad.quota.nodes"))}</th><th>${esc(t("ad.quota.storage"))}</th><th>${esc(t("ad.quota.price"))}</th></tr></thead><tbody>`,
     (cap.plans || []).map((p) => `<tr><td><strong>${esc(p.id)}</strong></td><td>${p.gpuLimit} GPU</td><td>${p.maxNodes}</td><td>${esc(p.storage)}</td><td>${money(p.fee)}</td></tr>`).join(""),

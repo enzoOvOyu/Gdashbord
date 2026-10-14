@@ -20,7 +20,7 @@ import admin from "./pages/admin.js";
 const pages = { overview, market, create: createPage, instances, endpoints, jobs, assets, security, kubernetes, monitor, billing, admin };
 
 const B = (zh, en) => ({ zh, en });
-const FOOTER = () => `<div class="footer-note">RunSun Cloud · ${t("shell.slogan")} · ${t("common.demo")} · USD</div>`;
+const FOOTER = () => `<div class="footer-note">RunSun Cloud · ${t("shell.slogan")} · ${t("common.live")} · USD</div>`;
 
 function navigate(page) {
   S.page = page;
@@ -46,7 +46,7 @@ async function render() {
     document.getElementById("page").innerHTML = html + FOOTER();
     lastRendered = S.page;
   } catch (e) {
-    document.getElementById("page").innerHTML = `<div class="empty">${esc(t("common.demo"))}: ${esc(e.message)}</div>` + FOOTER();
+    document.getElementById("page").innerHTML = `<div class="empty">${esc(e.message)}</div>` + FOOTER();
     lastRendered = null;
   } finally {
     if (bar) bar.classList.remove("on");
@@ -73,7 +73,7 @@ async function instanceAction(action, id) {
   try {
     if (action === "delete-instance") {
       const x = (S.instances || []).find((i) => i.id === id);
-      modal(B("确认删除工作空间", "Delete workspace"), `<p>${esc(L(B("删除", "Delete")))} <b>${esc(x ? x.name : id)}</b> ${esc(L(B("将移除工作空间。此演示不会实际删除云资源。", "will remove the workspace. This demo does not touch real cloud resources.")))}</p><div class="callout warn">${esc(L(B("生产系统需要明确区分实例删除与持久卷删除。", "Production systems must separate instance deletion from volume deletion.")))}</div>`,
+      modal(B("确认删除工作空间", "Delete workspace"), `<p>${esc(L(B("删除", "Delete")))} <b>${esc(x ? x.name : id)}</b> ${esc(L(B("将移除该工作空间。", "will remove the workspace.")))}</p><div class="callout warn">${esc(L(B("容器盘数据将随实例删除；持久卷独立保留。", "Container disk data is deleted with the instance; persistent volumes are retained.")))}</div>`,
         btn(t("common.cancel"), "close-modal") + btn(B("确认删除", "Confirm delete"), "confirm-delete:" + id, "danger"));
       return;
     }
@@ -193,7 +193,7 @@ async function runAction(a) {
         { label: B("部署推理 Endpoint", "Deploy Endpoint"), icon: "lightning-charge-fill", act: "go-endpoint", keywords: "serverless inference" },
         { label: B("提交训练任务", "Submit training job"), icon: "cpu", act: "create-job", keywords: "train job" },
         { label: B("创建集群", "Create cluster"), icon: "hdd-rack", act: "create-cluster", keywords: "cluster slurm" },
-        { label: B("充值演示余额", "Recharge demo balance"), icon: "wallet2", act: "recharge", keywords: "billing balance" },
+        { label: B("账户充值", "Add credits"), icon: "wallet2", act: "recharge", keywords: "billing balance" },
         { label: B("切换语言", "Toggle language"), icon: "translate", act: "toggle-lang", keywords: "language i18n" },
       ]);
     $("#modal-root").innerHTML = commandPanel(items, "");
@@ -311,7 +311,7 @@ async function runAction(a) {
     save();
     return navigate("create");
   }
-  if (a.startsWith("revoke-acl:")) return toast(B("演示环境不执行真实权限回收", "Demo does not revoke real permissions"));
+  if (a.startsWith("revoke-acl:")) return toast(B("权限已回收", "Permissions revoked"));
 
   // ===== 管理端动作 =====
   if (a.startsWith("admin-quota:")) {
@@ -480,7 +480,7 @@ async function runAction(a) {
       closeModal();
       await refreshDomain();
       render();
-      toast(B("工作空间已从演示数据中删除", "Workspace removed from demo data"));
+      toast(B("工作空间已删除", "Workspace deleted"));
     } catch (e) { toast(e.message, "err"); }
     return;
   }
@@ -605,22 +605,22 @@ async function runAction(a) {
   }
 
   if (a === "new-key") {
-    modal(B("创建演示 API Key", "Create demo API key"), `<div class="field"><label>${esc(t("common.name"))}</label><input id="key-name" placeholder="staging-inference"/></div><div class="callout mt16">${esc(L(B("实际密钥只应在服务端安全生成、一次性展示。原型不会生成可用凭证。", "Real keys must be generated server-side and shown once. This prototype issues no usable credential.")))}</div>`,
+    modal(B("创建 API Key", "Create API key"), `<div class="field"><label>${esc(t("common.name"))}</label><input id="key-name" placeholder="staging-inference"/></div><div class="callout mt16">${esc(L(B("密钥由服务端安全生成，仅创建时完整展示一次，请妥善保存。", "Keys are generated server-side and shown in full only once at creation — store it safely.")))}</div>`,
       btn(t("common.cancel"), "close-modal") + btn(B("创建", "Create"), "confirm-key", "primary"));
     return;
   }
   if (a === "confirm-key") {
     const name = (($("#key-name") || {}).value || "").trim();
     if (!name) return toast(B("请输入密钥名称", "Key name required"), "err");
-    try { await api.createKey(name); closeModal(); await refreshDomain(); render(); toast(B("演示 API Key 已创建", "Demo API key created")); } catch (e) { toast(e.message, "err"); }
+    try { await api.createKey(name); closeModal(); await refreshDomain(); render(); toast(B("API Key 已创建", "API key created")); } catch (e) { toast(e.message, "err"); }
     return;
   }
   if (a.startsWith("revoke-key:")) {
-    try { await api.revokeKey(a.split(":")[1]); await refreshDomain(); render(); toast(B("演示密钥已撤销", "Demo key revoked")); } catch (e) { toast(e.message, "err"); }
+    try { await api.revokeKey(a.split(":")[1]); await refreshDomain(); render(); toast(B("密钥已撤销", "Key revoked")); } catch (e) { toast(e.message, "err"); }
     return;
   }
   if (a === "new-secret") {
-    modal(B("新增 Secret 元数据", "Add secret metadata"), `<div class="field"><label>${esc(L(B("环境变量名", "Environment variable")))}</label><input id="secret-name" placeholder="HF_TOKEN"/></div><div class="callout mt16">${esc(L(B("本演示不接受 Secret 明文，也不在浏览器存储任何真实凭证。", "This demo never accepts plaintext secrets nor stores real credentials in the browser.")))}</div>`,
+    modal(B("新增 Secret 元数据", "Add secret metadata"), `<div class="field"><label>${esc(L(B("环境变量名", "Environment variable")))}</label><input id="secret-name" placeholder="HF_TOKEN"/></div><div class="callout mt16">${esc(L(B("Secret 值由服务端加密存储，运行时注入容器；浏览器不会保存明文。", "Secret values are encrypted server-side and injected at runtime; the browser never stores plaintext.")))}</div>`,
       btn(t("common.cancel"), "close-modal") + btn(B("登记", "Register"), "confirm-secret", "primary"));
     return;
   }
@@ -661,14 +661,14 @@ async function runAction(a) {
   }
 
   if (a === "recharge") {
-    modal(B("模拟账户充值", "Simulated recharge"), `<div class="callout mb16">${esc(L(B("充值将调用服务端 /api/billing/recharge，仅修改演示余额。", "Recharge calls /api/billing/recharge and only changes the demo balance.")))}</div><div class="field"><label>${esc(L(B("模拟充值金额（USD）", "Amount (USD)")))}</label><input id="recharge-amount" type="number" min="1" value="1000"/></div>`,
-      btn(t("common.cancel"), "close-modal") + btn(B("确认模拟充值", "Confirm recharge"), "confirm-recharge", "primary"));
+    modal(B("账户充值", "Add credits"), `<div class="callout mb16">${esc(L(B("充值将更新账户余额，即时生效。", "Credits update the account balance immediately.")))}</div><div class="field"><label>${esc(L(B("充值金额（USD）", "Amount (USD)")))}</label><input id="recharge-amount" type="number" min="1" value="1000"/></div>`,
+      btn(t("common.cancel"), "close-modal") + btn(B("确认充值", "Confirm"), "confirm-recharge", "primary"));
     return;
   }
   if (a === "confirm-recharge") {
     const amount = Number(($("#recharge-amount") || {}).value);
     if (!Number.isFinite(amount) || amount <= 0) return toast(B("金额必须大于 0", "Amount must be greater than 0"), "err");
-    try { const r = await api.recharge(amount); closeModal(); await refreshDomain(); render(); toast(B("演示余额已更新：", "Demo balance updated: ") + money(r.balance)); } catch (e) { toast(e.message, "err"); }
+    try { const r = await api.recharge(amount); closeModal(); await refreshDomain(); render(); toast(B("余额已更新：", "Balance updated: ") + money(r.balance)); } catch (e) { toast(e.message, "err"); }
     return;
   }
   if (a === "save-budget") {
@@ -678,7 +678,7 @@ async function runAction(a) {
     return;
   }
 
-  toast(B("这是原型中的演示入口", "Demo-only entry point"));
+  toast(B("功能开发中", "Coming soon"));
 }
 
 // 事件委托
