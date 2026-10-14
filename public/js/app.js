@@ -162,7 +162,7 @@ function renderPodDrawer(x) {
   } else {
     body = `<div class="drawer-section"><h3>${esc(L(B("连接方式", "Connection options")))}</h3>
       ${detailPairs([
-        [B("SSH 命令", "SSH command"), `<span class="mono">ssh -i ~/.ssh/demo_key ubuntu@${esc(x.ip || "—")}</span>`],
+        [B("SSH 命令", "SSH command"), `<span class="mono">ssh -i ~/.ssh/id_ed25519 ubuntu@${esc(x.ip || "—")}</span>`],
         [B("JupyterLab", "JupyterLab"), x.jupyter ? `<span class="mono">https://${esc(x.id)}-8888.proxy.runsuncloud.net</span>` : "—"],
         [B("Web 终端", "Web terminal"), `<span class="mono">https://${esc(x.id)}-7681.proxy.runsuncloud.net</span>`],
         [B("HTTP 服务", "HTTP services"), `<span class="mono">:8888 JupyterLab · :22 SSH</span>`],
@@ -496,7 +496,7 @@ async function runAction(a) {
     } catch (e) { toast(e.message, "err"); }
     return;
   }
-  if (a.startsWith("copy-connect:")) return copy("ssh -i ~/.ssh/demo_key ubuntu@203.0.113.24");
+  if (a.startsWith("copy-connect:")) return copy("ssh -i ~/.ssh/id_ed25519 ubuntu@203.0.113.24");
 
   if (a.startsWith("endpoint:")) { S.endpointSelected = a.split(":")[1]; S.endpointTab = "overview"; save(); return navigate("endpoints"); }
   if (a === "copy-curl") {
