@@ -60,14 +60,10 @@ export default async function endpointsPage(S) {
 
     // 机队级 KPI（4 张，含 sparkline）
     `<div class="grid cols-4 mb16 kpi-row">`,
-    metric("ep.kpi.requests", (totalReq / 1_000_000).toFixed(2) + "M", "ep.kpi.requests.desc", "<i class='bi bi-arrow-left-right'></i>", "↗ 18.6%", "hero",
-      { data: [30, 38, 35, 44, 48, 52, 49, 58, 62, 68, 74, 82], color: "#ff6000" }),
-    metric(B("推理端点机队", "Endpoint fleet"), list.length, B("在线 GPU " + activeGpus.toLocaleString() + " · " + Object.keys(groups).length + " 类模型分组", activeGpus.toLocaleString() + " GPUs · " + Object.keys(groups).length + " model groups"), "<i class='bi bi-lightning-charge-fill'></i>", `${list.filter((e) => e.status === "healthy").length}/${list.length}`, "",
-      { data: [15, 23, 19, 28, 35, 44, 47, 49, 64, 71, 68, 83], color: "#17a76f" }),
-    metric(B("吞吐 Tokens", "Tokens throughput"), totalTokens.toLocaleString() + "/s", B("全端点合计 · 平均错误率 " + avgErr + "%", "All endpoints · avg error " + avgErr + "%"), "<i class='bi bi-cpu'></i>", "↗ 24.2%", "",
-      { data: [40, 45, 42, 55, 60, 58, 67, 72, 70, 78, 85, 92], color: "#f9a825" }),
-    metric(B("日推理成本", "Daily inference cost"), moneyShort(dailyCost), B("平均 P95 " + avgP95 + " ms · 可用性 99.95%", "Avg P95 " + avgP95 + " ms · 99.95% uptime"), "<i class='bi bi-cash-stack'></i>", "↓ 3.1%", "",
-      { data: [75, 68, 73, 65, 58, 64, 50, 45, 52, 41, 39, 33], color: "#ff6000" }),
+    metric("ep.kpi.requests", (totalReq / 1_000_000).toFixed(2) + "M", "ep.kpi.requests.desc", "<i class='bi bi-arrow-left-right'></i>", "↗ 18.6%", "hero"),
+    metric(B("推理端点机队", "Endpoint fleet"), list.length, B("在线 GPU " + activeGpus.toLocaleString() + " · " + Object.keys(groups).length + " 类模型分组", activeGpus.toLocaleString() + " GPUs · " + Object.keys(groups).length + " model groups"), "<i class='bi bi-lightning-charge-fill'></i>", `${list.filter((e) => e.status === "healthy").length}/${list.length}`, ""),
+    metric(B("吞吐 Tokens", "Tokens throughput"), totalTokens.toLocaleString() + "/s", B("全端点合计 · 平均错误率 " + avgErr + "%", "All endpoints · avg error " + avgErr + "%"), "<i class='bi bi-cpu'></i>", "↗ 24.2%", ""),
+    metric(B("日推理成本", "Daily inference cost"), moneyShort(dailyCost), B("平均 P95 " + avgP95 + " ms · 可用性 99.95%", "Avg P95 " + avgP95 + " ms · 99.95% uptime"), "<i class='bi bi-cash-stack'></i>", "↓ 3.1%", ""),
     `</div>`,
 
     // Endpoint 机队表格（全量）

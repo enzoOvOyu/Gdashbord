@@ -1,127 +1,109 @@
-// 部署中心（万卡级）：区域 → 可用区 → GPU 型号三级联动（RunPod 风格），USD 计价，中英双语
-// 容量来自 /api/fleet/capacity（由 state.clusters 实算），与机队总览 / 市场口径一致
+// 部署中心：完全按参考素材包 "Deploy a GPU Pod" 结构重构
+// 01 Workload configuration（模板/名称/选项）→ 02 Choose GPU compute（筛选/云类型/地域/搜索/GPU 卡网格）
+// → 03 Storage & environment（GPU 数量 counter/磁盘滑块/持久卷滑块）+ 右侧吸顶 Deployment summary
+// 万卡级扩展：场景模式（工作空间/推理/训练/集群）、区域→可用区联动、实时库存
 import { api } from "../api.js";
-import { header, section, btn, field, input, select, esc, money, gpu, status, t, L, tabs } from "../ui.js";
+import { header, section, btn, esc, money, gpu, t, L } from "../ui.js";
 
 const B = (zh, en) => ({ zh, en });
-const BAR = (pct, color) => `<div class="progress"><span style="width:${Math.min(100, Math.max(2, Math.round(pct)))}%;${color ? "background:" + color : ""}"></span></div>`;
 
+// 场景模式（扩展素材包的 Pod 单一形态）
 const MODES = [
-  ["workspace", "cr.mode.workspace", "cr.mode.workspace.desc"],
-  ["endpoint", "cr.mode.endpoint", "cr.mode.endpoint.desc"],
-  ["job", "cr.mode.job", "cr.mode.job.desc"],
-  ["cluster", "cr.mode.cluster", "cr.mode.cluster.desc"],
+  ["workspace", "cr.mode.workspace", "cr.mode.workspace.desc", "terminal"],
+  ["endpoint", "cr.mode.endpoint", "cr.mode.endpoint.desc", "lightning-charge-fill"],
+  ["job", "cr.mode.job", "cr.mode.job.desc", "cpu"],
+  ["cluster", "cr.mode.cluster", "cr.mode.cluster.desc", "hdd-rack"],
 ];
 
-const STEPS = [
-  ["1", "cr.step1", "cr.step1.sub"],
-  ["2", "cr.step2", "cr.step2.sub"],
-  ["3", "cr.step3", "cr.step3.sub"],
-  ["4", "cr.step4", "cr.step4.sub"],
-];
-
-// 按部署场景推荐型号分级（与 GPU_TIERS 对应）
+// 场景 → GPU 分级映射（与 GPU_TIERS 对应）
+const TIER_OF = { H100: "general", H200: "longctx", B200: "frontier", B300: "moe", GB300: "rackscale" };
 const SCENARIOS = [
   ["all", B("全部型号", "All models")],
-  ["general", B("通用训练 / 推理", "General train / inference")],
-  ["longctx", B("长上下文推理", "Long-context inference")],
-  ["frontier", B("前沿预训练", "Frontier pre-training")],
+  ["general", B("通用", "General")],
+  ["longctx", B("长上下文", "Long-context")],
+  ["frontier", B("前沿预训练", "Frontier")],
   ["moe", B("超大 MoE", "Large MoE")],
   ["rackscale", B("机架级 NVL72", "Rack-scale NVL72")],
 ];
-
-const TIER_OF = { H100: "general", H200: "longctx", B200: "frontier", B300: "moe", GB300: "rackscale" };
 
 function findRegionCap(cap, regionId) {
   return (cap.regions || []).find((r) => r.region === regionId) || null;
 }
 
-// 区域选择：卡片含可用区数 / 容量 / 电力 / 合规
-function regionPicker(c, cap) {
+// ===== 顶部：场景模式选择条（素材包 quick-action 语义） =====
+function modeBar(c) {
+  return `<div class="grid cols-4 mb16">${MODES.map((x) => `
+    <button class="deploy-mode ${c.mode === x[0] ? "selected" : ""}" data-mode-select="${x[0]}">
+      <span class="dm-icon"><i class="bi bi-${x[3]}"></i></span>
+      <span><strong>${esc(t(x[1]))}</strong><small>${esc(t(x[2]))}</small></span>
+      <i class="bi bi-chevron-right dm-arrow"></i>
+    </button>`).join("")}</div>`;
+}
+
+// ===== 01 Workload configuration =====
+function workloadCard(c) {
+  const images = window.__IMAGES || [];
+  const groups = window.__MODEL_GROUPS || [];
+  const engines = window.__ENGINES || [];
+  const im = images.find((x) => x.id === c.image) || images[0] || { name: "—", desc: B("—", "—") };
+  const isEndpoint = c.mode === "endpoint";
+  const cur = groups.flatMap((g) => g.models).find((m) => m.id === c.modelId);
+  return `
+  <div class="card form-card">
+    <div class="form-head"><span class="step-num">01</span><div><div class="form-title">${esc(B("Workload configuration", "Workload configuration"))}</div><div class="form-desc">${esc(B("选择模板并命名你的工作负载", "Select your template and name your workload"))}</div></div></div>
+
+    ${isEndpoint ? `
+    <div class="form-group">
+      <label class="form-label">${esc(B("推理模型", "Inference model"))}</label>
+      <select class="field select w100" data-act-pick="model" id="model-picker">${groups.map((g) => `<optgroup label="${esc(L(g.name))}">${g.models.map((m) => `<option value="${esc(m.id)}" ${c.modelId === m.id ? "selected" : ""}>${esc(m.name)} · ${esc(m.params)}</option>`).join("")}</optgroup>`).join("")}</select>
+      ${cur ? `<div class="notice mt12">${esc(cur.name)} · ${esc(cur.params)} · ctx ${esc(cur.ctx)} · ${cur.vram ? cur.vram + " GB VRAM" : "API Proxy"}</div>` : ""}
+    </div>
+    <div class="form-group">
+      <label class="form-label">${esc(B("推理引擎", "Inference engine"))}</label>
+      <select class="field select w100" data-set="create.engine">${engines.map((e) => `<option ${c.engine === e ? "selected" : ""}>${esc(e)}</option>`).join("")}</select>
+    </div>
+    ` : `
+    <div class="form-group">
+      <label class="form-label">${esc(B("Pod template", "Pod template"))}</label>
+      <div class="template-chooser">
+        <div class="row gap12"><div class="template-mark"><i class="bi bi-box-seam"></i></div><div><strong>${esc(im.name)}</strong><small>${esc(L(im.desc))}</small></div></div>
+        <button class="btn sm" data-act="pick-scenario:all" style="visibility:hidden"></button>
+        <div class="template-picker"><select class="field select" data-set="create.image">${images.map((x) => `<option value="${esc(x.id)}" ${c.image === x.id ? "selected" : ""}>${esc(x.name)}</option>`).join("")}</select></div>
+      </div>
+    </div>
+    `}
+
+    <div class="form-group">
+      <label class="form-label" for="podname">${esc(B("Pod name", "Pod name"))}</label>
+      <input class="field w100" id="podname" value="${esc(c.name)}" data-set="create.name" placeholder="my-gpu-workspace" maxlength="48"/>
+    </div>
+
+    ${c.mode === "job" ? `
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">${esc(B("训练框架", "Training framework"))}</label>
+        <select class="field select w100" data-set="create.jobTemplate">${["PyTorch DDP", "DeepSpeed ZeRO", "Ray Train", "Custom Container"].map((x) => `<option ${c.jobTemplate === x ? "selected" : ""}>${esc(x)}</option>`).join("")}</select></div>
+      <div class="form-group"><label class="form-label">${esc(B("数据集", "Dataset"))}</label>
+        <select class="field select w100" data-set="create.dataset">${["nlp-corpus-v3", "vision-dataset", "pretrain-tokens"].map((x) => `<option ${c.dataset === x ? "selected" : ""}>${esc(x)}</option>`).join("")}</select></div>
+    </div>
+    ` : ""}
+
+    <div class="option-row">
+      <label class="check-line"><input type="checkbox" data-check="create.jupyter" ${c.jupyter ? "checked" : ""}/> ${esc(B("启动 Jupyter Notebook", "Start Jupyter Notebook"))}</label>
+      <label class="check-line"><input type="checkbox" data-check="create.ssh" ${c.ssh ? "checked" : ""}/> ${esc(B("SSH 终端访问", "SSH terminal access"))}</label>
+      ${c.mode === "job" ? `<label class="check-line"><input type="checkbox" data-check="create.spot" ${c.spot ? "checked" : ""}/> ${esc(B("使用抢占式实例", "Use spot instances"))}</label>` : ""}
+    </div>
+  </div>`;
+}
+
+// ===== 02 Choose GPU compute =====
+function computeCard(c, cap) {
+  const gpus = window.__GPU || [];
   const regions = window.__REGIONS || [];
-  const gpus = window.__GPU || [];
-  const capTotal = cap || { total: 0, free: 0, allocated: 0, utilization: 0 };
-  return [
-    `<div class="card card-pad mb16">${section(B("机队实时容量", "Live fleet capacity"), `<span class="small muted">${esc(B("数据来自调度器实时视图", "From scheduler live view"))}</span>`)}`,
-    `<div class="grid cols-4 mt12">`,
-    `<div class="summary-line"><span>${esc(B("机队总量", "Fleet total"))}</span><b>${(capTotal.total || 0).toLocaleString()}</b></div>`,
-    `<div class="summary-line"><span>${esc(B("可分配", "Free"))}</span><b style="color:#0e9e85">${(capTotal.free || 0).toLocaleString()}</b></div>`,
-    `<div class="summary-line"><span>${esc(B("已分配", "Allocated"))}</span><b>${(capTotal.allocated || 0).toLocaleString()}</b></div>`,
-    `<div class="summary-line"><span>${esc(B("使用率", "Utilization"))}</span><b>${capTotal.utilization || 0}%</b></div>`,
-    `</div>`,
-    `<div class="callout mt12">${esc(B(
-      `调度策略：跨可用区分散放置高可用拓扑感知调度（GPU 拓扑 / IB fabric / NVLink 域），排队任务优先复用低占用集群。`,
-      `Scheduling: topology-aware HA placement across zones (GPU topology / IB fabric / NVLink domains); queued jobs prefer low-utilization clusters.`
-    ))}</div></div>`,
-
-    `<div class="card card-pad mb16">${section("cr.region.step", `<span class="small muted">${esc(t("cr.region.hint"))}</span>`)}`,
-    `<div class="region-grid mt12">`,
-    regions.map((r) => {
-      const rc = findRegionCap(cap, r.id);
-      const regionFree = rc ? rc.zones.reduce((a, z) => a + (z.free || 0), 0) : 0;
-      const regionTotal = rc ? rc.zones.reduce((a, z) => a + (z.total || 0), 0) : 0;
-      const sel = c.region === r.id;
-      const stock = gpus.reduce((a, g) => a + (g.stock[r.id] || 0), 0);
-      const minPrice = Math.min(...gpus.filter((g) => (g.stock[r.id] || 0) > 0).map((g) => g.price).concat([Infinity]));
-      return `<button class="region-card${sel ? " selected" : ""}" data-act="pick-region:${r.id}" aria-pressed="${sel}">
-        <div class="rc-top"><span class="rc-flag">${r.country}</span><b>${esc(L(r.name))}</b>${sel ? `<span class="pill green sm"><i class="dot"></i>${esc(t("cr.selected"))}</span>` : ""}</div>
-        <div class="rc-meta">
-          <span><i class='bi bi-diagram-3'></i> ${esc(r.tier)} · ${(rc ? rc.zones.length : 0)} AZ</span>
-          <span><i class='bi bi-clock-history'></i> ${esc(L(r.latency))}</span>
-          <span><i class='bi bi-lightning-charge'></i> ${esc(r.fabric)}</span>
-        </div>
-        <div class="rc-meta">
-          <span><i class='bi bi-lightning-charge'></i> ${esc(L(r.power))}</span>
-        </div>
-        <div class="rc-foot">
-          <span class="rc-stock">${regionFree.toLocaleString()} <small>${esc(t("mk.card.stock"))}</small></span>
-          <span class="rc-price">${Number.isFinite(minPrice) ? money(minPrice) : "—"}<small>${esc(t("common.perGpuHour"))}</small></span>
-        </div>
-        <div style="margin-top:8px">${BAR(regionTotal ? (regionFree / regionTotal) * 100 : 0, "#0e9e85")}</div>
-      </button>`;
-    }).join(""),
-    `</div></div>`,
-  ].join("");
-}
-
-// 可用区选择（选定区域内）+ 实时容量 / 电力 / 散热
-function zonePicker(c, cap) {
-  const rc = findRegionCap(cap, c.region);
-  if (!rc) return "";
-  return [
-    `<div class="card card-pad mb16">${section(B("可用区与实时库存", "Zones & live inventory"), `<span class="small muted">${esc(L(rc.name))} · ${esc(rc.fabric)}</span>`)}`,
-    `<div class="region-grid mt12">`,
-    rc.zones.map((z) => {
-      const sel = c.zone === z.zone;
-      const stock = z.models.reduce((a, m) => a + (m.free || 0), 0);
-      return `<button class="region-card${sel ? " selected" : ""}" data-act="pick-zone:${z.zone}" aria-pressed="${sel}">
-        <div class="rc-top"><b>${esc(z.zone)}</b>${sel ? `<span class="pill green sm"><i class="dot"></i>${esc(t("cr.selected"))}</span>` : ""}</div>
-        <div class="rc-meta">
-          <span><i class='bi bi-lightning-charge'></i> ${esc(L(z.power))}</span>
-          <span><i class='bi bi-droplet'></i> ${esc(L(z.cooling))}</span>
-        </div>
-        <div class="rc-foot">
-          <span class="rc-stock">${stock.toLocaleString()} <small>${esc(t("mk.card.stock"))}</small></span>
-          <span class="rc-price">${(z.total || 0).toLocaleString()}<small> ${esc(t("common.total"))}</small></span>
-        </div>
-        <div style="margin-top:8px">${BAR(z.total ? (z.free / z.total) * 100 : 0, "#0e9e85")}</div>
-      </button>`;
-    }).join(""),
-    `</div>`,
-    `<div class="callout mt12">${esc(B(
-      `可用区级隔离：跨 AZ 部署高可用架构；同 AZ 内优先满足 NVLink / IB 拓扑约束，保障多卡作业的集合通信带宽。`,
-      `Zone isolation: deploy HA across AZs; within an AZ, NVLink / IB topology constraints are honored first to protect collective bandwidth for multi-GPU jobs.`
-    ))}</div></div>`,
-  ].join("");
-}
-
-// GPU 型号选择：场景过滤 + 三种计价 + 实时库存
-function gpuPicker(c, cap) {
-  const gpus = window.__GPU || [];
-  const kind = c.priceKind || "price";
   const rc = findRegionCap(cap, c.region);
   const scenario = c.scenario || "all";
-  // 某型号在选定区域（或可用区）的可分配量
+  const kind = c.priceKind || "price";
+
+  // 库存：可用区或区域级
   const freeOf = (g) => {
     if (c.zone && rc) {
       const z = rc.zones.find((x) => x.zone === c.zone);
@@ -131,168 +113,150 @@ function gpuPicker(c, cap) {
     if (rc) return rc.zones.reduce((a, z) => { const m = z.models.find((mm) => mm.id === g.id); return a + (m ? m.free : 0); }, 0);
     return g.stock[c.region] || 0;
   };
+
   const filtered = scenario === "all" ? gpus : gpus.filter((g) => TIER_OF[g.id] === scenario);
-  return [
-    `<div class="card card-pad mb16">${section("cr.gpu.step", `<span class="small muted">${esc(t("cr.gpu.hint"))}</span>`)}`,
-    `<div class="seg sm mb12">${SCENARIOS.map((x) => `<button data-act="pick-scenario:${x[0]}" class="${scenario === x[0] ? "active" : ""}">${esc(L(x[1]))}</button>`).join("")}</div>`,
-    `<div class="seg sm mb12">${[["price", "common.onDemand"], ["spot", "common.spot"], ["reserved", "common.reserved"]]
-      .map((x) => `<button data-act="pick-price:${x[0]}" class="${kind === x[0] ? "active" : ""}">${esc(t(x[1]))}</button>`).join("")}</div>`,
-    `<div class="gpu-pick-list">`,
-    filtered.map((g) => {
-      const free = freeOf(g);
-      const sel = c.gpu === g.id;
-      const out = free === 0;
-      const unit = g[kind] || g.price;
-      return `<button class="gpu-pick${sel ? " selected" : ""}${out ? " disabled" : ""}" data-act="${out ? "none" : "pick-gpu:" + g.id}" aria-pressed="${sel}">
-        <div class="gp-main">
-          <div class="gp-name">${esc(g.name)}<span class="tag">${esc(L(g.badge))}</span></div>
-          <div class="gp-desc">${esc(L(g.tag))}</div>
-          <div class="gp-specs">
-            <span>${esc(t("cr.gpu.meta.vram"))} <b>${g.vram} GB</b></span>
-            <span>${esc(t("cr.gpu.meta.arch"))} <b>${esc(g.arch)}</b></span>
-            <span>${esc(t("cr.gpu.meta.cpu"))} <b>${g.cpu}</b></span>
-            <span>${esc(t("cr.gpu.meta.ram"))} <b>${g.ram} GB</b></span>
-            <span>${esc(t("cr.gpu.meta.net"))} <b>${esc(g.network)}</b></span>
-            <span>${esc(t("cr.gpu.meta.compute"))} <b>${(g.fp8 / 1000).toFixed(1)} PF</b></span>
-          </div>
-        </div>
-        <div class="gp-side">
-          <div class="gp-price">${money(unit)}<small>${esc(t("common.perGpuHour"))}</small></div>
-          <div class="gp-stock${out ? " out" : ""}">${out ? esc(t("cr.gpu.soldout")) : free.toLocaleString() + " " + esc(t("mk.card.stock"))}</div>
-          <div class="progress sm"><span style="width:${Math.min(100, Math.round((free / Math.max(1, (rc ? rc.zones.reduce((a, z) => { const m = z.models.find((mm) => mm.id === g.id); return a + (m ? m.total : 0); }, 0) : 1))) * 100))}%;background:#0e9e85"></span></div>
-        </div>
-      </button>`;
-    }).join(""),
-    `</div>`,
-    `<div class="form-grid mt16">`,
-    field(B("部署数量", "GPU count"), `<div class="seg">${[1, 2, 4, 8].map((v) => `<button data-act="pick-count:${v}" class="${Number(c.count) === v ? "active" : ""}">${v} ${esc(t("cr.field.count.unit"))}</button>`).join("")}</div>`),
-    field("cr.field.name", input(c.name, "create.name")),
-    `</div>`,
-    `</div>`,
-  ].join("");
+
+  const gpuCards = filtered.map((g) => {
+    const free = freeOf(g);
+    const out = free === 0;
+    const unit = g[kind] || g.price;
+    const avail = out ? B("无库存", "Unavailable") : free < 40 ? B("库存紧张", "Low") : B("充足", "Available");
+    return `<button class="gpu-card2 ${c.gpu === g.id ? "selected" : ""} ${out ? "unavailable" : ""}" data-act="${out ? "none" : "pick-gpu:" + g.id}" aria-pressed="${c.gpu === g.id}">
+      <div class="g2-title">${esc(g.name)}</div>
+      <div class="g2-vram">${g.vram} GB VRAM · ${g.ram} GB RAM</div>
+      <div class="g2-vram" style="margin-top:4px">${g.cpu} vCPU · ${esc(g.arch)}</div>
+      <div class="g2-bottom">
+        <div class="g2-price">${money(unit)}<small>/hr</small></div>
+        <span class="availability ${out ? "none" : free < 40 ? "low" : ""}">● ${esc(avail)}</span>
+      </div>
+    </button>`;
+  }).join("");
+
+  return `
+  <div class="card form-card">
+    <div class="form-head"><span class="step-num">02</span><div><div class="form-title">${esc(B("Choose GPU compute", "Choose GPU compute"))}</div><div class="form-desc">${esc(B("按显存、库存与成本选择 GPU", "Select a GPU based on VRAM, availability and cost"))}</div></div></div>
+
+    <div class="gpu-filter-row">
+      <div class="tabs">${SCENARIOS.map((x) => `<button class="tab ${scenario === x[0] ? "active" : ""}" data-act="pick-scenario:${x[0]}">${esc(L(x[1]))}</button>`).join("")}</div>
+      <select class="field select" data-act-pick="pricetype" id="price-kind" aria-label="${esc(B("计价方式", "Pricing"))}">
+        ${[["price", B("按需 On-Demand", "On-Demand")], ["spot", B("抢占式 Spot", "Spot")], ["reserved", B("预留 Reserved", "Reserved")]].map((x) => `<option value="${x[0]}" ${kind === x[0] ? "selected" : ""}>${esc(L(x[1]))}</option>`).join("")}
+      </select>
+      <select class="field select" data-act-pick="region" id="region-picker" aria-label="${esc(t("common.region"))}">
+        ${regions.map((r) => `<option value="${esc(r.id)}" ${c.region === r.id ? "selected" : ""}>${esc(L(r.name))}</option>`).join("")}
+      </select>
+      <select class="field select" data-act-pick="zone" id="zone-picker" aria-label="${esc(B("可用区", "Availability zone"))}">
+        <option value="">${esc(B("全部可用区", "All zones"))}</option>
+        ${(rc ? rc.zones : []).map((z) => `<option value="${esc(z.zone)}" ${c.zone === z.zone ? "selected" : ""}>${esc(z.zone)} · ${esc(L(z.power))}</option>`).join("")}
+      </select>
+    </div>
+
+    <div class="row between mb16">
+      <span class="tiny-text">${filtered.length} ${esc(B("GPU 型号", "GPU types"))} · ${esc(B("区域实时库存来自调度器", "live inventory from scheduler"))}</span>
+      <span class="tiny-text">${rc ? `${(rc.zones.reduce((a, z) => a + z.free, 0)).toLocaleString()} ${esc(B("卡可分配", "free"))}` : ""}</span>
+    </div>
+
+    <div class="gpu-grid2">${gpuCards || `<div class="empty-state" style="grid-column:1/-1;padding:28px">${esc(B("没有符合条件的 GPU", "No GPUs match your filters."))}</div>`}</div>
+  </div>`;
 }
 
-function workspaceForm(c) {
-  const images = window.__IMAGES || [];
-  return [
-    `<div class="card card-pad mb16">${section("cr.ws.env")}<div class="option-grid">`,
-    images.map((im) => `<div class="option ${c.image === im.id ? "selected" : ""}" data-image="${esc(im.id)}"><span class="sel-dot"></span><b><i class='bi bi-box-seam'></i> ${esc(im.name)}</b><p>${esc(L(im.desc))}</p></div>`).join(""),
-    `</div></div>`,
-    `<div class="card card-pad mb16">${section("cr.ws.data")}<div class="form-grid">`,
-    field("cr.field.dataset", select([["nlp-corpus-v3", "nlp-corpus-v3 · 1.8 TB"], ["vision-dataset", "vision-dataset · 640 GB"], ["pretrain-tokens", "pretrain-tokens · 12.4 TB"], ["none", B("不挂载数据集", "No dataset")]], c.dataset, "create.dataset")),
-    field("cr.field.disk", input(c.disk, "create.disk", "number", "min=\"50\" step=\"50\"")),
-    field("cr.field.autostop", select([["0", "cr.autostop.off"], ["1", "1 " + t("cr.autostop.h")], ["2", "2 " + t("cr.autostop.h")], ["6", "6 " + t("cr.autostop.h")], ["12", "12 " + t("cr.autostop.h")]], c.autoStop, "create.autoStop")),
-    field("cr.ws.cmd", `<input value="/bin/bash" disabled/>`),
-    `</div><div class="flex mt16">`,
-    `<label class="check-pill"><input type="checkbox" data-check="create.ssh" ${c.ssh ? "checked" : ""}/> ${esc(t("cr.ssh"))}</label>`,
-    `<label class="check-pill"><input type="checkbox" data-check="create.jupyter" ${c.jupyter ? "checked" : ""}/> ${esc(t("cr.jupyter"))}</label>`,
-    `</div></div>`,
-  ].join("");
+// ===== 03 Storage & environment =====
+function storageCard(c) {
+  const isCluster = c.mode === "cluster";
+  return `
+  <div class="card form-card">
+    <div class="form-head"><span class="step-num">03</span><div><div class="form-title">${esc(B("Storage & environment", "Storage & environment"))}</div><div class="form-desc">${esc(B("配置磁盘、持久数据与 GPU 数量", "Configure disk, persistent data and GPU quantity"))}</div></div></div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">${esc(B("GPU 数量", "GPU count"))}</label>
+        <div class="counter"><button data-act="gpu-count:-1" aria-label="${esc(B("减少", "Decrease"))}">−</button><span>${c.count}</span><button data-act="gpu-count:1" aria-label="${esc(B("增加", "Increase"))}">+</button></div>
+      </div>
+      ${isCluster ? `
+      <div class="form-group">
+        <label class="form-label">${esc(B("节点数", "Nodes"))}</label>
+        <select class="field select w100" data-set="create.nodes">${[1, 2, 4, 8, 16, 32].map((x) => `<option ${Number(c.nodes) === x ? "selected" : ""}>${x}</option>`).join("")}</select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">${esc(B("调度器", "Scheduler"))}</label>
+        <select class="field select w100" data-set="create.scheduler">${["Slurm", "Kubernetes"].map((x) => `<option ${c.scheduler === x ? "selected" : ""}>${x}</option>`).join("")}</select>
+      </div>` : c.mode === "endpoint" ? `
+      <div class="form-group">
+        <label class="form-label">${esc(B("最小副本", "Min replicas"))}</label>
+        <select class="field select w100" data-set="create.minReplicas">${[0, 1, 2, 3, 4].map((x) => `<option ${Number(c.minReplicas) === x ? "selected" : ""}>${x}</option>`).join("")}</select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">${esc(B("最大副本", "Max replicas"))}</label>
+        <select class="field select w100" data-set="create.maxReplicas">${[1, 2, 4, 8, 16].map((x) => `<option ${Number(c.maxReplicas) === x ? "selected" : ""}>${x}</option>`).join("")}</select>
+      </div>` : `
+      <div class="form-group">
+        <label class="form-label">${esc(B("空闲自动关机", "Idle auto-shutdown"))}</label>
+        <select class="field select w100" data-set="create.autoStop">${[["0", B("关闭", "Off")], ["1", "1h"], ["2", "2h"], ["6", "6h"], ["12", "12h"]].map((x) => `<option value="${x[0]}" ${String(c.autoStop) === x[0] ? "selected" : ""}>${typeof x[1] === "string" ? esc(x[1]) : esc(L(x[1]))}</option>`).join("")}</select>
+      </div>`}
+    </div>
+
+    <div class="form-group">
+      <div class="range-line"><label for="disk">${esc(B("容器磁盘", "Container disk"))}</label><strong>${c.disk} GB</strong></div>
+      <input class="range" type="range" id="disk" min="20" max="250" step="10" value="${Number(c.disk) || 200}" data-set="create.disk" data-type="number"/>
+    </div>
+
+    <div class="notice">${esc(B("持久化数据应优先使用 Network Volume；容器盘与存储卷的计费和保留规则可能不同。", "Persistent data should live on a Network Volume; disk and volume billing/retention rules differ."))}</div>
+  </div>`;
 }
 
-function endpointForm(c) {
-  const groups = window.__MODEL_GROUPS || [];
-  const engines = window.__ENGINES || [];
-  const cur = groups.flatMap((g) => g.models).find((m) => m.id === c.modelId);
-  return [
-    `<div class="card card-pad mb16">${section("cr.ep.model")}<div class="form-grid">`,
-    field("cr.field.model", `<select data-act-pick="model" id="model-picker">${groups.map((g) => `<optgroup label="${esc(L(g.name))}">${g.models.map((m) => `<option value="${esc(m.id)}" ${c.modelId === m.id ? "selected" : ""}>${esc(m.name)} · ${esc(m.params)}</option>`).join("")}</optgroup>`).join("")}</select>`),
-    field("cr.field.engine", select(engines.map((e) => [e, e]), c.engine, "create.engine")),
-    `</div>`,
-    cur ? `<div class="callout mt16"><b>${esc(cur.name)}</b> · ${esc(cur.params)} · ${esc(t("ep.model.ctx"))} ${esc(cur.ctx)} · ${esc(t("ep.model.license"))} ${esc(cur.license)} · ${esc(t("ep.model.vram"))} ${cur.vram ? cur.vram + " GB" : "—"}</div>` : "",
-    `<div class="callout mt12">${esc(t("cr.ep.tip"))}</div></div>`,
-    `<div class="card card-pad mb16">${section("cr.ep.scale")}<div class="form-grid">`,
-    field("cr.field.min", select([0, 1, 2, 3, 4].map((x) => [x, x + " " + t("cr.replica.unit")]), c.minReplicas, "create.minReplicas")),
-    field("cr.field.max", select([1, 2, 4, 8, 16].map((x) => [x, x + " " + t("cr.replica.unit")]), c.maxReplicas, "create.maxReplicas")),
-    `</div><div class="flex mt16">`,
-    `<label class="check-pill"><input type="checkbox" data-check="create.auth" ${c.auth ? "checked" : ""}/> ${esc(t("cr.auth"))}</label>`,
-    `<span class="pill green"><i class='bi bi-check2-circle'></i> ${esc(t("cr.scalezero"))}</span><span class="pill blue"><i class='bi bi-check2-circle'></i> ${esc(t("cr.autoscale"))}</span>`,
-    `</div></div>`,
-  ].join("");
-}
-
-function jobForm(c) {
-  return [
-    `<div class="card card-pad mb16">${section("cr.job.cfg")}<div class="form-grid">`,
-    field("cr.field.template", select([["PyTorch DDP", "PyTorch DDP"], ["DeepSpeed ZeRO", "DeepSpeed ZeRO"], ["Ray Train", "Ray Train"], ["Custom Container", B("自定义容器", "Custom container")]], c.jobTemplate, "create.jobTemplate")),
-    field("cr.field.epochs", input(c.epochs, "create.epochs", "number", "min=\"1\" max=\"100\"")),
-    field("cr.field.dataset", select([["nlp-corpus-v3", "nlp-corpus-v3"], ["vision-dataset", "vision-dataset"], ["pretrain-tokens", "pretrain-tokens"]], c.dataset, "create.dataset")),
-    field("cr.field.checkpoint", `<input value="/checkpoints/${esc(c.name)}" disabled/>`),
-    `</div><div class="flex mt16">`,
-    `<label class="check-pill"><input type="checkbox" data-check="create.spot" ${c.spot ? "checked" : ""}/> ${esc(t("cr.spot"))}</label>`,
-    `<span class="pill blue">${esc(t("cr.ckpt.auto"))}</span><span class="pill green">${esc(t("cr.retry"))}</span>`,
-    `</div></div>`,
-  ].join("");
-}
-
-function clusterForm(c) {
+// ===== 右侧吸顶 Deployment summary =====
+function priceSummary(c, cap) {
   const g = gpu(c.gpu);
-  return [
-    `<div class="card card-pad mb16">${section("cr.cluster.cfg")}<div class="form-grid">`,
-    field("cr.field.nodes", select([1, 2, 4, 8, 16, 32].map((x) => [x, x + " " + t("cr.node.unit")]), c.nodes, "create.nodes")),
-    field("cr.field.scheduler", select([["Slurm", "Slurm"], ["Kubernetes", "Kubernetes"]], c.scheduler, "create.scheduler")),
-    field("cr.cluster.net", `<input value="${esc(g.network)}" disabled/>`),
-    field("cr.cluster.fs", `<input value="training-checkpoints · /checkpoints" disabled/>`),
-    `</div><div class="callout mt16">${esc(t("cr.cluster.tip"))}</div></div>`,
-  ].join("");
+  const kind = c.priceKind || "price";
+  const unit = g[kind] || g.price;
+  const mult = c.mode === "cluster" ? Number(c.nodes) : 1;
+  const gpuCount = c.mode === "endpoint" ? Number(c.count) * Number(c.minReplicas) : Number(c.count) * mult;
+  const gpuCost = unit * gpuCount;
+  const diskCost = (Number(c.disk) || 0) * 0.00013;
+  const total = gpuCost + diskCost;
+  const rc = findRegionCap(cap, c.region);
+  const reg = (window.__REGIONS || []).find((r) => r.id === c.region) || {};
+  const freeOfGpu = (() => {
+    if (!rc) return 0;
+    if (c.zone) { const z = rc.zones.find((x) => x.zone === c.zone); const m = z && z.models.find((mm) => mm.id === g.id); return m ? m.free : 0; }
+    return rc.zones.reduce((a, z) => { const m = z.models.find((mm) => mm.id === g.id); return a + (m ? m.free : 0); }, 0);
+  })();
+
+  const modeLabel = t(MODES.find((x) => x[0] === c.mode)[1]);
+
+  return `
+  <aside class="card price-summary">
+    <div class="row gap12 mb20"><div class="summary-card-icon"><i class="bi bi-wallet2"></i></div><div><div class="card-title">${esc(B("Deployment summary", "Deployment summary"))}</div><div class="card-sub">${esc(B("确认配置后部署", "Review your configuration"))}</div></div></div>
+    <div class="summary-line"><span>${esc(B("负载类型", "Workload type"))}</span><b>${esc(modeLabel)}</b></div>
+    <div class="summary-line"><span>${esc(B("区域", "Region"))}</span><b>${esc(L(reg.name) || c.region)}${c.zone ? " · " + esc(c.zone) : ""}</b></div>
+    <div class="summary-line"><span>${esc(B("GPU 型号", "GPU model"))}</span><b>${esc(g.name)}</b></div>
+    <div class="summary-line"><span>${esc(B("GPU 数量", "GPU quantity"))}</span><b>${gpuCount} GPU${gpuCount > 1 ? "s" : ""}</b></div>
+    <div class="summary-line"><span>${esc(B("计价方式", "Pricing"))}</span><b>${kind === "spot" ? t("common.spot") : kind === "reserved" ? t("common.reserved") : t("common.onDemand")}</b></div>
+    <div class="summary-line"><span>${esc(B("容器磁盘", "Container disk"))}</span><b>${c.disk} GB</b></div>
+    <div class="summary-line"><span>${esc(B("可分配库存", "Free stock"))}</span><b>${freeOfGpu.toLocaleString()}</b></div>
+    <div class="separator"></div>
+    <div class="summary-line"><span>${esc(B("GPU 计算", "GPU compute"))}</span><b>${money(gpuCost)}/hr</b></div>
+    <div class="summary-line"><span>${esc(B("容器磁盘", "Container disk"))}</span><b>${money(diskCost)}/hr</b></div>
+    <div class="summary-line total"><span>${esc(B("预估合计", "Estimated total"))}</span><b>${money(total)}<small>/hr</small></b></div>
+    <div class="summary-note">${esc(B("按量价格为实时估算，部署后开始计费；预留/抢占价按所选计价方式生效。", "On-demand prices are live estimates; billing starts after deployment. Spot/reserved pricing applies per selection."))}</div>
+    ${btn("<i class='bi bi-rocket-takeoff'></i> " + (freeOfGpu > 0 ? B("立即部署", "Deploy Pod") : B("到货后部署", "Deploy when available")), "deploy", "primary w100")}
+    ${btn("<i class='bi bi-book'></i> " + B("查看文档", "View documentation"), "about", "ghost w100")}
+    <div class="caption mt20">${esc(B("演示环境：不连接真实云 API，不产生实际费用。", "Demo environment: no real cloud API, no actual charges."))}</div>
+  </aside>`;
 }
 
 export default async function createPage(S) {
   const c = S.create;
   const cap = await api.fleetCapacity();
-  const g = gpu(c.gpu);
-  const kind = c.priceKind || "price";
-  const unit = g[kind] || g.price;
-  const mult = c.mode === "cluster" ? Number(c.nodes) : 1;
-  const est = c.mode === "endpoint" ? unit * Number(c.minReplicas) * Number(c.count) : unit * Number(c.count) * mult;
-  const totalGpus = c.mode === "endpoint" ? Number(c.count) * Number(c.minReplicas) : Number(c.count) * mult;
-  const reg = (window.__REGIONS || []).find((r) => r.id === c.region) || {};
-  const rc = findRegionCap(cap, c.region);
-  const zoneInfo = c.zone && rc ? (rc.zones.find((z) => z.zone === c.zone) || null) : null;
-  // 当前型号在所选区域/可用区的可分配量
-  const curFree = (() => {
-    const gg = (window.__GPU || []).find((x) => x.id === c.gpu);
-    if (!gg) return 0;
-    if (zoneInfo) { const m = zoneInfo.models.find((mm) => mm.id === gg.id); return m ? m.free : 0; }
-    if (rc) return rc.zones.reduce((a, z) => { const m = z.models.find((mm) => mm.id === gg.id); return a + (m ? m.free : 0); }, 0);
-    return gg.stock[c.region] || 0;
-  })();
-
   return [
     header("cr.title", "cr.sub", btn("cr.back", "go-market")),
-    `<div class="grid cols-4 mb16">${MODES.map((x) => `<div class="option ${c.mode === x[0] ? "selected" : ""}" data-mode-select="${x[0]}"><span class="sel-dot"></span><b>${esc(t(x[1]))}</b><p>${esc(t(x[2]))}</p></div>`).join("")}</div>`,
-    `<div class="steps">${STEPS.map((x, i) => `<div data-step="${i + 1}" style="cursor:pointer" class="step ${c.step === i + 1 ? "active" : c.step > i + 1 ? "done" : ""}"><span class="step-num">${c.step > i + 1 ? "<i class='bi bi-check2-circle'></i>" : x[0]}</span><div><b>${esc(t(x[1]))}</b><small>${esc(t(x[2]))}</small></div></div>`).join("")}</div>`,
-    `<div class="layout-wide-side"><div>`,
-    c.step === 1
-      ? `<div class="card card-pad mb16">${section("cr.intro.title")}<div class="callout mb16">${esc(t("cr.intro"))}</div><div class="grid cols-2">${[["cr.intro.dev", "cr.intro.dev.desc"], ["cr.intro.infer", "cr.intro.infer.desc"], ["cr.intro.train", "cr.intro.train.desc"], ["cr.intro.cluster", "cr.intro.cluster.desc"]].map((x) => `<div class="option"><b>${esc(t(x[0]))}</b><p>${esc(t(x[1]))}</p></div>`).join("")}</div></div>`
-      : "",
-    c.step === 2
-      ? [regionPicker(c, cap), zonePicker(c, cap), gpuPicker(c, cap)].join("")
-      : "",
-    c.step === 3 ? (c.mode === "workspace" ? workspaceForm(c) : c.mode === "endpoint" ? endpointForm(c) : c.mode === "job" ? jobForm(c) : clusterForm(c)) : "",
-    c.step === 4
-      ? `<div class="card card-pad">${section("cr.check.title")}<div class="grid cols-3"><div class="check-pill"><i class='bi bi-check2-circle'></i> ${esc(t("cr.check.image"))}</div><div class="check-pill"><i class='bi bi-check2-circle'></i> ${esc(t("cr.check.region"))}</div><div class="check-pill"><i class='bi bi-check2-circle'></i> ${esc(t("cr.check.budget"))}</div></div><div class="callout warn mt16">${esc(t("cr.check.warn"))}</div></div>`
-      : "",
-    `</div>`,
-    `<div class="card card-pad sticky">${section("cr.summary.title", `<a href="javascript:void(0)" data-act="reset-create">${esc(t("cr.summary.reset"))}</a>`)}`,
-    [["cr.summary.mode", t(MODES.find((x) => x[0] === c.mode) ? MODES.find((x) => x[0] === c.mode)[1] : "cr.mode.workspace")],
-     ["cr.summary.region", (L(reg.name) || c.region) + (c.zone ? " · " + c.zone : "")],
-     ["cr.summary.gpu", g.name],
-     ["cr.summary.count", totalGpus + " × " + (c.mode === "cluster" ? Number(c.nodes) + " " + t("cr.node.unit") : "")],
-     ["cr.summary.vram", g.vram * totalGpus + " GB"],
-     ["common.price", money(unit) + " " + t("common.perGpuHour")],
-     [B("可分配库存", "Free stock"), (curFree || 0).toLocaleString() + " " + t("mk.card.stock")],
-     ["cr.summary.image", c.mode === "endpoint" ? c.engine : c.image],
-     ["cr.summary.data", c.mode === "workspace" ? c.dataset : c.mode === "job" ? "Checkpoint + Dataset" : c.mode === "cluster" ? B("共享存储", "Shared storage") : B("模型缓存卷", "Model cache volume")]]
-      .map((x) => `<div class="summary-line"><span>${esc(t(x[0]))}</span><b>${esc(L(x[1]))}</b></div>`).join(""),
-    `<div style="margin-top:19px" class="price-summary-total"><div class="between"><span class="muted small">${esc(t("cr.summary.price"))}</span><span class="price">${money(est)}<small> / ${esc(t("common.perHour"))}</small></span></div>`,
-    `<div class="summary-line" style="margin-top:10px"><span>${esc(t("ov.cost.month"))} · 730h</span><b>${money(est * 730)}</b></div>`,
-    `<div class="small muted mt12">${esc(t(c.mode === "endpoint" ? "cr.summary.note.ep" : "cr.summary.note"))}</div></div>`,
-    `<div class="divider"></div>`,
-    c.step === 4
-      ? btn(["cr.deploy.ws", "cr.deploy.ep", "cr.deploy.job", "cr.deploy.cluster"][["workspace", "endpoint", "job", "cluster"].indexOf(c.mode)], "deploy", "primary block")
-      : btn("common.next", "next-step", "primary block"),
-    c.step > 1 ? `<div class="mt12">${btn("common.prev", "prev-step", "block")}</div>` : "",
-    `<div class="small muted" style="text-align:center;margin-top:11px">${esc(t("cr.deploy.time"))}</div></div></div>`,
+    modeBar(c),
+    `<div class="deploy-layout">
+      <div class="deploy-left">
+        ${workloadCard(c)}
+        ${computeCard(c, cap)}
+        ${storageCard(c)}
+      </div>
+      ${priceSummary(c, cap)}
+    </div>`,
   ].join("");
 }

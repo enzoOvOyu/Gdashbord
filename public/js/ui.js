@@ -75,20 +75,10 @@ export function header(title, sub, buttons = "") {
   return `<div class="pagehead"><div><div class="eyebrow">RUNSUN CLOUD / THE GPU CLOUD</div><h1>${esc(L(title))}</h1><p>${esc(L(sub))}</p></div><div class="head-actions">${buttons}</div></div>`;
 }
 
-// Sparkline：KPI 卡右下角迷你趋势线（素材包 stat-spark 模式）
-export function sparkline(vals, color = "#ff6000") {
-  if (!Array.isArray(vals) || vals.length < 2) return "";
-  const w = 92, h = 34;
-  const max = Math.max(...vals), min = Math.min(...vals);
-  const span = max - min || 1;
-  const pts = vals.map((v, i) => `${(i * w) / (vals.length - 1).toFixed(1)},${(h - 4 - ((v - min) / span) * (h - 8)).toFixed(1)}`).join(" ");
-  return `<svg class="stat-spark" viewBox="0 0 ${w} ${h}" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-}
-
-// 统计卡（素材包 stat-card 模式：标题 + 图标 + 大数字 + 趋势 + sparkline）
-export function metric(label, value, desc, icon = "<i class='bi bi-dot'></i>", trend = "", cls = "", spark = null) {
+// 统计卡（素材包 stat-card 模式）
+export function metric(label, value, desc, icon = "<i class='bi bi-dot'></i>", trend = "", cls = "") {
   const trendCls = /^↓|^\−/.test(String(trend)) ? "down" : "";
-  return `<div class="card metric ${cls}"><div class="metric-top"><span>${esc(L(label))}</span><span class="metric-icon">${icon}</span></div><div class="metric-value">${value}</div><div class="metric-bottom"><span>${esc(L(desc))}</span>${trend ? `<span class="trend ${trendCls}">${trend}</span>` : ""}</div>${spark ? sparkline(spark.data || [], spark.color || "#ff6000") : ""}</div>`;
+  return `<div class="card metric ${cls}"><div class="metric-top"><span>${esc(L(label))}</span><span class="metric-icon">${icon}</span></div><div class="metric-value">${value}</div><div class="metric-bottom"><span>${esc(L(desc))}</span>${trend ? `<span class="trend ${trendCls}">${trend}</span>` : ""}</div></div>`;
 }
 
 export function section(title, right = "") {

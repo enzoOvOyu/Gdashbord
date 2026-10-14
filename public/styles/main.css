@@ -1488,3 +1488,194 @@ select {
   .region-grid { grid-template-columns: minmax(0, 1fr); }
   .lang-toggle span { display: none; }
 }
+
+/* ==========================================================================
+   部署中心 V4 — 完全按参考素材包 "Deploy a GPU Pod" 布局重构
+   deploy-layout（左表单流 + 右吸顶摘要）/ form-card 三段式 / gpu-card2 网格 / counter
+   ========================================================================== */
+
+/* ---------- 场景模式选择条 ---------- */
+.deploy-mode {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--surface);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+.deploy-mode:hover { border-color: #ffcfb3; background: #fffaf6; box-shadow: var(--shadow-card-hover); }
+.deploy-mode.selected { border: 1.5px solid var(--brand); background: #fffaf6; box-shadow: 0 0 0 3px rgba(255, 96, 0, 0.08); }
+.deploy-mode.selected .dm-icon { background: var(--brand); color: #fff; }
+.deploy-mode.selected .dm-arrow { color: var(--brand); opacity: 1; }
+.dm-icon {
+  width: 36px; height: 36px; flex: 0 0 36px;
+  display: grid; place-items: center;
+  border-radius: 10px;
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-size: 16px;
+}
+.deploy-mode strong { display: block; font-size: 12px; font-weight: 700; color: var(--text); }
+.deploy-mode small { display: block; color: #9a9fb0; font-size: 10px; margin-top: 4px; line-height: 1.5; }
+.dm-arrow { margin-left: auto; color: #b4b8c8; font-size: 12px; opacity: 0; transition: opacity var(--dur) var(--ease); }
+.deploy-mode:hover .dm-arrow { opacity: 1; }
+
+/* ---------- 部署主布局：左流 + 右摘要 ---------- */
+.deploy-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 315px;
+  gap: 19px;
+  align-items: start;
+}
+.deploy-left { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+
+/* ---------- 表单卡（素材包 form-card） ---------- */
+.form-card { padding: 21px; }
+.form-head { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
+.form-head .step-num {
+  width: 25px; height: 25px;
+  border-radius: 8px;
+  background: var(--brand-soft);
+  color: var(--brand);
+  display: grid; place-items: center;
+  font-weight: 800;
+  font-size: 11px;
+  flex: 0 0 25px;
+}
+.form-title { font-size: 13px; font-weight: 750; letter-spacing: -0.15px; }
+.form-desc { font-size: 10.5px; color: #a1a5b4; margin-top: 4px; }
+.form-label { font-size: 10.5px; color: #71768c; font-weight: 690; margin: 0 0 8px; display: block; }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.form-group { margin-bottom: 16px; }
+.form-group:last-child { margin-bottom: 0; }
+.option-row { display: flex; align-items: center; gap: 17px; flex-wrap: wrap; margin-top: 4px; }
+.check-line { display: flex; align-items: center; gap: 7px; font-size: 11px; color: #64697d; cursor: pointer; }
+.check-line input { accent-color: var(--brand); }
+
+/* ---------- 模板选择器（素材包 template-chooser） ---------- */
+.template-chooser {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid #e4e1f5;
+  border-radius: 9px;
+  padding: 12px;
+  gap: 10px;
+  background: #fbfaff;
+}
+.template-mark {
+  width: 35px; height: 35px;
+  border-radius: 9px;
+  background: #fff1e8;
+  color: #e57943;
+  display: grid; place-items: center;
+  font-size: 16px;
+  flex: 0 0 35px;
+}
+.template-chooser strong { font-size: 11.5px; display: block; }
+.template-chooser small { display: block; color: #9da1b0; font-size: 10px; margin-top: 4px; }
+.template-picker select { min-width: 190px; height: 30px; font-size: 11.5px; }
+
+/* ---------- GPU 筛选行（素材包 gpu-filter-row） ---------- */
+.gpu-filter-row { display: flex; gap: 9px; flex-wrap: wrap; align-items: center; margin-bottom: 15px; }
+.gpu-filter-row .tabs { margin: 0; }
+.gpu-filter-row .field.select { height: 34px; min-width: 130px; font-size: 11.5px; }
+.field { border: 1px solid #e5e6ef; background: #fff; border-radius: 8px; min-height: 36px; padding: 0 11px; color: #35394f; outline: none; min-width: 0; }
+.field:focus { border-color: #ffab73; box-shadow: 0 0 0 3px rgba(255, 96, 0, 0.1); }
+.field::placeholder { color: #b3b7c5; }
+
+/* ---------- GPU 卡片网格（素材包 gpu-grid / gpu-card） ---------- */
+.gpu-grid2 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.gpu-card2 {
+  position: relative;
+  border: 1px solid #e6e7ef;
+  border-radius: 10px;
+  background: #fff;
+  padding: 14px 13px;
+  min-height: 142px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+.gpu-card2:hover { border-color: #c1b4ff; box-shadow: 0 5px 16px rgba(110, 78, 221, 0.07); }
+.gpu-card2.selected { border: 1.5px solid var(--brand); background: #fffaf6; box-shadow: 0 0 0 3px rgba(255, 96, 0, 0.08); }
+.gpu-card2.selected::after {
+  content: '✓';
+  position: absolute; right: 12px; top: 12px;
+  background: var(--brand); color: #fff;
+  border-radius: 50%;
+  width: 16px; height: 16px;
+  display: grid; place-items: center;
+  font-size: 10px;
+}
+.gpu-card2.unavailable { opacity: 0.67; cursor: not-allowed; }
+.gpu-card2.unavailable:hover { border-color: #e6e7ef; box-shadow: none; }
+.g2-title { font-size: 12px; font-weight: 780; margin-bottom: 5px; color: var(--text); padding-right: 20px; }
+.g2-vram { font-size: 10px; color: #8c91a2; }
+.g2-bottom { display: flex; align-items: flex-end; justify-content: space-between; margin-top: 22px; }
+.g2-price { font-size: 16px; letter-spacing: -0.5px; font-weight: 790; color: var(--text); }
+.g2-price small { font-size: 9px; color: #9297a9; font-weight: 500; letter-spacing: 0; }
+.availability { font-size: 9px; color: #21a877; font-weight: 600; }
+.availability.low { color: #d69935; }
+.availability.none { color: #a2a7b7; }
+
+/* ---------- GPU 数量 counter（素材包 counter） ---------- */
+.counter { display: flex; align-items: center; border: 1px solid #e6e7ef; border-radius: 8px; width: max-content; overflow: hidden; }
+.counter button { width: 35px; height: 35px; border: 0; background: #fafafe; font-size: 18px; color: #6f7386; cursor: pointer; }
+.counter button:hover { background: var(--brand-soft); color: var(--brand); }
+.counter span { min-width: 39px; text-align: center; font-weight: 750; }
+
+/* ---------- 滑块 ---------- */
+.range-line { display: flex; justify-content: space-between; align-items: center; color: #74798c; font-size: 11px; margin-bottom: 8px; }
+.range { width: 100%; accent-color: var(--brand); cursor: pointer; }
+
+/* ---------- 提示（素材包 notice） ---------- */
+.notice {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 12px 14px; border-radius: 9px;
+  background: #f8f9fd; color: #777d91;
+  font-size: 11px; line-height: 1.65;
+}
+.notice .bi { color: #7655e9; margin-top: 2px; }
+
+/* ---------- 右侧吸顶摘要（素材包 price-summary） ---------- */
+.price-summary { position: sticky; top: calc(var(--header-h) + 19px); padding: 20px; }
+.summary-card-icon {
+  width: 39px; height: 39px;
+  border-radius: 11px;
+  background: var(--brand-soft);
+  display: grid; place-items: center;
+  color: var(--brand);
+  font-size: 17px;
+  flex: 0 0 39px;
+}
+.card-title { font-size: 14px; font-weight: 750; letter-spacing: -0.15px; }
+.card-sub { color: #9b9fb0; font-size: 11.5px; margin-top: 5px; }
+.price-summary .summary-line { display: flex; align-items: center; justify-content: space-between; margin: 13px 0; color: #85899a; font-size: 11px; gap: 12px; }
+.price-summary .summary-line b { color: #45495c; font-size: 11px; font-weight: 710; text-align: right; }
+.price-summary .summary-line.total { border-top: 1px solid var(--line-strong); padding-top: 18px; margin-top: 18px; }
+.price-summary .summary-line.total b { font-size: 23px; color: #24253a; letter-spacing: -0.8px; }
+.price-summary .summary-line.total b small { font-size: 11px; color: #9fa3b2; font-weight: 550; letter-spacing: 0; }
+.summary-note { font-size: 10px; line-height: 1.6; color: #a2a6b7; margin: 12px 0 17px; }
+.separator { height: 1px; background: var(--border-strong); margin: 19px 0; }
+.caption { font-size: 10px; color: #a3a6b6; line-height: 1.7; }
+.price-summary .btn { width: 100%; }
+.price-summary .btn + .btn { margin-top: 8px; }
+.w100 { width: 100%; }
+
+/* ---------- 响应式 ---------- */
+@media (max-width: 1280px) {
+  .deploy-layout { grid-template-columns: minmax(0, 1fr); }
+  .price-summary { position: static; }
+  .gpu-grid2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 768px) {
+  .gpu-grid2 { grid-template-columns: minmax(0, 1fr); }
+  .form-row { grid-template-columns: 1fr; }
+  .deploy-mode { padding: 12px; }
+}

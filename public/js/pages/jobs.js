@@ -17,14 +17,10 @@ function jobsView(S, res) {
 
   return [
     `<div class="grid cols-4 mb16 kpi-row">`,
-    metric("job.kpi.running", running.length, B(gpuNow.toLocaleString() + " GPU 调度中", gpuNow.toLocaleString() + " GPUs scheduled"), "<i class='bi bi-play-circle'></i>", "", "hero",
-      { data: [25, 32, 28, 42, 39, 55, 50, 61, 63, 72, 68, 80], color: "#ff6000" }),
-    metric("job.kpi.queued", res.queued || 0, "job.kpi.queued.desc", "<i class='bi bi-clock-history'></i>", "", "",
-      { data: [40, 44, 42, 38, 45, 36, 40, 34, 37, 32, 30, 28], color: "#f9a825" }),
-    metric("job.kpi.goodput", avgGoodput + "%", "job.kpi.goodput.desc", "<i class='bi bi-speedometer2'></i>", "↗ 1.8%", "",
-      { data: [70, 72, 71, 74, 73, 76, 75, 78, 79, 81, 83, 85], color: "#17a76f" }),
-    metric(B("运行成本", "Run cost"), moneyShort(spend), money(hourly) + " / " + t("common.perHour"), "<i class='bi bi-cash-stack'></i>", "", "",
-      { data: [30, 28, 38, 35, 49, 53, 50, 62, 67, 68, 73, 78], color: "#ff6000" }),
+    metric("job.kpi.running", running.length, B(gpuNow.toLocaleString() + " GPU 调度中", gpuNow.toLocaleString() + " GPUs scheduled"), "<i class='bi bi-play-circle'></i>", "", "hero"),
+    metric("job.kpi.queued", res.queued || 0, "job.kpi.queued.desc", "<i class='bi bi-clock-history'></i>", "", ""),
+    metric("job.kpi.goodput", avgGoodput + "%", "job.kpi.goodput.desc", "<i class='bi bi-speedometer2'></i>", "↗ 1.8%", ""),
+    metric(B("运行成本", "Run cost"), moneyShort(spend), money(hourly) + " / " + t("common.perHour"), "<i class='bi bi-cash-stack'></i>", "", ""),
     `</div>`,
     `<div class="layout-wide-side">`,
     `<div class="card"><div class="table-wrap"><table><thead><tr>
@@ -89,14 +85,10 @@ function clustersView(S, clusters) {
 
   return [
     `<div class="grid cols-4 mb16 kpi-row">`,
-    metric("job.cl.kpi.count", clusters.length, B("Slurm " + (schedulers.Slurm || 0) + " · K8s " + (schedulers.Kubernetes || 0), "Slurm " + (schedulers.Slurm || 0) + " · K8s " + (schedulers.Kubernetes || 0)), "<i class='bi bi-hdd-rack'></i>", "", "",
-      { data: [60, 66, 72, 78, 84, 88, 92, 96, 99, 101, 103, 103], color: "#f9a825" }),
-    metric("job.cl.kpi.gpus", totalGpus.toLocaleString(), B("在线 " + onlineGpus.toLocaleString() + " · 利用率 " + util + "%", "Online " + onlineGpus.toLocaleString() + " · " + util + "%"), "<i class='bi bi-cpu'></i>", "", "hero",
-      { data: [62, 66, 71, 69, 76, 82, 84, 88, 92, 96, 98, 100], color: "#ff6000" }),
-    metric(B("总功耗", "Total power"), Math.round(totalPower).toLocaleString() + " kW", B("运行中作业 " + totalJobs + " · 碳排按区域因子", totalJobs + " active jobs · regional carbon factors"), "<i class='bi bi-lightning-charge'></i>", "", "",
-      { data: [50, 55, 52, 58, 61, 57, 63, 66, 64, 69, 72, 75], color: "#17a76f" }),
-    metric(B("NVL72 机架", "NVL72 racks"), clusters.filter((c) => c.topo === "NVL72").length, B("GB300 机架级 NVLink 域", "GB300 rack-scale NVLink domains"), "<i class='bi bi-diagram-3'></i>", "", "",
-      { data: [8, 9, 10, 12, 13, 14, 14, 15, 16, 17, 18, 18], color: "#ff6000" }),
+    metric("job.cl.kpi.count", clusters.length, B("Slurm " + (schedulers.Slurm || 0) + " · K8s " + (schedulers.Kubernetes || 0), "Slurm " + (schedulers.Slurm || 0) + " · K8s " + (schedulers.Kubernetes || 0)), "<i class='bi bi-hdd-rack'></i>", "", ""),
+    metric("job.cl.kpi.gpus", totalGpus.toLocaleString(), B("在线 " + onlineGpus.toLocaleString() + " · 利用率 " + util + "%", "Online " + onlineGpus.toLocaleString() + " · " + util + "%"), "<i class='bi bi-cpu'></i>", "", "hero"),
+    metric(B("总功耗", "Total power"), Math.round(totalPower).toLocaleString() + " kW", B("运行中作业 " + totalJobs + " · 碳排按区域因子", totalJobs + " active jobs · regional carbon factors"), "<i class='bi bi-lightning-charge'></i>", "", ""),
+    metric(B("NVL72 机架", "NVL72 racks"), clusters.filter((c) => c.topo === "NVL72").length, B("GB300 机架级 NVLink 域", "GB300 rack-scale NVLink domains"), "<i class='bi bi-diagram-3'></i>", "", ""),
     `</div>`,
     `<div class="card card-pad">${section("job.tab.clusters" + " · " + clusters.length, `<span class="small muted">${esc(B("点击行内操作查看拓扑与详情", "Click row actions for topology & details"))}</span>`)}`,
     `<div class="table-wrap"><table><thead><tr>

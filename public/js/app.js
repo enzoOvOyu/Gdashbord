@@ -151,9 +151,15 @@ async function runAction(a) {
   if (a.startsWith("pick-gpu:")) { S.create.gpu = a.split(":")[1]; save(); return render(); }
   if (a.startsWith("pick-count:")) { S.create.count = Number(a.split(":")[1]); save(); return render(); }
   if (a.startsWith("pick-price:")) { S.create.priceKind = a.split(":")[1]; save(); return render(); }
-  // ===== 部署中心（万卡级）：可用区 / 场景筛选 =====
+  // ===== 部署中心（万卡级）：可用区 / 场景筛选 / GPU 数量 counter =====
   if (a.startsWith("pick-zone:")) { S.create.zone = a.split(":")[1]; save(); return render(); }
   if (a.startsWith("pick-scenario:")) { S.create.scenario = a.split(":")[1]; save(); return render(); }
+  if (a.startsWith("gpu-count:")) {
+    const step = Number(a.split(":")[1]);
+    S.create.count = Math.max(1, Math.min(72, Number(S.create.count || 1) + step));
+    save();
+    return render();
+  }
 
   // ===== 模型目录 → 部署 =====
   if (a.startsWith("deploy-model:")) {
@@ -580,7 +586,7 @@ document.addEventListener("click", (e) => {
   const step = e.target.closest("[data-step]");
   if (step) { S.create.step = Number(step.dataset.step); save(); render(); return; }
   const mode = e.target.closest("[data-mode-select]");
-  if (mode) { S.create.step = 2; S.create.mode = mode.dataset.modeSelect; S.create.name = "my-" + mode.dataset.modeSelect + "-workload"; save(); render(); return; }
+  if (mode) { S.create.mode = mode.dataset.modeSelect; save(); render(); return; }
   const im = e.target.closest("[data-image]");
   if (im) { S.create.image = im.dataset.image; save(); render(); return; }
   const t2 = e.target.closest("button[data-set][data-value],a[data-set][data-value]");
@@ -603,6 +609,20 @@ document.addEventListener("change", (e) => {
     S[p[0]][p[1]] = el.checked;
     save();
     render();
+    return;
+  }
+  // 部署中心：下拉即选（区域 / 可用区 / 计价方式 / 模型）
+  if (el.dataset.actPick) {
+    const kind = el.dataset.actPick;
+    const v = el.value;
+    if (kind === "region") { S.create.region = v; S.create.zone = ""; save(); return render(); }
+    if (kind === "zone") { S.create.zone = v; save(); return render(); }
+    if (kind === "pricetype") { S.create.priceKind = v; save(); return render(); }
+    if (kind === "model") {
+      const groups = window.__MODEL_GROUPS || [];
+      const m = groups.flatMap((g) => g.models).find((x) => x.id === v);
+      if (m) { S.create.modelId = m.id; S.create.model = m.name; save(); return render(); }
+    }
     return;
   }
   if (el.dataset.set) {
