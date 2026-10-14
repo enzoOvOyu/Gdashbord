@@ -160,6 +160,9 @@ async function runAction(a) {
     save();
     return render();
   }
+  // ===== Instant Clusters：展开/收起集群 Pod 列表 =====
+  if (a.startsWith("cluster-open:")) { S.clusterOpen = a.split(":")[1]; save(); return render(); }
+  if (a === "cluster-close") { S.clusterOpen = ""; save(); return render(); }
 
   // ===== 模型目录 → 部署 =====
   if (a.startsWith("deploy-model:")) {
@@ -431,7 +434,7 @@ async function runAction(a) {
   if (a.startsWith("job:")) {
     const j = (S.jobs || []).find((x) => x.id === a.split(":")[1]);
     if (!j) return;
-    modal(t("job.detail.title") + " · " + esc(j.name), `<div class="grid cols-2">${[[t("common.status"), status(j.status)], [t("common.gpu"), j.gpu + " × " + j.count + " × " + (j.nodes || 1)], [t("job.th.dataset"), j.dataset], [t("job.detail.runtime"), L(j.duration)], [t("job.detail.progress"), j.progress + "%"], [t("job.detail.cost"), money(j.cost || 0)]].map((x) => `<div class="summary-line"><span>${esc(L(x[0]))}</span><b>${x[1]}</b></div>`).join("")}</div><div class="subhead mt16">${esc(t("job.detail.ckpt"))}</div><div class="progress"><span style="width:${j.progress}%"></span></div><div class="code mt16">[INFO] epoch=2 step=1680 loss=0.00012</div>`,
+    modal(t("job.detail.title") + " · " + esc(j.name), `<div class="grid cols-2">${[[t("common.status"), status(j.status)], [t("common.gpu"), j.gpu + " × " + j.count + "（" + (j.nodes || 1) + " " + esc(L(B("节点", "nodes"))) + "）"], [t("job.th.dataset"), j.dataset], [t("job.th.region"), j.region], [t("job.detail.runtime"), L(j.duration)], [t("job.detail.progress"), j.progress + "%"], [t("job.th.goodput"), (j.goodput || "—") + "%"], [t("job.detail.cost"), money(j.cost || 0)]].map((x) => `<div class="summary-line"><span>${esc(L(x[0]))}</span><b>${x[1]}</b></div>`).join("")}</div><div class="subhead mt16">${esc(t("job.detail.ckpt"))} · ${esc(L(j.checkpoint || B("—", "—")))}</div><div class="progress"><span style="width:${j.progress}%"></span></div><div class="code mt16">[INFO] epoch=2 step=1680 loss=0.00012\ntorchrun --nproc_per_node=$NUM_TRAINERS --nnodes=$NUM_NODES --node_rank=$NODE_RANK</div>`,
       btn(t("common.close"), "close-modal") + btn(t("job.btn.logs"), "job-logs:" + j.id));
     return;
   }

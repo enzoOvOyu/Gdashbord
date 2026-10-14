@@ -26,6 +26,7 @@ export const init = {
   modelGroup: "all",
   jobTab: "jobs",
   jobSelected: "job-001",
+  clusterOpen: "",
   assetTab: "models",
   securityTab: "keys",
   monitorTab: "gpu",
@@ -44,7 +45,7 @@ export const init = {
   adminTenant: "all",
 };
 
-const UI_KEYS = ["page", "lang", "sidebarCollapsed", "market", "create", "instanceFilter", "instanceQuery", "selectedInstance", "endpointSelected", "endpointPlayground", "endpointTab", "modelGroup", "jobTab", "jobSelected", "assetTab", "securityTab", "monitorTab", "monitorTarget", "monitorRange", "billingTab", "billingRange", "overviewRange", "k8sTab", "k8sPool", "k8sStatus", "k8sNs", "k8sPhase", "k8sRange", "adminTab", "adminTenant"];
+const UI_KEYS = ["page", "lang", "sidebarCollapsed", "market", "create", "instanceFilter", "instanceQuery", "selectedInstance", "endpointSelected", "endpointPlayground", "endpointTab", "modelGroup", "jobTab", "jobSelected", "clusterOpen", "assetTab", "securityTab", "monitorTab", "monitorTarget", "monitorRange", "billingTab", "billingRange", "overviewRange", "k8sTab", "k8sPool", "k8sStatus", "k8sNs", "k8sPhase", "k8sRange", "adminTab", "adminTenant"];
 
 export let S = Object.assign({}, init);
 

@@ -48,57 +48,85 @@ function jobsView(S, res) {
   ].join("");
 }
 
-// 集群机队：万卡级表格视图（103 集群）+ 顶部汇总 KPI
+// 集群机队：Instant Clusters 式集群卡网格（拓扑图形 + 3 列规格 + 可展开 Pod 列表）
 function clustersView(S, clusters) {
   const totalGpus = clusters.reduce((a, c) => a + Number(c.count || 0), 0);
   const onlineGpus = clusters.filter((c) => c.status === "running" || c.status === "degraded").reduce((a, c) => a + Number(c.count || 0), 0);
   const util = totalGpus ? Math.round(clusters.reduce((a, c) => a + (c.status === "running" ? c.count * c.util : 0), 0) / totalGpus) : 0;
   const totalPower = clusters.reduce((a, c) => a + Number(c.powerKw || 0), 0);
   const totalJobs = clusters.reduce((a, c) => a + Number(c.jobs || 0), 0);
-  const schedulers = {};
-  clusters.forEach((c) => { schedulers[c.scheduler] = (schedulers[c.scheduler] || 0) + 1; });
+  const running = clusters.filter((c) => c.status === "running").length;
+  const openId = S.clusterOpen || "";
+  // 展开某集群时展示其节点（Pod）列表
+  const clusterNodes = (c) => Array.from({ length: Math.min(Number(c.nodes) || 1, 8) }, (_, i) => `
+    <div class="cluster-pod-row">
+      <span class="endpoint-icon sm"><i class="bi bi-hdd-network"></i></span>
+      <div style="flex:1"><b>${esc(c.name)}-pod-${i}</b><small>${esc(c.gpu)} × ${c.gpusPerNode} · ${esc(c.cpuPerNode || "—")} vCPU · ${esc(c.ramPerNode || "—")} GB · rank ${i}${i === 0 ? " (primary)" : ""}</small></div>
+      <span class="pill ${i === 0 ? "green" : c.status === "running" ? "green" : "gray"} sm"><i class="dot"></i>${i === 0 ? esc(L(B("主节点", "primary"))) : esc(L(B("就绪", "ready")))}</span>
+    </div>`).join("") + (Number(c.nodes) > 8 ? `<div class="small muted" style="padding:8px 0 2px 42px">… ${c.nodes - 8} ${esc(L(B("更多节点", "more nodes")))}</div>` : "");
 
-  const rows = clusters.map((c) => {
+  const clusterCards = clusters.map((c) => {
     const nh = c.nodeHealth || {};
-    const health = c.status === "running"
-      ? `<span class="pill green"><i class="dot"></i>${esc(B("健康", "Healthy"))} ${nh.healthy ?? c.nodes}/${c.nodes}</span>`
-      : c.status === "degraded"
-      ? `<span class="pill amber"><i class="dot"></i>${esc(B("告警", "Warn"))} ${nh.warn || 1}${nh.fault ? " · " + esc(B("故障", "fault")) + " " + nh.fault : ""}</span>`
-      : status(c.status);
-    return `<tr>
-      <td><a href="javascript:void(0)" data-act="cluster-detail:${c.id}"><strong>${esc(c.name)}</strong></a><small>${esc(c.id)} · ${esc(c.tenantName || c.tenant || "—")}</small></td>
-      <td>${esc(c.gpu)}</td>
-      <td>${c.nodes}<small>${esc(String(c.gpusPerNode))} GPU/节点</small></td>
-      <td><b>${c.count.toLocaleString()}</b></td>
-      <td>${esc(c.scheduler)}</td>
-      <td><small>${esc(c.network)}</small></td>
-      <td>${esc(c.region)}<small>${esc(c.zone || "")}</small></td>
-      <td>${c.util || 0}%${BAR(c.util || 0)}</td>
-      <td>${health}</td>
-      <td>${esc(c.billing === "reserved" ? t("common.reserved") : c.billing === "spot" ? t("common.spot") : t("common.onDemand"))}</td>
-      <td>${money(c.priceEff || c.price || 0)}<small>${money(c.price || 0)}/h ${esc(B("目录价", "list"))}</small></td>
-      <td>${c.powerKw || 0} kW<small>${c.tempC || "—"}°C</small></td>
-      <td>${c.jobs || 0}</td>
-      <td><div class="table-actions">${btn("job.cl.topology", "cluster:" + c.id, "sm")}${btn("job.cl.detail", "cluster-detail:" + c.id, "sm ghost")}</div></td>
-    </tr>`;
+    const isOpen = openId === c.id;
+    const nodeIcons = Array.from({ length: Math.min(Number(c.nodes) || 1, 6) }, (_, i) =>
+      `${i ? '<span class="cluster-connector"></span>' : ""}<span class="cluster-node"><i class="bi bi-hdd-network"></i></span>`).join("");
+    return `
+    <div class="card cluster-card">
+      <div class="cluster-top">
+        <div>
+          <div class="row gap8"><strong style="font-size:14px">${esc(c.name)}</strong>${status(c.status)}</div>
+          <div class="pod-id mono" style="margin-top:8px">${esc(c.id)} · ${esc(c.scheduler)} · ${esc(c.tenantName || c.tenant || "—")}</div>
+        </div>
+        <button class="icon-btn" data-act="${isOpen ? "cluster-close" : "cluster-open:" + c.id}"><i class="bi bi-${isOpen ? "chevron-up" : "three-dots"}"></i></button>
+      </div>
+      <div class="cluster-graphic">${nodeIcons}</div>
+      <div class="cluster-spec">
+        <div><small>GPU COMPUTE</small><strong>${c.count} × ${esc(c.gpu)}</strong></div>
+        <div><small>NETWORK</small><strong>${esc(c.network)}</strong></div>
+        <div><small>REGION</small><strong>${esc(c.region)}</strong></div>
+      </div>
+      <div class="pod-middle">
+        <div><div class="metric-name"><span>Utilization</span><b>${c.util || 0}%</b></div><div class="progress"><span style="width:${c.util || 0}%"></span></div></div>
+        <div><div class="metric-name"><span>Nodes</span><b>${nh.healthy ?? c.nodes}/${c.nodes}</b></div><div class="progress green"><span style="width:${Math.round(((nh.healthy ?? c.nodes) / Math.max(1, c.nodes)) * 100)}%"></span></div></div>
+        <div><div class="metric-name"><span>Power</span><b>${c.powerKw || 0} kW</b></div><div class="progress"><span style="width:${Math.min(100, (c.powerKw || 0) / 8)}%"></span></div></div>
+        <div><div class="metric-name"><span>Temp</span><b>${c.tempC || "—"}°C</b></div><div class="progress${(c.tempC || 0) > 55 ? " orange" : ""}"><span style="width:${Math.min(100, ((c.tempC || 30) / 90) * 100)}%"></span></div></div>
+      </div>
+      <div class="pod-footer">
+        <span class="tiny-text">Uptime: ${c.uptimeDays || "—"} ${esc(L(B("天", "d")))} · ${c.jobs || 0} ${esc(L(B("作业", "jobs")))} · ${money(c.priceEff || c.price || 0)}/hr</span>
+        <div class="row gap8">
+          ${btn(esc(L(B("查看详情", "View details"))), "cluster-detail:" + c.id, "sm")}
+          ${btn(esc(L(B("拓扑", "Topology"))), "cluster:" + c.id, "sm ghost")}
+        </div>
+      </div>
+      ${isOpen ? `<div class="cluster-expand"><div class="subhead" style="margin:6px 0 10px">PODS · ${c.nodes} ${esc(t("job.cl.nodes"))}</div>${clusterNodes(c)}
+        <div class="callout mt12">${esc(L(B("分布式环境变量自动注入：MASTER_ADDR / NUM_NODES / NUM_TRAINERS / NODE_RANK / WORLD_SIZE；NCCL_SOCKET_IFNAME=ens1-8 高速内网互联。", "Distributed env auto-injected: MASTER_ADDR / NUM_NODES / NUM_TRAINERS / NODE_RANK / WORLD_SIZE; NCCL over high-speed ens1-ens8 interfaces.")))}</div></div>` : ""}
+    </div>`;
   }).join("");
 
   return [
     `<div class="grid cols-4 mb16 kpi-row">`,
-    metric("job.cl.kpi.count", clusters.length, B("Slurm " + (schedulers.Slurm || 0) + " · K8s " + (schedulers.Kubernetes || 0), "Slurm " + (schedulers.Slurm || 0) + " · K8s " + (schedulers.Kubernetes || 0)), "<i class='bi bi-hdd-rack'></i>", "", ""),
-    metric("job.cl.kpi.gpus", totalGpus.toLocaleString(), B("在线 " + onlineGpus.toLocaleString() + " · 利用率 " + util + "%", "Online " + onlineGpus.toLocaleString() + " · " + util + "%"), "<i class='bi bi-cpu'></i>", "", "hero"),
-    metric(B("总功耗", "Total power"), Math.round(totalPower).toLocaleString() + " kW", B("运行中作业 " + totalJobs + " · 碳排按区域因子", totalJobs + " active jobs · regional carbon factors"), "<i class='bi bi-lightning-charge'></i>", "", ""),
-    metric(B("NVL72 机架", "NVL72 racks"), clusters.filter((c) => c.topo === "NVL72").length, B("GB300 机架级 NVLink 域", "GB300 rack-scale NVLink domains"), "<i class='bi bi-diagram-3'></i>", "", ""),
+    metric(B("训练集群", "Clusters"), clusters.length, B(`运行中 ${running} · Slurm/K8s 混合调度`, `Running ${running} · Slurm/K8s mixed scheduling`), "<i class='bi bi-hdd-rack'></i>", "", "hero"),
+    metric(B("机队 GPU", "Fleet GPUs"), totalGpus.toLocaleString(), B(`在线 ${onlineGpus.toLocaleString()} · 利用率 ${util}%`, `Online ${onlineGpus.toLocaleString()} · ${util}% utilized`), "<i class='bi bi-cpu'></i>", "", ""),
+    metric(B("总功耗", "Total power"), Math.round(totalPower).toLocaleString() + " kW", B(`运行中作业 ${totalJobs} · 碳排按区域因子`, `${totalJobs} active jobs · regional carbon factors`), "<i class='bi bi-lightning-charge'></i>", "", ""),
+    metric(B("NVL72 机架", "NVL72 racks"), clusters.filter((c) => c.topo === "NVL72").length, B("GB300 机架级 NVLink 域 · 800–3200 Gbps", "GB300 rack-scale NVLink domains · 800–3200 Gbps"), "<i class='bi bi-diagram-3'></i>", "", ""),
     `</div>`,
-    `<div class="card card-pad">${section("job.tab.clusters" + " · " + clusters.length, `<span class="small muted">${esc(B("点击行内操作查看拓扑与详情", "Click row actions for topology & details"))}</span>`)}`,
-    `<div class="table-wrap"><table><thead><tr>
-      <th>${esc(B("集群", "Cluster"))} / ${esc(B("租户", "Tenant"))}</th>
-      <th>GPU</th><th>${esc(t("job.th.nodes"))}</th><th>${esc(B("卡数", "GPUs"))}</th>
-      <th>${esc(B("调度器", "Scheduler"))}</th><th>${esc(B("互联", "Fabric"))}</th>
-      <th>${esc(t("common.region"))}</th><th>${esc(B("利用率", "Util"))}</th>
-      <th>${esc(B("节点健康", "Node health"))}</th><th>${esc(B("计费", "Billing"))}</th>
-      <th>${esc(B("有效时价", "Effective $/h"))}</th><th>${esc(B("功耗", "Power"))}</th>
-      <th>${esc(B("作业", "Jobs"))}</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`,
+
+    `<div class="notice mb16"><i class="bi bi-info-circle"></i> ${esc(L(B(
+      "Instant Clusters：多机多卡训练集群，适用于分布式 PyTorch 与 Slurm 工作负载。点击集群卡片右上角展开 Pod 列表。",
+      "Instant Clusters: multi-node GPU clusters for distributed PyTorch and Slurm workloads. Click the cluster's top-right icon to expand its pod list."
+    )))}</div>`,
+
+    `<div class="cluster-grid">${clusterCards}</div>`,
+
+    // 参考架构条（素材包 Distributed training reference architecture）
+    `<div class="card card-pad mt16"><div class="section-head"><div><div class="card-title">${esc(L(B("分布式训练参考架构", "Distributed training reference architecture")))}</div><div class="card-sub">${esc(L(B("示意：数据 → 调度 → GPU 集群 → Checkpoints", "Data → Scheduler → GPU cluster → Checkpoints")))}</div></div></div>
+    <div class="grid cols-4">
+      ${[["database", B("数据集与存储", "Dataset & storage"), B("共享训练数据与模型权重", "Shared training data & weights")],
+         ["layers", B("调度器", "Scheduler"), B("Slurm / PyTorch distributed", "Slurm / PyTorch distributed")],
+         ["cpu", B("GPU 节点", "GPU nodes"), B("高速互联多机多卡计算", "Multi-node compute, high-speed fabric")],
+         ["device-hdd", B("Checkpoints", "Checkpoints"), B("持久化保存训练状态", "Persist training state")]]
+        .map((x, i) => `<div class="quick-action" style="cursor:default"><span class="quick-icon"><i class="bi bi-${x[0]}"></i></span><span><strong>${esc(L(x[1]))}</strong><small>${esc(L(x[2]))}</small></span>${i < 3 ? '<i class="bi bi-arrow-right"></i>' : ""}</div>`).join("")}
+    </div></div>`,
   ].join("");
 }
 

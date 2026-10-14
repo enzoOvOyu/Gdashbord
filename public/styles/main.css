@@ -1679,3 +1679,152 @@ select {
   .form-row { grid-template-columns: 1fr; }
   .deploy-mode { padding: 12px; }
 }
+
+/* ==========================================================================
+   Pods 页 + Instant Clusters 页 — 素材包组件样式（pod-card / cluster-card / toolbar / search-field）
+   ========================================================================== */
+
+/* ---------- 工具条（素材包 toolbar） ---------- */
+.toolbar { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin: 21px 0 15px; flex-wrap: wrap; }
+.toolbar .tabs { margin: 0; }
+
+/* ---------- 搜索框（素材包 search-field） ---------- */
+.search-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  background: #fff;
+  border: 1px solid #e5e6ef;
+  border-radius: 8px;
+  height: 34px;
+  color: #a1a5b6;
+  min-width: 210px;
+  cursor: text;
+}
+.search-field i { font-size: 12px; }
+.search-field input { border: 0; outline: 0; background: transparent; width: 100%; font-size: 11.5px; color: var(--text); height: auto; padding: 0; }
+.search-field input::placeholder { color: #adb1c0; }
+.search-field:focus-within { border-color: #ffab73; box-shadow: 0 0 0 3px rgba(255, 96, 0, 0.1); }
+
+/* ---------- Pod 卡片（素材包 pod-card） ---------- */
+.pod-list { display: flex; flex-direction: column; gap: 13px; }
+.pod-card { padding: 19px 21px; transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease); cursor: pointer; }
+.pod-card:hover { border-color: #ffcfb3; box-shadow: var(--shadow-card-hover); }
+.pod-card.selected { border-color: var(--brand); box-shadow: 0 0 0 3px rgba(255, 96, 0, 0.08); }
+.pod-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.pod-ident { display: flex; align-items: flex-start; gap: 13px; min-width: 0; }
+.pod-emoji {
+  height: 40px; width: 40px; flex: 0 0 40px;
+  display: grid; place-items: center;
+  border: 1px solid #ffe0cd;
+  background: var(--brand-soft);
+  color: var(--brand);
+  border-radius: 10px;
+  font-size: 17px;
+}
+.pod-name { font-size: 14px; font-weight: 760; letter-spacing: -0.2px; }
+.pod-id { font-size: 10px; color: #a3a7b8; margin-top: 5px; }
+.pod-gpu { text-align: right; flex-shrink: 0; }
+.pod-gpu-name { font-weight: 750; font-size: 12px; }
+.pod-price { color: #9a9eae; font-size: 10px; margin-top: 5px; }
+.pod-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 15px; margin: 17px 0 16px; color: #777d92; font-size: 10.5px; }
+.pod-meta span { display: flex; align-items: center; gap: 5px; }
+.pod-meta i { font-size: 12px; color: #9da2b5; }
+.pod-middle { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; border-top: 1px solid #f0f0f5; border-bottom: 1px solid #f0f0f5; padding: 14px 0; }
+.metric-name { display: flex; justify-content: space-between; gap: 8px; font-size: 10px; color: #8d92a3; margin-bottom: 8px; }
+.metric-name b { font-weight: 700; color: #535970; }
+.pod-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 14px; flex-wrap: wrap; }
+.pod-actions { display: flex; gap: 7px; flex-wrap: wrap; }
+.pod-up { color: #a0a4b4; font-size: 10px; }
+.btn.disabled, .btn[disabled] { opacity: 0.45; cursor: not-allowed; pointer-events: none; }
+
+/* ---------- 集群卡（素材包 cluster-card + 拓扑图形） ---------- */
+.cluster-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.cluster-card { padding: 20px; }
+.cluster-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.icon-btn { border: 0; background: transparent; display: grid; place-items: center; color: #767b91; padding: 7px; border-radius: 8px; cursor: pointer; font-size: 15px; }
+.icon-btn:hover { background: var(--brand-soft); color: var(--brand); }
+.cluster-graphic {
+  margin: 20px 0 17px;
+  border-radius: 9px;
+  background: #f8f7ff;
+  padding: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.cluster-node {
+  width: 44px; height: 46px;
+  border: 1px solid #ffd9c2;
+  border-radius: 8px;
+  background: #fff;
+  display: grid; place-items: center;
+  color: var(--brand);
+  position: relative;
+  font-size: 17px;
+}
+.cluster-node::after {
+  content: '';
+  position: absolute;
+  bottom: -5px; left: 50%; margin-left: -2px;
+  width: 4px; height: 4px;
+  border-radius: 50%;
+  background: #30b881;
+}
+.cluster-connector { width: 18px; height: 1px; background: #ffc9ac; }
+.cluster-spec { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding-top: 14px; border-top: 1px solid #f0f0f5; }
+.cluster-spec small { display: block; color: #a0a4b4; font-size: 9px; margin-bottom: 5px; letter-spacing: 0.5px; }
+.cluster-spec strong { font-size: 11px; color: var(--text); }
+.cluster-card .pod-middle { border-top: 0; margin-top: 2px; }
+.cluster-expand { border-top: 1px solid #f0f0f5; margin-top: 14px; padding-top: 12px; }
+.cluster-pod-row { display: flex; align-items: center; gap: 11px; padding: 9px 0; border-bottom: 1px solid #f0f0f5; }
+.cluster-pod-row b { font-size: 11.5px; display: block; }
+.cluster-pod-row small { display: block; color: #a0a4b4; font-size: 10px; margin-top: 3px; }
+.endpoint-icon.sm { width: 28px; height: 28px; flex: 0 0 28px; font-size: 13px; border-radius: 8px; }
+
+/* ---------- 快捷动作条（参考架构） ---------- */
+.quick-action {
+  padding: 17px 16px;
+  display: flex; align-items: center; gap: 12px;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: #fff;
+  text-align: left;
+  transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+.quick-action:hover { border-color: #ffcfb3; background: #fffaf6; }
+.quick-icon {
+  width: 36px; height: 36px; flex: 0 0 36px;
+  background: var(--brand-soft);
+  color: var(--brand);
+  border-radius: 10px;
+  display: grid; place-items: center;
+  font-size: 15px;
+}
+.quick-action strong { font-size: 12px; display: block; }
+.quick-action small { display: block; color: #9a9fb0; margin-top: 4px; font-size: 10px; line-height: 1.5; }
+.quick-action > .bi:last-child, .quick-action > i:last-child { margin-left: auto; color: #b4b8c8; }
+
+/* ---------- notice（素材包 notice-banner） ---------- */
+.notice {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 12px 14px; border-radius: 9px;
+  background: #f8f9fd; color: #777d91;
+  font-size: 11px; line-height: 1.65;
+}
+.notice .bi { color: #7655e9; margin-top: 2px; }
+
+/* ---------- 响应式 ---------- */
+@media (max-width: 1280px) {
+  .cluster-grid { grid-template-columns: minmax(0, 1fr); }
+  .pod-middle { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 768px) {
+  .pod-card { padding: 15px; }
+  .pod-gpu { display: none; }
+  .cluster-spec { gap: 5px; }
+}

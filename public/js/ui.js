@@ -101,8 +101,8 @@ export function select(items, val, path) {
   return `<select data-set="${path}">${opt(items, val)}</select>`;
 }
 
-export function btn(label, act, cls = "") {
-  return `<button class="btn ${cls}" data-act="${act}">${L(label)}</button>`;
+export function btn(label, act, cls = "", extra = "") {
+  return `<button class="btn ${cls}" data-act="${act}"${extra ? " " + extra : ""}>${L(label)}</button>`;
 }
 
 export function segmented(items, val, path) {
