@@ -129,8 +129,12 @@ export default async function overview(S) {
     (ov.instances || []).map((x) => `<tr><td><strong>${esc(x.name)}</strong><small>${esc(L(x.kind))}</small></td><td>${esc(x.gpu)} × ${x.count}</td><td>${status(x.status)}</td><td>${esc(x.region)}</td><td>${btn("common.view", "instance:" + x.id, "sm")}</td></tr>`).join(""),
     (ov.endpoints || []).map((x) => `<tr><td><strong>${esc(x.name)}</strong><small>${esc(t("ov.endpoint.kind"))}</small></td><td>${esc(x.gpu)} × ${(x.gpusPerReplica || 1)} × ${x.replicas}</td><td>${status(x.status)}</td><td>${esc(x.region || "—")}</td><td>${btn("common.view", "endpoint:" + x.id, "sm")}</td></tr>`).join(""),
     `</tbody></table></div></div>`,
-    `<div class="card card-pad">${section("ov.events", `<a data-nav="monitor" href="javascript:void(0)">${esc(t("ov.events.link"))}</a>`)}`,
-    (ov.events || []).map((e) => `<div style="padding:11px 0;border-bottom:1px solid #edf1f7"><div class="between">${status(e.level)}<span class="right-muted">${esc(e.time)}</span></div><div class="small" style="margin-top:8px;line-height:1.5">${esc(L(e.text))}</div></div>`).join(""),
-    `</div></div>`,
+    `<div class="card card-pad"><div class="section-head"><div><div class="card-title">${esc(t("ov.events"))}</div><div class="card-sub">${esc(L(B("工作区事件与动态", "Workspace events and updates")))}</div></div><a data-nav="monitor" href="javascript:void(0)" class="icon-btn" title="${esc(t("ov.events.link"))}"><i class="bi bi-three-dots"></i></a></div>`,
+    `<div class="activity">`,
+    (ov.events || []).slice(0, 6).map((e) => {
+      const icon = e.level === "warning" ? "exclamation-triangle" : e.level === "error" ? "x-octagon" : e.level === "success" ? "check-circle" : "info-circle";
+      return `<div class="activity-item"><div class="activity-icon"><i class="bi bi-${icon}"></i></div><div style="min-width:0"><div class="activity-title">${esc(L(e.text))}</div><div class="activity-meta">${status(e.level)} · ${esc(e.time)}</div></div></div>`;
+    }).join(""),
+    `</div></div></div>`,
   ].join("");
 }

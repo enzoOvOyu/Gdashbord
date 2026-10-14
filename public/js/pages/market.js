@@ -1,6 +1,9 @@
-// GPU 算力市场：区域限定 JP/TH/US，USD 计价
+// GPU 算力市场 — 素材包 Explore Templates / GPU Cloud 融合设计：
+// KPI → toolbar(筛选 tabs + select + 搜索) → gpu-grid2 精选卡片网格（规格徽标 + 语义库存色 + 快捷部署）
 import { api } from "../api.js";
-import { header, metric, section, btn, esc, money, opt, t, L, gpu } from "../ui.js";
+import { header, metric, section, btn, esc, money, opt, t, L } from "../ui.js";
+
+const B = (zh, en) => ({ zh, en });
 
 export default async function market(S) {
   const m = S.market;
@@ -8,34 +11,73 @@ export default async function market(S) {
   const gpus = res.gpus || [];
   const regions = res.regions || [];
   const minPrice = Math.min(...gpus.map((g) => g.price).concat([0]));
+  const totalAvail = gpus.reduce((a, g) => a + (g.available || 0), 0);
+
+  // 库存语义（素材包 availability：High/Medium/Low/Unavailable）
+  const availOf = (g) => {
+    const n = g.available || 0;
+    return n === 0 ? { cls: "none", label: B("无库存", "Unavailable") }
+      : n < 50 ? { cls: "low", label: B("紧张", "Low") }
+      : n < 300 ? { cls: "", label: B("中等", "Medium") }
+      : { cls: "", label: B("充足", "High") };
+  };
+
+  const cards = gpus.map((g) => {
+    const av = availOf(g);
+    return `<button class="gpu-card2 ${g.available > 0 ? "" : "unavailable"}" data-act="${g.available > 0 ? "choose-gpu:" + g.id : "gpu:" + g.id}" aria-label="${esc(g.name)}">
+      <div class="g2-top">
+        <span class="gpu-badge">${esc(g.id)}</span>
+        <span class="pill sm ${g.id === "GB300" || g.id === "B300" ? "purple" : g.id === "B200" ? "blue" : "orange"}">${esc(L(g.badge))}</span>
+      </div>
+      <div class="g2-vram">${g.vram} GB VRAM · ${g.ram} GB RAM · ${g.cpu} vCPU</div>
+      <div class="g2-vram" style="margin-top:4px">${(g.fp8 / 1000).toFixed(1)} PFLOPS · ${esc(g.arch)} · ${esc(g.network)}</div>
+      <div class="g2-bottom">
+        <div class="g2-price">${money(g.price)}<small>/hr</small></div>
+        <span class="availability ${av.cls}">● ${esc(av.label)} · ${g.available.toLocaleString()}</span>
+      </div>
+    </button>`;
+  }).join("");
 
   return [
     header("mk.title", "mk.sub", btn("mk.cta", "go-create", "primary")),
+
     `<div class="grid cols-4 mb16 kpi-row">`,
-    metric("mk.kpi.pool", gpus.reduce((a, g) => a + (g.available || 0), 0).toLocaleString(), "mk.kpi.pool.desc", "<i class='bi bi-cpu'></i>", esc(t("common.demo")), "hero"),
+    metric(B("可分配 GPU", "Available GPUs"), totalAvail.toLocaleString(), B("4 区域实时库存", "Live inventory across 4 regions"), "<i class='bi bi-cpu'></i>", "", "hero"),
     metric("mk.kpi.start", money(minPrice || 0) + " /h", "mk.kpi.start.desc", "<i class='bi bi-box-seam'></i>", "USD", ""),
     metric("mk.kpi.net", "400–800G", "mk.kpi.net.desc", "<i class='bi bi-diagram-3'></i>", "RDMA / NVLink", ""),
     metric("mk.kpi.delivery", "4", "mk.kpi.delivery.desc", "<i class='bi bi-lightning-charge-fill'></i>", "", ""),
     `</div>`,
-    `<div class="card filterbar mb16">`,
-    `<input placeholder="${esc(t("mk.filter.query"))}" value="${esc(m.query)}" data-set="market.query"/>`,
-    `<select data-set="market.gpu">${opt([["all", "mk.filter.gpu"], ...(S.GPU || []).map((g) => [g.id, g.id])], m.gpu)}</select>`,
-    `<select data-set="market.region">${opt([["all", "mk.filter.region"], ...regions.map((r) => [r.id, r.name])], m.region)}</select>`,
-    `<select data-set="market.mode">${opt([["all", "mk.filter.mode"], ["workspace", "cr.mode.workspace"], ["endpoint", "cr.mode.endpoint"], ["job", "cr.mode.job"], ["cluster", "cr.mode.cluster"]], m.mode)}</select>`,
-    `<select data-set="market.sort">${opt([["recommended", "mk.filter.sort"], ["price", "mk.sort.price"], ["vram", "mk.sort.vram"]], m.sort)}</select>`,
-    btn("common.reset", "reset-market", "sm"),
+
+    // 工具条：筛选 + 区域下拉 + 排序 + 搜索（素材包 toolbar 布局）
+    `<div class="toolbar">`,
+    `<div class="tabs">
+      ${[["recommended", B("推荐", "Recommended")], ["price", B("低价优先", "Price")], ["vram", B("大显存", "VRAM")]].map((x) => `
+      <button class="tab ${m.sort === x[0] ? "active" : ""}" data-set="market.sort" data-value="${x[0]}">${esc(L(x[1]))}</button>`).join("")}
+    </div>`,
+    `<select class="field select" data-set="market.region">${opt([["all", "mk.filter.region"], ...regions.map((r) => [r.id, r.name])], m.region)}</select>`,
+    `<select class="field select" data-set="market.gpu">${opt([["all", "mk.filter.gpu"], ...(S.GPU || []).map((g) => [g.id, g.id])], m.gpu)}</select>`,
+    `<label class="search-field"><i class="bi bi-search"></i><input value="${esc(m.query)}" data-set="market.query" placeholder="${esc(t("mk.filter.query"))}"/></label>`,
     `</div>`,
-    `<div class="layout-main-side">`,
-    `<div>${section(t("mk.list") + " · " + gpus.length + " " + t("mk.list.unit"), `<span class="small muted">${esc(t("mk.list.note"))}</span>`)}`,
+
+    // GPU 网格 + 计数
+    `<div class="row between mb12"><span class="tiny-text">${gpus.length} ${esc(B("GPU 型号", "GPU types"))} · ${totalAvail.toLocaleString()} ${esc(t("mk.card.stock"))}</span><span class="tiny-text">${esc(t("mk.list.note"))}</span></div>`,
     gpus.length
-      ? gpus.map((g) => `<div class="card gpu-card"><div class="gpu-art"><i class='bi bi-gpu-card'></i></div><div><div class="gpu-name">${esc(g.name)}</div><div class="gpu-desc">${esc(L(g.tag))}${g.region ? " · " + esc(g.region) : ""}</div><div class="chiprow"><span class="tag">${esc(L(g.badge))}</span><span class="tag">${g.available} ${esc(t("mk.card.stock"))}</span><span class="tag">${esc(g.arch)}</span></div><div class="gpu-foot">${esc(t("mk.card.score"))} ${g.score}/100 · ${esc(t("mk.card.mode"))} Pod / Job / API</div></div><div><div class="spec-grid"><div>${esc(t("mk.card.vram"))}<b>${g.vram} GB / ${esc(t("mk.card.perGpu"))}</b></div><div>${esc(t("mk.card.cpu"))}<b>${g.cpu} ${esc(t("mk.card.cores"))} / ${g.ram} GB</b></div><div>${esc(t("mk.card.storage"))}<b>${esc(g.storage)}</b></div><div>${esc(t("mk.card.net"))}<b>${esc(g.network)}</b></div><div>${esc(t("cr.gpu.meta.compute"))}<b>${(g.fp8 / 1000).toFixed(1)} PFLOPS</b></div><div>${esc(t("mk.card.sched"))}<b style="color:#16aa79">● ${g.available > 0 ? esc(t("mk.card.sched")) : esc(t("cr.gpu.soldout"))}</b></div></div></div><div class="gpu-right"><div class="price">${money(g.price)}<small> / ${esc(t("common.perGpuHour"))}</small></div><div class="small muted">${esc(t("common.spot"))} ${money(g.spot)} · ${esc(t("common.reserved"))} ${money(g.reserved)}</div><div>${btn("common.detail", "gpu:" + g.id, "sm")}${btn("mk.card.deploy", "choose-gpu:" + g.id, "sm primary")}</div></div></div>`).join("")
-      : `<div class="card empty">${esc(t("mk.empty"))}</div>`,
+      ? `<div class="gpu-grid2">${cards}</div>`
+      : `<div class="empty-state"><div class="empty-icon"><i class="bi bi-search"></i></div><h3>${esc(t("mk.empty"))}</h3><p>${esc(L(B("调整筛选条件后重试。", "Adjust filters and retry.")))}</p></div>`,
+
+    // 模式快捷入口（素材包 quick-action）
+    `<div class="section-head" style="margin-top:24px"><div><div class="card-title">${esc(L(B("快速开始", "Quick actions")))}</div><div class="card-sub">${esc(L(B("选择部署场景直达", "Jump into your next workflow")))}</div></div></div>`,
+    `<div class="grid cols-4">`,
+    [["workspace", "mk.side.dev", "mk.side.dev.desc", "terminal"],
+     ["endpoint", "mk.side.infer", "mk.side.infer.desc", "lightning-charge-fill"],
+     ["job", "mk.side.train", "mk.side.train.desc", "cpu"],
+     ["cluster", "mk.side.cluster", "mk.side.cluster.desc", "hdd-rack"]]
+      .map((x) => `<div class="quick-action" data-nav="create" data-mode="${x[0]}"><span class="quick-icon"><i class="bi bi-${x[3]}"></i></span><span><strong>${esc(t(x[1]))}</strong><small>${esc(t(x[2]))}</small></span><i class="bi bi-chevron-right"></i></div>`).join(""),
     `</div>`,
-    `<div><div class="card card-pad sticky">${section("mk.side.title")}`,
-    `<div class="callout">${esc(t("mk.side.tip"))}</div>`,
-    [["mk.side.dev", "mk.side.dev.desc", "workspace", "<i class='bi bi-terminal'></i>"], ["mk.side.infer", "mk.side.infer.desc", "endpoint", "<i class='bi bi-lightning-charge-fill'></i>"], ["mk.side.train", "mk.side.train.desc", "job", "<i class='bi bi-cpu'></i>"], ["mk.side.cluster", "mk.side.cluster.desc", "cluster", "<i class='bi bi-hdd-rack'></i>"]]
-      .map((x) => `<div class="quick-card" style="padding:13px 0;border-bottom:1px solid #edf1f7" data-nav="create" data-mode="${x[2]}"><div class="quick-icon" style="width:34px;height:34px;font-size:16px">${x[3]}</div><div><h3>${esc(t(x[0]))} →</h3><p>${esc(t(x[1]))}</p></div></div>`).join(""),
-    `<div class="mt16">${btn("mk.side.cta", "go-create", "primary block")}</div></div></div>`,
-    `</div>`,
+
+    `<div class="notice mt16"><i class="bi bi-info-circle"></i> ${esc(L(B(
+      "价格与库存为演示数据；按需 / 抢占 / 预留三种计价在部署中心可选。库存来自机队调度器实时视图。",
+      "Prices and inventory are demo data; on-demand / spot / reserved pricing available in the deploy center. Inventory from the live fleet scheduler view."
+    )))}</div>`,
   ].join("");
 }

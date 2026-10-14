@@ -14,15 +14,21 @@ function table(headers, rows) {
   return `<div class="table-wrap"><table><thead><tr>${headers.map((h) => `<th>${esc(L(h))}</th>`).join("")}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
 }
 
+// 模型仓库：素材包 template-card 模式（logo 徽标 + 标签 + footer 操作）
 function modelsView(items) {
-  return table([t("common.name"), t("as.th.task"), t("as.th.params"), t("as.th.license"), t("common.size"), t("common.version"), t("common.source"), t("as.th.downloads"), t("as.th.acl"), t("common.actions")],
-    items.map((a, i) => [
-      `<strong>${esc(a.name)}</strong><small>${esc(a.source)}</small>`,
-      esc(L(a.task)), esc(a.params), esc(a.license), esc(a.size), esc(a.version), esc(a.source),
-      (a.downloads || 0).toLocaleString(),
-      esc(L(a.acl)),
-      `<div class="table-actions">${btn("as.btn.deploy", "deploy-asset-model:" + i, "sm primary")}${btn("as.btn.detail", "asset:models:" + i, "sm")}</div>`,
-    ]));
+  return `<div class="template-grid">${items.map((a, i) => `
+    <div class="card template-card">
+      <div class="template-head">
+        <div class="template-logo"><i class="bi bi-box-seam"></i></div>
+        <span class="pill ${String(L(a.acl)).includes("公开") || String(L(a.acl)).includes("Public") ? "purple" : "gray"}">${esc(L(a.acl))}</span>
+      </div>
+      <h3>${esc(a.name)}</h3>
+      <p>${esc(L(a.task))} · ${esc(a.params)} · ${esc(a.license)}</p>
+      <div class="template-tags"><span>${esc(a.version)}</span><span>${esc(a.size)}</span><span>${esc(a.source)}</span><span>${(a.downloads || 0).toLocaleString()} ↓</span></div>
+      <div class="template-footer"><small>${esc(a.source)} · ${esc(a.date || "")}</small>
+        <div class="row gap8">${btn("as.btn.deploy", "deploy-asset-model:" + i, "sm primary")}${btn("as.btn.detail", "asset:models:" + i, "sm")}</div>
+      </div>
+    </div>`).join("")}</div>`;
 }
 
 function datasetsView(items) {
