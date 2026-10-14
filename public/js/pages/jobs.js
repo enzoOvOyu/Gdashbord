@@ -27,24 +27,24 @@ function jobsView(S, res) {
       <div class="cluster-top">
         <div>
           <div class="row gap8"><strong style="font-size:14px">${esc(j.name)}</strong>${status(j.status)}</div>
-          <div class="pod-id mono" style="margin-top:8px">${esc(j.id)} · ${esc(L(j.type))} · ${esc(j.template || "PyTorch")} · ${esc(L(j.priority || B("普通", "Normal")))}</div>
+          <div class="pod-id mono spec-ellipsis" style="margin-top:8px" title="${esc(j.id)} · ${esc(L(j.type))} · ${esc(j.template || "PyTorch")} · ${esc(L(j.priority || B("普通", "Normal")))}">${esc(j.id)} · ${esc(L(j.type))} · ${esc(j.template || "PyTorch")}</div>
         </div>
         <div class="pod-gpu">
-          <div class="pod-gpu-name">${esc(j.gpu)} × ${j.count}</div>
+          <div class="pod-gpu-name">${esc(j.gpu)} × ${Number(j.count || 0).toLocaleString()}</div>
           <div class="pod-price">${money(gpu(j.gpu).price * Number(j.count || 0))}/hr${esc(j.region ? " · " + j.region : "")}</div>
         </div>
       </div>
       <div class="cluster-graphic">${nodeIcons}${Number(j.nodes) > 6 ? `<span class="tiny-text" style="margin-left:6px">+${j.nodes - 6}</span>` : ""}</div>
       <div class="cluster-spec">
+        <div><small>GPUS</small><strong>${Number(j.count || 0).toLocaleString()}</strong></div>
         <div><small>NODES</small><strong>${j.nodes || 1} × ${esc(j.gpu)}</strong></div>
-        <div><small>THROUGHPUT</small><strong>${j.throughput ? (j.throughput >= 1000 ? (j.throughput / 1000).toFixed(1) + "K tok/s" : j.throughput + " tok/s") : "—"}</strong></div>
-        <div><small>TENANT</small><strong>${esc(j.tenant || "—")}</strong></div>
+        <div><small>TENANT</small><strong class="spec-ellipsis" title="${esc(j.tenant || "—")}">${esc(j.tenant || "—")}</strong></div>
       </div>
-      <div class="pod-middle">
+      <div class="pod-middle pod-middle-2col">
         <div><div class="metric-name"><span>Progress</span><b>${j.progress || 0}%</b></div><div class="progress"><span style="width:${j.progress || 0}%"></span></div></div>
         <div><div class="metric-name"><span>Goodput</span><b>${j.goodput || 0}%</b></div><div class="progress green"><span style="width:${j.goodput || 0}%"></span></div></div>
-        <div><div class="metric-name"><span>Checkpoint</span><b style="font-size:10px">${esc(ckpt)}</b></div><div class="progress"><span style="width:${j.progress || 0}%;background:#f9a825"></span></div></div>
-        <div><div class="metric-name"><span>ETA</span><b style="font-size:10px">${esc(eta)}</b></div><div class="progress${isActive ? "" : " orange"}"><span style="width:${isActive ? Math.min(100, (j.progress || 0)) : 100}%"></span></div></div>
+        <div><div class="metric-name"><span>Checkpoint</span><b class="spec-ellipsis" title="${esc(ckpt)}">${esc(ckpt)}</b></div><div class="progress"><span style="width:${j.progress || 0}%;background:#f9a825"></span></div></div>
+        <div><div class="metric-name"><span>ETA</span><b>${esc(eta)}</b></div><div class="progress${isActive ? "" : " orange"}"><span style="width:${isActive ? Math.min(100, (j.progress || 0)) : 100}%"></span></div></div>
       </div>
       <div class="pod-footer">
         <span class="tiny-text">${esc(L(j.duration || B("—", "—")))} · ${money(j.cost || 0)} ${esc(B("累计", "spent"))}</span>
@@ -60,7 +60,7 @@ function jobsView(S, res) {
   return [
     `<div class="grid cols-4 mb16 kpi-row">`,
     metric("job.kpi.running", running.length, B(gpuNow.toLocaleString() + " GPU 调度中", gpuNow.toLocaleString() + " GPUs scheduled"), "<i class='bi bi-play-circle'></i>", "", "hero"),
-    metric("job.kpi.queued", res.queued || 0, "job.kpi.queued.desc", "<i class='bi bi-clock-history'></i>", "", ""),
+    metric("job.kpi.queued", jobs.filter((x) => x.status === "queued").length, "job.kpi.queued.desc", "<i class='bi bi-clock-history'></i>", "", ""),
     metric("job.kpi.goodput", avgGoodput + "%", "job.kpi.goodput.desc", "<i class='bi bi-speedometer2'></i>", "↗ 1.8%", ""),
     metric(B("运行成本", "Run cost"), moneyShort(spend), money(hourly) + " / " + t("common.perHour"), "<i class='bi bi-cash-stack'></i>", "", ""),
     `</div>`,
@@ -100,24 +100,24 @@ function clustersView(S, clusters) {
       <div class="cluster-top">
         <div>
           <div class="row gap8"><strong style="font-size:14px">${esc(c.name)}</strong>${status(c.status)}</div>
-          <div class="pod-id mono" style="margin-top:8px">${esc(c.id)} · ${esc(c.scheduler)} · ${esc(c.tenantName || c.tenant || "—")}</div>
+          <div class="pod-id mono spec-ellipsis" style="margin-top:8px" title="${esc(c.id)} · ${esc(c.scheduler)} · ${esc(c.tenantName || c.tenant || "—")}">${esc(c.id)} · ${esc(c.scheduler)} · ${esc(c.tenantName || c.tenant || "—")}</div>
         </div>
         <button class="icon-btn" data-act="${isOpen ? "cluster-close" : "cluster-open:" + c.id}"><i class="bi bi-${isOpen ? "chevron-up" : "three-dots"}"></i></button>
       </div>
       <div class="cluster-graphic">${nodeIcons}</div>
       <div class="cluster-spec">
-        <div><small>GPU COMPUTE</small><strong>${c.count} × ${esc(c.gpu)}</strong></div>
-        <div><small>NETWORK</small><strong>${esc(c.network)}</strong></div>
+        <div><small>GPU COMPUTE</small><strong>${Number(c.count || 0).toLocaleString()} × ${esc(c.gpu)}</strong></div>
+        <div><small>NETWORK</small><strong class="spec-ellipsis" title="${esc(c.network)}">${esc(c.network)}</strong></div>
         <div><small>REGION</small><strong>${esc(c.region)}</strong></div>
       </div>
       <div class="pod-middle">
         <div><div class="metric-name"><span>Utilization</span><b>${c.liveUtil ?? c.util ?? 0}%</b></div><div class="progress"><span style="width:${c.liveUtil ?? c.util ?? 0}%"></span></div></div>
         <div><div class="metric-name"><span>Nodes</span><b>${nh.healthy ?? c.nodes}/${c.nodes}</b></div><div class="progress green"><span style="width:${Math.round(((nh.healthy ?? c.nodes) / Math.max(1, c.nodes)) * 100)}%"></span></div></div>
-        <div><div class="metric-name"><span>Power</span><b>${c.powerKw || 0} kW</b></div><div class="progress"><span style="width:${Math.min(100, (c.powerKw || 0) / 8)}%"></span></div></div>
-        <div><div class="metric-name"><span>Temp</span><b>${c.tempC || "—"}°C</b></div><div class="progress${(c.tempC || 0) > 55 ? " orange" : ""}"><span style="width:${Math.min(100, ((c.tempC || 30) / 90) * 100)}%"></span></div></div>
+        <div><div class="metric-name"><span>Power</span><b>${Math.round(c.powerKw || 0).toLocaleString()} kW</b></div><div class="progress"><span style="width:${Math.min(100, Math.round(((c.powerKw || 0) / Math.max(1, c.count)) / 14 * 100))}%"></span></div></div>
+        <div><div class="metric-name"><span>Temp</span><b>${c.tempC || "—"}°C</b></div><div class="progress${(c.tempC || 0) > 55 ? " orange" : ""}"><span style="width:${Math.min(100, Math.max(2, ((c.tempC || 30) - 20) * 1.6))}%"></span></div></div>
       </div>
       <div class="pod-footer">
-        <span class="tiny-text">Uptime: ${c.uptimeDays || "—"} ${esc(L(B("天", "d")))} · ${c.jobs || 0} ${esc(L(B("作业", "jobs")))} · ${money(c.priceEff || c.price || 0)}/hr</span>
+        <span class="tiny-text spec-ellipsis">${esc(L(B("上线", "Up")))} ${c.uptimeDays || "—"}${esc(L(B("天", "d")))} · ${c.jobs || 0} ${esc(L(B("个作业", "jobs")))} · ${money(c.priceEff || c.price || 0)}/hr</span>
         <div class="row gap8">
           ${btn(esc(L(B("查看详情", "View details"))), "cluster-detail:" + c.id, "sm")}
           ${btn(esc(L(B("拓扑", "Topology"))), "cluster:" + c.id, "sm ghost")}
@@ -133,7 +133,7 @@ function clustersView(S, clusters) {
     metric(B("训练集群", "Clusters"), clusters.length, B(`运行中 ${running} · Slurm/K8s 混合调度`, `Running ${running} · Slurm/K8s mixed scheduling`), "<i class='bi bi-hdd-rack'></i>", "", "hero"),
     metric(B("机队 GPU", "Fleet GPUs"), totalGpus.toLocaleString(), B(`在线 ${onlineGpus.toLocaleString()} · 利用率 ${util}%`, `Online ${onlineGpus.toLocaleString()} · ${util}% utilized`), "<i class='bi bi-cpu'></i>", "", ""),
     metric(B("总功耗", "Total power"), Math.round(totalPower).toLocaleString() + " kW", B(`运行中作业 ${totalJobs} · 碳排按区域因子`, `${totalJobs} active jobs · regional carbon factors`), "<i class='bi bi-lightning-charge'></i>", "", ""),
-    metric(B("NVL72 机架", "NVL72 racks"), clusters.filter((c) => c.topo === "NVL72").length, B("GB300 机架级 NVLink 域 · 800–3200 Gbps", "GB300 rack-scale NVLink domains · 800–3200 Gbps"), "<i class='bi bi-diagram-3'></i>", "", ""),
+    metric(B("NVL72 GPUs", "NVL72 GPUs"), clusters.filter((c) => c.topo === "NVL72").reduce((a, c) => a + Number(c.count || 0), 0).toLocaleString(), B(`GB300 机架级 NVLink · 800–3200 Gbps · ${clusters.filter((c) => c.topo === "NVL72").length} ${L(B("机架", "racks"))}`, `GB300 rack-scale NVLink · 800–3200 Gbps · ${clusters.filter((c) => c.topo === "NVL72").length} racks`), "<i class='bi bi-diagram-3'></i>", "", ""),
     `</div>`,
 
     `<div class="notice mb16"><i class="bi bi-info-circle"></i> ${esc(L(B(
@@ -164,7 +164,7 @@ function catalogView(S) {
       <th>${esc(t("job.catalog.th.net"))}</th><th>${esc(t("job.catalog.th.price"))}</th><th>${esc(t("common.actions"))}</th></tr></thead><tbody>`,
     skus.map((s) => `<tr>
       <td><strong>${esc(L(s.name))}</strong><small>${esc(s.id)}</small></td>
-      <td>${esc(s.gpu)} × ${s.gpusPerNode} · ${s.cpu} vCPU · ${s.ram} GB · ${esc(L(s.storage))}</td>
+      <td style="white-space:normal;min-width:220px">${esc(s.gpu)} × ${s.gpusPerNode} · ${s.cpu} vCPU · ${s.ram} GB · ${esc(L(s.storage))}</td>
       <td>${s.totalGpus}</td>
       <td>${esc(L(s.network))}</td>
       <td><b>${money(s.price)}</b><small>${money(s.price / s.totalGpus)} / ${esc(t("common.perGpuHour"))}</small></td>
