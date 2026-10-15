@@ -100,7 +100,7 @@ function nodesTab(nodes, pools, S) {
     `<select data-set="k8sPool">${opt([["all", b("全部节点池", "All pools")], ...pools.map((p) => [p.id, p.name])], S.k8sPool)}</select>`,
     `<select data-set="k8sStatus">${opt([["all", b("全部状态", "All statuses")], ["ready", "Ready"], ["cordoned", "Cordoned"], ["draining", "Draining"], ["remediation", "Remediation"], ["notready", "NotReady"]], S.k8sStatus)}</select>`,
     `<span class="small muted">${nodes.length} ${b("个节点", "nodes")}</span>`,
-    `<span class="top-spacer"></span>${btn("↻ " + b("刷新", "Refresh"), "refresh", "sm")}`,
+    `<span class="top-spacer"></span>${btn({ html: "↻ ", label: b("刷新", "Refresh") }, "refresh", "sm")}`,
     `</div>`,
     `<div class="card card-pad">${section(b("GPU 节点 · Nodes", "GPU nodes"), `<span class="small muted">${b("抽样浏览视图 · 全量 ", "Sampled browse view · ")}${"1,100"} ${b("节点按池聚合统计见概览页", "nodes total; aggregate stats on the overview tab")}</span>`)}`,
     `<div class="table-wrap"><table class="dense"><thead><tr>`,
@@ -189,7 +189,7 @@ function schedulerTab(sch, S) {
     metric(b("累计调度", "Scheduled"), sch.scheduled, b("本次会话", "This session"), "<i class='bi bi-check2-circle'></i>", ""),
     metric(b("抢占次数", "Preemptions"), sch.preempted, b("低优先级被抢占", "Low priority preempted"), "<i class='bi bi-arrow-left-right'></i>", ""),
     `</div>`,
-    `<div class="card card-pad mb16">${section(b("调度队列 · Pending", "Scheduler queue · pending"), btn("<i class='bi bi-lightning-charge-fill'></i> " + b("触发调度", "Dispatch"), "k8s-dispatch", "primary"))}`,
+    `<div class="card card-pad mb16">${section(b("调度队列 · Pending", "Scheduler queue · pending"), btn({ html: "<i class='bi bi-lightning-charge-fill'></i> ", label: b("触发调度", "Dispatch") }, "k8s-dispatch", "primary"))}`,
     pend.length
       ? `<div class="table-wrap"><table class="dense"><thead><tr><th>${b("任务", "Job")}</th><th>Namespace</th><th>${b("类型", "Kind")}</th><th>GPU</th><th>${b("拓扑约束", "Topology")}</th><th>${b("优先级", "Priority")}</th><th>${b("等待", "Wait")}</th><th>${b("阻塞原因", "Blocked reason")}</th><th>${b("操作", "Actions")}</th></tr></thead><tbody>${pend.map((p) => `<tr>
       <td>${mono(p.name)}</td>
@@ -283,7 +283,7 @@ export default async function kubernetesPage(S) {
     header(
       b("GPU 集群 · Kubernetes", "GPU Cluster · Kubernetes"),
       `${esc(sum.cluster.name)} · ${esc(sum.cluster.version)} · ${esc(sum.cluster.scheduler)} — ${b("节点、配额、调度与机架级可观测性", "nodes, quotas, scheduling and rack-level observability")}`,
-      btn("<i class='bi bi-lightning-charge-fill'></i> " + b("触发调度", "Dispatch"), "k8s-dispatch", "primary") + btn("↻ " + b("刷新", "Refresh"), "refresh", "sm")
+      btn({ html: "<i class='bi bi-lightning-charge-fill'></i> ", label: b("触发调度", "Dispatch") }, "k8s-dispatch", "primary") + btn({ html: "↻ ", label: b("刷新", "Refresh") }, "refresh", "sm")
     ),
     tabs([["overview", "k8s.tab.overview"], ["nodes", "k8s.tab.nodes"], ["quotas", "k8s.tab.quotas"], ["scheduler", "k8s.tab.scheduler"], ["workloads", "k8s.tab.workloads"]], tab, "k8sTab"),
     `<div class="card filterbar mb16">`,

@@ -129,8 +129,15 @@ export function select(items, val, path) {
   return `<select data-set="${path}">${opt(items, val)}</select>`;
 }
 
+// btn 支持: 字符串 | {zh,en} | { html: "<i></i> ", label: {zh,en} }（图标+文案安全拼接，避免对象被 toString）
 export function btn(label, act, cls = "", extra = "") {
-  return `<button class="btn ${cls}" data-act="${act}"${extra ? " " + extra : ""}>${L(label)}</button>`;
+  let inner;
+  if (label && typeof label === "object" && label.html !== undefined) {
+    inner = label.html + L(label.label);
+  } else {
+    inner = L(label);
+  }
+  return `<button class="btn ${cls}" data-act="${act}"${extra ? " " + extra : ""}>${inner}</button>`;
 }
 
 export function segmented(items, val, path) {

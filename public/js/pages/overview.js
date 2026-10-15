@@ -62,7 +62,7 @@ export default async function overview(S) {
     header("ov.title", "ov.sub", btn("ov.cta.create", "go-create", "primary") + btn("ov.cta.guide", "about")),
 
     // 运营横幅：万卡规模宣言（素材包 hero 模式：装饰图形 + 双 CTA）
-    `<div class="banner mb16"><div><div style="font-size:10px;letter-spacing:1.8px;opacity:.8;margin-bottom:7px">${esc(t("ov.banner.eyebrow"))}</div><h2>${esc(t("ov.banner.title"))}</h2><p>${t("ov.banner.body")}</p><div class="flex" style="gap:8px;margin-top:14px">${btn("<i class='bi bi-rocket-takeoff'></i> " + t("ov.cta.create"), "go-create", "primary")}${btn(t("ov.banner.cta") + " <i class='bi bi-arrow-right'></i>", "go-endpoint")}</div></div><div class="hero-art"><div class="hero-orbit"></div><div class="hero-orbit two"></div><div class="hero-chip"><i class="bi bi-gpu-card"></i></div></div></div>`,
+    `<div class="banner mb16"><div><div style="font-size:10px;letter-spacing:1.8px;opacity:.8;margin-bottom:7px">${esc(t("ov.banner.eyebrow"))}</div><h2>${esc(t("ov.banner.title"))}</h2><p>${t("ov.banner.body")}</p><div class="flex" style="gap:8px;margin-top:14px">${btn({ html: "<i class='bi bi-rocket-takeoff'></i> ", label: t("ov.cta.create") }, "go-create", "primary")}${btn(t("ov.banner.cta") + " <i class='bi bi-arrow-right'></i>", "go-endpoint")}</div></div><div class="hero-art"><div class="hero-orbit"></div><div class="hero-orbit two"></div><div class="hero-chip"><i class="bi bi-gpu-card"></i></div></div></div>`,
 
     // 机队级 KPI（4 张，含 sparkline 趋势）
     `<div class="grid cols-4 mb16 kpi-row">`,
