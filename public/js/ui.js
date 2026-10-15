@@ -78,8 +78,8 @@ export function commandPanel(items, query) {
   const filtered = items.filter((x) => String(x.label).toLowerCase().includes(q) || String(x.keywords || "").toLowerCase().includes(q));
   return `<div class="keyboard-modal" data-overlay="1" data-command-overlay="1"><div class="command-panel">
     <div class="command-search"><i class="bi bi-search"></i><input id="command-input" value="${esc(query || "")}" placeholder="${esc(t("shell.search"))}" autofocus/><span class="tiny-text">ESC</span></div>
-    <div class="command-items">${filtered.length ? filtered.map((x) => `<button class="command-item" data-act="${x.act}"><i class="bi bi-${x.icon}"></i> ${esc(L(x.label))} <i class="bi bi-arrow-right"></i></button>`).join("") : `<div class="empty-state" style="padding:24px">${esc(t("common.none"))}</div>`}</div>
-    <div class="command-foot">⌘K · ${esc(L({ zh: "页面与快捷操作 · Esc 关闭", en: "Pages & quick actions · Esc to close" }))}</div>
+    <div class="command-items">${filtered.length ? filtered.map((x, i) => `<button class="command-item${i === 0 ? " active" : ""}" data-act="${x.act}" data-cmd-index="${i}" role="option" aria-selected="${i === 0}"><i class="bi bi-${x.icon}"></i> ${esc(L(x.label))} <i class="bi bi-arrow-right"></i></button>`).join("") : `<div class="empty-state" style="padding:24px">${esc(t("common.none"))}</div>`}</div>
+    <div class="command-foot">⌘K · ↑↓ ${esc(L({ zh: "选择", en: "navigate" }))} · ↵ ${esc(L({ zh: "打开", en: "open" }))} · ESC ${esc(L({ zh: "关闭", en: "close" }))}</div>
   </div></div>`;
 }
 
@@ -148,41 +148,184 @@ export function tabs(items, val, path) {
   return `<div class="tabs">${items.map((it) => `<button class="tab ${String(it[0]) === String(val) ? "active" : ""}" data-set="${path}" data-value="${esc(it[0])}">${esc(L(it[1]))}</button>`).join("")}</div>`;
 }
 
+// 时序 X 轴标签：按 range 从当前时间往前均匀分布 n 个点。
+// 原图表只写死"期初 / 期末"两个文字，无法判断时间点，这里补上真实刻度。
+export function timeAxis(n, range = "1h") {
+  const count = Math.max(2, Number(n) || 2);
+  const spanMs = range === "30d" ? 30 * 864e5
+    : range === "7d" ? 7 * 864e5
+    : range === "24h" ? 864e5
+    : 36e5;
+  const now = Date.now();
+  const out = [];
+  for (let i = 0; i < count; i++) {
+    const t = new Date(now - spanMs * (1 - i / (count - 1)));
+    const hh = String(t.getHours()).padStart(2, "0");
+    const mm = String(t.getMinutes()).padStart(2, "0");
+    out.push(range === "7d" || range === "30d"
+      ? `${t.getMonth() + 1}/${t.getDate()}`
+      : `${hh}:${mm}`);
+  }
+  return out;
+}
+
+// 数值紧凑格式（坐标轴刻度用）：1.2K / 3.4M / 5.6B
+function fmtNum(v, digits = 0) {
+  const n = Number(v || 0);
+  const abs = Math.abs(n);
+  if (abs >= 1e9) return (n / 1e9).toFixed(Math.max(1, digits)) + "B";
+  if (abs >= 1e6) return (n / 1e6).toFixed(Math.max(1, digits)) + "M";
+  if (abs >= 1e4) return (n / 1e3).toFixed(Math.max(0, digits)) + "K";
+  return n.toFixed(digits);
+}
+
+// 折线 / 面积图：带 Y 轴刻度、X 轴标签与 hover 数值提示
+// 说明：SVG 用 preserveAspectRatio="none" 横向自适应，因此所有文字改由 HTML 层渲染，
+//       避免横向拉伸变形；线宽用 vector-effect="non-scaling-stroke" 保持恒定。
+// options: { color, color2, second, height, grid, labels, startText, endText, xLabels, unit, digits, fill, ariaLabel }
 export function chart(data, options = {}) {
   const color = options.color || "#ff6000";
   const color2 = options.color2 || "#34383b";
   const second = options.second || null;
   const height = options.height || 190;
   const grid = options.grid || 4;
+  const unit = options.unit || "";
+  const digits = options.digits != null ? options.digits : 0;
   const showLabels = options.labels !== false;
   const fill = options.fill !== false;
-  const startText = options.startText || t("ep.chart.start");
-  const endText = options.endText || t("ep.chart.end");
-  const w = 700, h = height, pad = 16, top = 13, bottom = showLabels ? 22 : 10;
+  const xLabels = options.xLabels || null;
+  const startText = options.startText || (xLabels && xLabels[0]) || t("ep.chart.start");
+  const endText = options.endText || (xLabels && xLabels[xLabels.length - 1]) || t("ep.chart.end");
+  const xAxisH = showLabels ? 20 : 0;
+  const w = 700, h = Math.max(60, height - xAxisH), pad = 16, top = 13, bottom = 10;
   const all = second ? data.concat(second) : data;
   const max = Math.max(1, ...all) * 1.18, min = 0;
-  const xx = (i) => pad + (w - 2 * pad) * (i / (data.length - 1 || 1));
+  const n = Math.max(1, (data.length || 1) - 1);
+  const xx = (i) => pad + (w - 2 * pad) * (i / n);
   const yy = (v) => top + (h - top - bottom) * (1 - (v - min) / (max - min));
   const line = (arr) => arr.map((v, i) => (i ? "L" : "M") + xx(i).toFixed(1) + "," + yy(v).toFixed(1)).join(" ");
-  const area = line(data) + " L " + xx(data.length - 1) + "," + (h - bottom) + " L " + pad + "," + (h - bottom) + " Z";
+  const area = line(data) + " L " + xx(n).toFixed(1) + "," + (h - bottom) + " L " + pad + "," + (h - bottom) + " Z";
+  const gid = "g" + color.replace("#", "");
   const gridLines = Array.from({ length: grid + 1 }, (_, i) => {
     const y = top + (h - top - bottom) * (i / grid);
     return `<line x1="${pad}" y1="${y}" x2="${w - pad}" y2="${y}" stroke="#eceff1" stroke-dasharray="3 4"/>`;
   }).join("");
-  const gid = "g" + color.replace("#", "");
-  const labels = showLabels
-    ? `<text x="${pad}" y="${h - 3}" fill="#98a0a6" font-size="11">${esc(startText)}</text><text x="${w - pad}" y="${h - 3}" fill="#98a0a6" font-size="11" text-anchor="end">${esc(endText)}</text>`
+  // Y 轴刻度：自上而下（含 0 基线）；垂直方向 viewBox 与像素 1:1，故可直接用 px 定位
+  const yTicks = Array.from({ length: grid + 1 }, (_, i) => {
+    const v = max * (1 - i / grid);
+    const y = top + (h - top - bottom) * (i / grid);
+    return `<i style="top:${y.toFixed(1)}px">${esc(fmtNum(v, digits))}${esc(unit)}</i>`;
+  }).join("");
+  const midText = xLabels && xLabels.length > 2 ? xLabels[Math.floor((xLabels.length - 1) / 2)] : null;
+  const xAxis = showLabels
+    ? `<div class="chart-xaxis"><span>${esc(L(startText))}</span>${midText ? `<span>${esc(L(midText))}</span>` : ""}<span>${esc(L(endText))}</span></div>`
     : "";
+  const meta = JSON.stringify({
+    v: data.map((x) => Number(x) || 0),
+    s: second ? second.map((x) => Number(x) || 0) : null,
+    x: xLabels || [],
+    u: unit,
+    d: digits,
+  });
   return [
-    `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" class="chart" style="height:${height}px" role="img" aria-label="trend">`,
+    `<div class="chart-wrap" style="height:${height}px" data-chart='${meta}' role="img" aria-label="${esc(options.ariaLabel || "trend")}">`,
+    `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" class="chart" style="height:${h}px" aria-hidden="true">`,
     `<defs><linearGradient id="${gid}" x1="0" x2="0" y1="0" y2="1"><stop stop-color="${color}" stop-opacity=".16"/><stop offset="1" stop-color="${color}" stop-opacity=".01"/></linearGradient></defs>`,
     gridLines,
     fill ? `<path d="${area}" fill="url(#${gid})"/>` : "",
-    `<path d="${line(data)}" fill="none" stroke="${color}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>`,
-    second ? `<path d="${line(second)}" fill="none" stroke="${color2}" stroke-width="2" stroke-linecap="round"/>` : "",
-    labels,
+    `<path d="${line(data)}" fill="none" stroke="${color}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`,
+    second ? `<path d="${line(second)}" fill="none" stroke="${color2}" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>` : "",
     "</svg>",
+    `<div class="chart-yaxis">${yTicks}</div>`,
+    xAxis,
+    `<div class="chart-cursor"><div class="chart-tip"></div><i></i></div>`,
+    "</div>",
   ].join("");
+}
+
+// 图表 hover / 触摸游标：事件委托，避免每次重渲重新绑定
+const CHART_VB_W = 700;
+const CHART_PAD = 16;
+const chartCache = new WeakMap();
+
+function chartMeta(el) {
+  if (!chartCache.has(el)) {
+    try { chartCache.set(el, JSON.parse(el.dataset.chart || "{}")); } catch (e) { chartCache.set(el, { v: [] }); }
+  }
+  return chartCache.get(el);
+}
+
+let chartActive = null;
+
+function hideChartCursor() {
+  if (chartActive) { chartActive.classList.remove("on"); chartActive = null; }
+}
+
+function paintChartCursor(wrap, clientX) {
+  const m = chartMeta(wrap);
+  const vals = m.v || [];
+  if (!vals.length) return;
+  const svg = wrap.querySelector("svg");
+  const rect = (svg || wrap).getBoundingClientRect();
+  const sx = rect.width / CHART_VB_W;
+  const pad = CHART_PAD * sx;
+  const plotW = Math.max(1, rect.width - pad * 2);
+  const n = Math.max(1, vals.length - 1);
+  const i = Math.max(0, Math.min(n, Math.round(((clientX - rect.left - pad) / plotW) * n)));
+  const cursor = wrap.querySelector(".chart-cursor");
+  if (!cursor) return;
+  const vbH = svg ? Number(String(svg.getAttribute("viewBox")).split(" ")[3]) || 0 : 0;
+  const top = 13, bottom = 10, plotH = Math.max(1, vbH - top - bottom);
+  const maxV = Math.max(1, ...(m.s ? vals.concat(m.s) : vals)) * 1.18;
+  const y = top + plotH * (1 - (vals[i] || 0) / maxV);
+  cursor.style.left = (pad + plotW * (i / n)).toFixed(1) + "px";
+  cursor.classList.add("on");
+  const dot = cursor.querySelector("i");
+  if (dot) dot.style.top = y.toFixed(1) + "px";
+  const tip = cursor.querySelector(".chart-tip");
+  if (tip) {
+    const label = m.x && m.x[i] ? L(m.x[i]) : "";
+    const v = Number(vals[i] || 0).toLocaleString("en-US", { minimumFractionDigits: m.d || 0, maximumFractionDigits: m.d || 0 });
+    tip.textContent = (label ? label + " · " : "") + v + (m.u || "");
+    tip.classList.toggle("below", y < 48);
+  }
+  if (chartActive && chartActive !== cursor) chartActive.classList.remove("on");
+  chartActive = cursor;
+}
+
+export function initChartCursor() {
+  let raf = 0, pending = null;
+  const apply = () => { raf = 0; if (pending) paintChartCursor(pending.wrap, pending.x); };
+  document.addEventListener("mousemove", (e) => {
+    const wrap = e.target.closest && e.target.closest(".chart-wrap");
+    if (!wrap) { pending = null; hideChartCursor(); return; }
+    pending = { wrap, x: e.clientX };
+    if (!raf) raf = requestAnimationFrame(apply);
+  }, { passive: true });
+  document.addEventListener("mouseleave", hideChartCursor);
+  document.addEventListener("touchmove", (e) => {
+    const t = e.touches && e.touches[0];
+    if (!t) return;
+    const wrap = e.target.closest && e.target.closest(".chart-wrap");
+    if (wrap) paintChartCursor(wrap, t.clientX);
+  }, { passive: true });
+}
+
+// 高危操作二次确认（统一入口，避免删库级操作无提示）
+export function confirmAction(title, bodyHTML, confirmAct, confirmLabel, danger = true) {
+  modal(title, bodyHTML, btn(t("common.cancel"), "close-modal") + btn(confirmLabel, confirmAct, danger ? "danger" : "primary"));
+}
+
+// 分页控件：大数据量列表统一分页，避免一次性渲染上千节点
+export function pager(page, totalPages, path, total, pageSize) {
+  if (totalPages <= 1) return "";
+  const from = (page - 1) * pageSize + 1;
+  const to = Math.min(page * pageSize, total);
+  const prev = page > 1 ? btn(`<i class='bi bi-chevron-left'></i> ${esc(L({ zh: "上一页", en: "Prev" }))}`, `${path}:${page - 1}`, "sm ghost")
+    : `<button class="btn sm ghost" disabled><i class='bi bi-chevron-left'></i> ${esc(L({ zh: "上一页", en: "Prev" }))}</button>`;
+  const next = page < totalPages ? btn(`${esc(L({ zh: "下一页", en: "Next" }))} <i class='bi bi-chevron-right'></i>`, `${path}:${page + 1}`, "sm ghost")
+    : `<button class="btn sm ghost" disabled>${esc(L({ zh: "下一页", en: "Next" }))} <i class='bi bi-chevron-right'></i></button>`;
+  return `<div class="pager"><span class="small muted">${from}–${to} / ${total} · ${esc(L({ zh: "第", en: "Page" }))} ${page}/${totalPages}</span><div class="row gap8">${prev}${next}</div></div>`;
 }
 
 // 统一 Loading 骨架屏

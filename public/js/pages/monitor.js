@@ -1,6 +1,6 @@
 // 可观测性：GPU / 推理 / 训练 / 告警（USD 无关，统一图表配色与状态语义）
 import { api } from "../api.js";
-import { header, metric, section, btn, esc, status, chart, tabs, segmented, t, L } from "../ui.js";
+import { header, metric, section, btn, esc, status, chart, tabs, segmented, timeAxis, t, L } from "../ui.js";
 
 const S2 = (zh, en) => ({ zh, en });
 
@@ -13,6 +13,7 @@ export default async function monitorPage(S) {
   const evRes = await api.events();
   const events = evRes.events || [];
   const m = await api.metrics(tab === "alerts" ? "gpu" : tab, S.monitorRange);
+  const AX = timeAxis((m.primary || []).length, S.monitorRange || "1h");
   const v = ((m.values && m.values.length ? m.values : ["—", "—", "—", "—"]).map((x) => L(x))).slice(0, 4);
   while (v.length < 4) v.push("—");
 
@@ -55,10 +56,10 @@ export default async function monitorPage(S) {
               </div>`
             : "",
           `<div class="grid cols-2 mb16">`,
-          `<div class="card card-pad">${section(tab === "inference" ? S2("QPS / 请求量", "QPS / requests") : tab === "jobs" ? S2("训练 Loss 曲线", "Training loss") : S2("GPU 利用率", "GPU utilization"), `<span class="pill blue">LIVE</span>`)}${chart(m.primary, { height: 225 })}</div>`,
-          `<div class="card card-pad">${section(tab === "inference" ? S2("p50 / p95 延迟", "p50 / p95 latency") : tab === "jobs" ? S2("GPU 利用率与梯度", "Utilization & gradients") : S2("显存 / CPU 占用", "Memory / CPU"))}${chart(m.primary, { second: m.secondary, color2: "#34383b", height: 225 })}<div class="flex small muted"><span style="color:#ff6000">● ${esc(L(S2("主指标", "Primary")))}</span><span style="color:#34383b">● ${esc(L(S2("对比指标", "Secondary")))}</span></div></div>`,
-          `<div class="card card-pad">${section(tab === "inference" ? S2("自动伸缩 / 活跃容器", "Autoscaling / containers") : tab === "jobs" ? S2("Checkpoint / 任务进度", "Checkpoints / progress") : S2("网络入站 / 出站", "Network in / out"))}${chart(m.secondary, { color: "#f9a825", second: m.primary, color2: "#ff6000", height: 225 })}</div>`,
-          `<div class="card card-pad">${section(tab === "inference" ? S2("TTFT / Token 生成速度", "TTFT / tokens per second") : tab === "jobs" ? S2("GPU 温度与功耗", "GPU temp & power") : S2("GPU 温度 / 功耗", "GPU temp / power"))}${chart(m.primary, { color: "#ff6a48", second: m.secondary, color2: "#34383b", height: 225 })}</div>`,
+          `<div class="card card-pad">${section(tab === "inference" ? S2("QPS / 请求量", "QPS / requests") : tab === "jobs" ? S2("训练 Loss 曲线", "Training loss") : S2("GPU 利用率", "GPU utilization"), `<span class="pill blue">LIVE</span>`)}${chart(m.primary, { height: 225, unit: "%", xLabels: AX })}</div>`,
+          `<div class="card card-pad">${section(tab === "inference" ? S2("p50 / p95 延迟", "p50 / p95 latency") : tab === "jobs" ? S2("GPU 利用率与梯度", "Utilization & gradients") : S2("显存 / CPU 占用", "Memory / CPU"))}${chart(m.primary, { second: m.secondary, color2: "#34383b", height: 225, unit: "%", xLabels: AX })}<div class="flex small muted"><span style="color:#ff6000">● ${esc(L(S2("主指标", "Primary")))}</span><span style="color:#34383b">● ${esc(L(S2("对比指标", "Secondary")))}</span></div></div>`,
+          `<div class="card card-pad">${section(tab === "inference" ? S2("自动伸缩 / 活跃容器", "Autoscaling / containers") : tab === "jobs" ? S2("Checkpoint / 任务进度", "Checkpoints / progress") : S2("网络入站 / 出站", "Network in / out"))}${chart(m.secondary, { color: "#f9a825", second: m.primary, color2: "#ff6000", height: 225, xLabels: AX })}</div>`,
+          `<div class="card card-pad">${section(tab === "inference" ? S2("TTFT / Token 生成速度", "TTFT / tokens per second") : tab === "jobs" ? S2("GPU 温度与功耗", "GPU temp & power") : S2("GPU 温度 / 功耗", "GPU temp / power"))}${chart(m.primary, { color: "#ff6a48", second: m.secondary, color2: "#34383b", height: 225, xLabels: AX })}</div>`,
           `</div>`,
           `<div class="card card-pad">${section(S2("最近事件与告警", "Recent events"), `<a href="javascript:void(0)" data-set="monitorTab" data-value="alerts">${esc(L(S2("全部告警 →", "All alerts →")))}</a>`)}${eventsTable(events)}</div>`,
         ].join(""),

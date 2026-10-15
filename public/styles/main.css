@@ -2132,3 +2132,84 @@ input.field::placeholder { color: #b3b7c5; }
 .mk-buttons { display: flex; gap: 7px; align-items: center; }
 
 @media (max-width: 1280px) { .mk-grid { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---------- 17. 评审优化：图表可读性 / 列表密度 / 工具条 / 分页 / 移动端 ---------- */
+
+/* 图表：Y 轴刻度 + X 轴标签 + hover 游标
+   文字统一放 HTML 层，避免 SVG preserveAspectRatio=none 横向拉伸导致字形变形 */
+.chart-wrap { position: relative; width: 100%; }
+.chart-wrap .chart { display: block; width: 100%; }
+.chart-yaxis { position: absolute; inset: 0 0 20px 0; pointer-events: none; }
+.chart-yaxis > i {
+  position: absolute; left: 0; transform: translateY(-50%);
+  font-style: normal; font-size: 9px; font-weight: 600;
+  color: var(--text-3); background: rgba(255, 255, 255, .74);
+  padding: 0 3px; border-radius: 3px; font-variant-numeric: tabular-nums;
+}
+.chart-xaxis { display: flex; align-items: center; justify-content: space-between; gap: 8px; height: 20px; font-size: 10px; color: var(--text-3); }
+.chart-xaxis > span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chart-cursor {
+  position: absolute; top: 0; bottom: 20px; width: 0;
+  border-left: 1px dashed #c9cfda; opacity: 0;
+  transition: opacity 120ms var(--ease); pointer-events: none;
+}
+.chart-cursor.on { opacity: 1; }
+.chart-cursor > i {
+  position: absolute; left: -5px; width: 9px; height: 9px;
+  border-radius: 50%; background: var(--brand); border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(16, 24, 40, .22);
+}
+.chart-tip {
+  position: absolute; left: 50%; bottom: calc(100% - 4px); transform: translateX(-50%);
+  white-space: nowrap; padding: 4px 8px; border-radius: 6px;
+  background: var(--text); color: #fff; font-size: 10px; font-weight: 650;
+  font-variant-numeric: tabular-nums; box-shadow: 0 6px 18px rgba(16, 24, 40, .18);
+}
+.chart-tip.below { bottom: auto; top: calc(100% - 4px); }
+
+/* 列表密度：宽屏下 Pods 卡片改多列网格，避免上万像素的单列长滚动 */
+.pod-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 13px; align-items: start; }
+@media (max-width: 860px) { .pod-grid { grid-template-columns: minmax(0, 1fr); } }
+
+/* 工具条：下拉不再被最长选项撑成全宽而互相换行堆叠 */
+.mk-toolbar .select,
+.toolbar .select,
+.filterbar .select { flex: 0 1 auto; max-width: 210px; text-overflow: ellipsis; }
+.mk-toolbar .results-label { margin-left: auto; white-space: nowrap; }
+@media (max-width: 768px) {
+  .mk-toolbar .results-label { margin-left: 0; }
+  .mk-toolbar .select, .toolbar .select, .filterbar .select { flex: 1 1 calc(50% - 5px); max-width: none; }
+}
+
+/* 进度条：超预算 / 接近阈值要有明确颜色，不能用"利好绿"掩盖风险 */
+.progress.over > span { background: linear-gradient(90deg, #ff4d4f, #e03131); }
+.progress.warn > span { background: linear-gradient(90deg, #f9a825, #f57f17); }
+.metric.danger { border-color: #ffc9c9; background: var(--error-soft, #fff5f5); }
+.metric.warn { border-color: #f3e3c4; background: #fffaf0; }
+.metric-bottom .trend.up { color: var(--error, #e03131); }
+.metric-bottom .trend.down { color: var(--success, #12b76a); }
+
+/* 分页控件 */
+.pager { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+
+/* ⌘K 命令面板：键盘选中态 */
+.command-item.active { background: var(--surface-3, #f3f5f9); box-shadow: inset 0 0 0 1px rgba(255, 96, 0, .35); }
+.command-item.active i:last-child { opacity: 1; }
+
+/* 移动端：宽表在容器内横向滚动，不能把整个页面撑宽 */
+.table-wrap { max-width: 100%; -webkit-overflow-scrolling: touch; }
+.table-wrap table { min-width: 640px; }
+@media (max-width: 768px) {
+  .table-wrap table { min-width: 520px; }
+  .detail-pairs { grid-template-columns: minmax(0, 1fr) !important; }
+}
+
+/* 顶栏：数据新鲜度指示（静态 LIVE 徽标不足以说明数据是否过期） */
+.sync-time {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: var(--fs-xs); color: var(--text-3); font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.sync-time.live { color: var(--success, #12b76a); font-weight: 600; }
+.top-icon.on { color: var(--brand); box-shadow: inset 0 0 0 1px rgba(255, 96, 0, .35); }
+@media (max-width: 1024px) { .sync-time { display: none; } }

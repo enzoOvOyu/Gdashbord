@@ -20,11 +20,19 @@ export function nav(n) {
   return `<button class="nav ${S.page === id ? "active" : ""}" data-nav="${id}" title="${esc(label)}" aria-current="${S.page === id ? "page" : "false"}"><span class="nav-icon"><i class="bi bi-${icon}"></i></span><span>${esc(label)}</span>${count ? `<span class="count">${count}</span>` : ""}${mini}</button>`;
 }
 
+// 最后同步时间：让「LIVE」有明确的数据新鲜度语义，而不是一个静态徽标
+function syncLabel() {
+  if (!S.lastSyncAt) return "--:--";
+  const d = new Date(S.lastSyncAt);
+  return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+}
+
 export function shell() {
   const list = S.NAV || [];
   const p = S.project;
   const collapsed = !!S.sidebarCollapsed;
   const lang = getLang();
+  const auto = !!S.autoRefresh;
   return [
     `<div class="app${collapsed ? " collapsed" : ""}">`,
     `<aside class="sidebar">`,
@@ -43,7 +51,10 @@ export function shell() {
     `<select class="org" aria-label="organization"><option>${esc(t("shell.org"))}</option></select>`,
     `<select class="project" data-set="project" aria-label="project"><option ${p === "AI Platform / Production" ? "selected" : ""}>AI Platform / Production</option><option ${p === "AI Platform / Staging" ? "selected" : ""}>AI Platform / Staging</option><option ${p === "Research / Sandbox" ? "selected" : ""}>Research / Sandbox</option></select>`,
     `<div class="search-global"><i class='bi bi-search'></i><input id="global-search" placeholder="${esc(t("shell.search"))}" aria-label="search"/><span class="shortcut">⌘ K</span></div>`,
-    `<span class="top-spacer"></span><span class="env">${esc(t("shell.env"))}</span>`,
+    `<span class="top-spacer"></span>`,
+    `<span class="sync-time${auto ? " live" : ""}"><i class="bi bi-${auto ? "broadcast" : "clock-history"}"></i> ${esc(syncLabel())}</span>`,
+    `<button class="top-icon${auto ? " on" : ""}" title="${esc(L({ zh: "自动刷新（60 秒）", en: "Auto refresh (60s)" }))}" aria-pressed="${auto ? "true" : "false"}" data-act="toggle-auto-refresh"><i class="bi bi-arrow-repeat"></i></button>`,
+    `<span class="env">${esc(t("shell.env"))}</span>`,
     `<button class="lang-toggle" data-act="toggle-lang" title="Language" aria-label="Language"><i class='bi bi-translate'></i><span>${esc(lang === "zh" ? "EN" : "中")}</span></button>`,
     `<button class="top-icon" title="${esc(t("shell.notify"))}" aria-label="${esc(t("shell.notify"))}" data-act="notifications"><i class='bi bi-bell'></i></button>`,
     `<button class="top-icon" title="${esc(t("shell.about"))}" aria-label="${esc(t("shell.about"))}" data-act="about"><i class='bi bi-info-circle'></i></button>`,

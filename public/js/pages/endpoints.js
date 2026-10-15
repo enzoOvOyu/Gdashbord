@@ -1,7 +1,7 @@
 // 推理服务（万卡级）：模型目录（按任务分组）+ Endpoint 机队工作台
 // KPI 含吞吐 / 延迟 / tokens / 错误率 / 成本；详情面板含副本弹性、区域可用区、租户归属
 import { api } from "../api.js";
-import { header, metric, section, btn, esc, status, chart, tabs, field, segmented, money, moneyShort, t, L } from "../ui.js";
+import { header, metric, section, btn, esc, status, chart, tabs, field, segmented, money, moneyShort, timeAxis, t, L } from "../ui.js";
 
 const B = (zh, en) => ({ zh, en });
 const BAR = (pct, color) => `<div class="progress"><span style="width:${Math.min(100, Math.max(2, Math.round(pct)))}%;${color ? "background:" + color : ""}"></span></div>`;
@@ -82,7 +82,7 @@ export default async function endpointsPage(S) {
     `<div class="split-65 mb16">`,
     `<div class="card chart-panel"><div class="section-head"><div><div class="card-title">${esc(B("推理请求量", "Inference requests"))}</div><div class="card-sub">${esc(B("活跃端点请求合计", "Requests across active endpoints"))}</div></div><span class="pill gray">${esc(B("近 24 小时", "Last 24 hours"))}</span></div>`,
     `<div class="billing-total">${(totalReq / 1_000_000).toFixed(2)}M <span class="pill green">↗ 18.6%</span></div>`,
-    chart(m.primary, { color: "#17a76f", height: 205 }),
+    chart(m.primary, { color: "#17a76f", height: 205, xLabels: timeAxis(m.primary.length, "1h") }),
     `<div class="row between tiny-text"><span>${esc(B("起始", "Period start"))}</span><span>${esc(B("当前", "Period end"))}</span></div></div>`,
     `<div class="card card-pad"><div class="section-head"><div><div class="card-title">${esc(B("Serverless 架构", "Serverless architecture"))}</div><div class="card-sub">${esc(B("自动伸缩工作负载运行机制", "How auto-scaling workloads behave"))}</div></div><i class="bi bi-layers"></i></div>`,
     `<div class="activity">`,
@@ -101,7 +101,7 @@ export default async function endpointsPage(S) {
           `<div class="card card-pad">${section(L(x.name) + " · " + t("ep.workbench"), tabs([["overview", "ep.tab.overview"], ["playground", "ep.tab.playground"], ["versions", "ep.tab.versions"], ["models", "ep.tab.models"]], S.endpointTab, "endpointTab"))}`,
           S.endpointTab === "overview"
             ? [
-                chart(m.primary, { second: m.secondary, height: 215, startText: t("ep.chart.start"), endText: t("ep.chart.end") }),
+                chart(m.primary, { second: m.secondary, height: 215, unit: "%", xLabels: timeAxis(m.primary.length, "1h") }),
                 `<div class="flex small muted"><span class="blue">${esc(t("ep.chart.throughput"))}</span><span class="purple">${esc(t("ep.chart.replicas"))}</span></div>`,
                 `<div class="grid cols-3 mt16">${metric("ep.metric.24h", x.requests.toLocaleString(), "ep.metric.24h.desc", "<i class='bi bi-arrow-left-right'></i>", "")}${metric("ep.metric.err", (x.errorRate != null ? x.errorRate : "0.12") + "%", "ep.metric.err.desc", "<i class='bi bi-exclamation-triangle'></i>", "")}${metric("ep.metric.token", (x.tokensPerSec || 0).toLocaleString() + " /s", "ep.metric.token.desc", "<i class='bi bi-cpu'></i>", "")}</div>`,
               ].join("")

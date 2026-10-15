@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { get, save, pushEvent } from "../store.js";
-import { costSummary, HOURS_PER_MONTH, CURRENCY } from "../services/cost.js";
+import { costSummary, budgetInsight, HOURS_PER_MONTH, CURRENCY } from "../services/cost.js";
 
 export default function billingRouter() {
   const r = Router();
@@ -9,6 +9,8 @@ export default function billingRouter() {
   r.get("/", (req, res) => {
     const s = get();
     const cost = costSummary(s);
+    const insight = budgetInsight(s);
+    save(); // 账单历史首次生成后落盘，保证刷新 / 重启后读数稳定
     res.json({
       balance: s.balance,
       budget: s.budget,
@@ -20,6 +22,7 @@ export default function billingRouter() {
       gpuHours: cost.gpuHours,
       bills: cost.bills,
       details: cost.lines,
+      insight,
     });
   });
 

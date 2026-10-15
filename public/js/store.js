@@ -19,6 +19,9 @@ export const init = {
   },
   instanceFilter: "all",
   instanceQuery: "",
+  instancePage: 1,
+  autoRefresh: false,
+  lastSyncAt: 0,
   selectedInstance: "ws-001",
   endpointSelected: "ep-001",
   endpointPlayground: "",
@@ -45,7 +48,7 @@ export const init = {
   adminTenant: "all",
 };
 
-const UI_KEYS = ["page", "lang", "sidebarCollapsed", "market", "create", "instanceFilter", "instanceQuery", "selectedInstance", "endpointSelected", "endpointPlayground", "endpointTab", "modelGroup", "jobTab", "jobSelected", "clusterOpen", "assetTab", "securityTab", "monitorTab", "monitorTarget", "monitorRange", "billingTab", "billingRange", "overviewRange", "k8sTab", "k8sPool", "k8sStatus", "k8sNs", "k8sPhase", "k8sRange", "adminTab", "adminTenant"];
+const UI_KEYS = ["page", "lang", "sidebarCollapsed", "market", "create", "instanceFilter", "instanceQuery", "instancePage", "autoRefresh", "lastSyncAt", "selectedInstance", "endpointSelected", "endpointPlayground", "endpointTab", "modelGroup", "jobTab", "jobSelected", "clusterOpen", "assetTab", "securityTab", "monitorTab", "monitorTarget", "monitorRange", "billingTab", "billingRange", "overviewRange", "k8sTab", "k8sPool", "k8sStatus", "k8sNs", "k8sPhase", "k8sRange", "adminTab", "adminTenant"];
 
 export let S = Object.assign({}, init);
 

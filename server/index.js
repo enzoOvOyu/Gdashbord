@@ -21,7 +21,9 @@ import fleetRouter from "./routes/fleet.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
-app.use(express.json());
+// 批量操作（如逐条 PATCH 部署数百实例）会超出 express 默认 100KB 限制，
+// 这里放宽到 2MB，并把解析错误统一转成 JSON，避免前端只拿到 HTML 难以定位。
+app.use(express.json({ limit: "2mb" }));
 
 // 目录与常量（区域 / GPU 型号 / 模型分组 / 集群 SKU，统一 USD 计价）
 app.get("/api/catalog", (req, res) => res.json({
@@ -59,6 +61,15 @@ app.use("/api/fleet", fleetRouter());
 // 托管前端（无构建，对齐原型单文件 → 拆分为模块）
 app.use(express.static(config.publicDir));
 app.get(/^\/(?!api\/).*/, (req, res) => res.sendFile(path.join(config.publicDir, "index.html")));
+
+// 统一错误处理（放最后）：保证 /api 始终返回 JSON 错误
+app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
+  const status = Number(err.status || err.statusCode) || 500;
+  if (status === 413) return res.status(413).json({ error: "请求体过大（单次写入上限 2MB），请减少单次批量条数" });
+  if (err.type === "entity.parse.failed") return res.status(400).json({ error: "请求体不是合法 JSON" });
+  console.error("[api] 未处理错误:", err.message);
+  return res.status(status).json({ error: err.message || "服务器内部错误" });
+});
 
 load();
 app.listen(config.port, config.host, () => {

@@ -1,7 +1,7 @@
 // 万卡级机队总览：机队 KPI → 运营状态条 → 区域容量 / 型号构成 / 集群健康 → 趋势与成本 → 负载与事件
 // 所有机队数据来自 /api/overview 的 fleet（由 state.clusters 实算），口径与部署/推理/训练一致
 import { api } from "../api.js";
-import { header, metric, section, btn, chart, status, money, moneyShort, esc, segmented, t, L } from "../ui.js";
+import { header, metric, section, btn, chart, status, money, moneyShort, esc, segmented, timeAxis, t, L } from "../ui.js";
 
 const B = (zh, en) => ({ zh, en });
 const BAR = (pct, color) => `<div class="progress"><span style="width:${Math.min(100, Math.max(2, Math.round(pct)))}%;${color ? "background:" + color : ""}"></span></div>`;
@@ -86,7 +86,10 @@ export default async function overview(S) {
     `<div><span>${esc(B("在线 GPU", "Online GPUs"))}</span><b>${online.toLocaleString()} <small>(${onlinePct}%)</small></b></div>`,
     `<div><span>${esc(B("可分配 GPU", "Free GPUs"))}</span><b>${free.toLocaleString()}</b></div>`,
     `<div><span>${esc(B("训练作业", "Training jobs"))}</span><b>${M.jobsRunning || 0} ${esc(B("运行", "run"))} / ${M.jobsQueued || 0} ${esc(B("排队", "queued"))}</b></div>`,
-    `<div><span>${esc(t("ov.strip.sched"))}</span><b>${M.jobSuccessRate}</b></div>`,
+    // 口径说明：无终态样本时显示「— + 暂无终态样本」，不再显示误导性的 0%
+    `<div><span>${esc(t("ov.strip.sched"))}</span><b>${esc(M.jobSuccessRate)}</b>${
+      M.jobSuccessSample ? "" : `<small class="muted"> · ${esc(L(B("暂无终态样本", "no finished jobs")))}</small>`
+    }</div>`,
     `<div><span>${esc(B("本月消费", "Month spend"))}</span><b>${moneyShort(monthCost)}</b></div>`,
     `</div>`,
 
@@ -114,7 +117,7 @@ export default async function overview(S) {
     // 趋势 + 成本结构
     `<div class="split-65 mb16">`,
     `<div class="card card-pad">${section("ov.trend", segmented([["7d", "ov.trend.7d"], ["30d", "ov.trend.30d"]], S.overviewRange, "overviewRange"))}`,
-    chart(m.primary, { second: m.secondary, height: 220, startText: t("ep.chart.start"), endText: t("ep.chart.end") }),
+    chart(m.primary, { second: m.secondary, height: 220, unit: "%", xLabels: timeAxis(m.primary.length, range) }),
     `<div class="flex small muted"><span class="blue">${esc(t("ov.trend.gpu"))}</span><span class="purple">${esc(t("ov.trend.ep"))}</span><span style="margin-left:auto">${esc(t("ov.trend.src"))}</span></div></div>`,
     `<div class="card card-pad">${section("ov.cost", `<a data-nav="billing" href="javascript:void(0)">${esc(t("ov.cost.link"))}</a>`)}`,
     `<div class="flex" style="gap:18px;margin-top:15px"><div class="donut"><div class="donut-inner">${money(monthCost)}<small>${esc(t("ov.cost.month"))}</small></div></div>`,

@@ -1,7 +1,7 @@
 // 入口：render() / runAction() / 事件委托（中英双语 + 管理端动作）
 import { S, loadUI, save, set, refreshDomain, refreshCatalog } from "./store.js";
 import { api } from "./api.js";
-import { $, esc, toast, modal, closeModal, copy, btn, status, money, gpu, skeleton, drawer, detailPairs, commandPanel, t, L } from "./ui.js";
+import { $, esc, toast, modal, closeModal, copy, btn, status, money, gpu, skeleton, drawer, detailPairs, commandPanel, confirmAction, initChartCursor, t, L } from "./ui.js";
 import { getLang, setLang, toggleLang } from "./i18n.js";
 import { shell } from "./shell.js";
 import overview from "./pages/overview.js";
@@ -31,7 +31,33 @@ function navigate(page) {
 
 let lastRendered = null;
 
+// 全量重绘会丢弃 DOM 节点：先快照焦点，重渲后恢复。
+// 这是输入框失焦 / 光标跳回开头 / ⌘K 输入中断的根因。
+function snapshotFocus() {
+  const el = document.activeElement;
+  if (!el || el === document.body) return null;
+  const key = el.id || (el.dataset && el.dataset.set);
+  if (!key) return null;
+  let start = null, end = null;
+  try { start = el.selectionStart; end = el.selectionEnd; } catch (e) { /* number/date 不支持选区 */ }
+  return { key, byId: !!el.id, start, end };
+}
+
+function restoreFocus(snap) {
+  if (!snap) return;
+  let el = null;
+  try {
+    el = snap.byId ? document.getElementById(snap.key) : document.querySelector('[data-set="' + snap.key + '"]');
+  } catch (e) { return; }
+  if (!el || typeof el.focus !== "function") return;
+  el.focus();
+  if (typeof snap.start === "number" && el.setSelectionRange) {
+    try { el.setSelectionRange(snap.start, snap.end); } catch (e) { /* 忽略不支持的类型 */ }
+  }
+}
+
 async function render() {
+  const snap = snapshotFocus();
   const app = document.getElementById("app");
   const bar = document.getElementById("progress-top");
   if (!app.innerHTML) app.innerHTML = shell();
@@ -50,6 +76,7 @@ async function render() {
     lastRendered = null;
   } finally {
     if (bar) bar.classList.remove("on");
+    restoreFocus(snap);
   }
 }
 
@@ -104,9 +131,14 @@ function bindCommandInput(items) {
   if (!inp || inp.dataset.bound) return;
   inp.dataset.bound = "1";
   inp.addEventListener("input", () => {
+    const pos = inp.selectionStart;
     $("#modal-root").innerHTML = commandPanel(items, inp.value);
+    bindCommandInput(items);
     const inp2 = document.getElementById("command-input");
-    if (inp2) { inp2.focus(); inp2.setSelectionRange(inp2.value.length, inp2.value.length); bindCommandInput(items); }
+    if (inp2) {
+      inp2.focus();
+      try { inp2.setSelectionRange(pos, pos); } catch (e) { /* 忽略不支持选区的输入类型 */ }
+    }
   });
 }
 
@@ -173,9 +205,69 @@ function renderPodDrawer(x) {
   $("#drawer-root").innerHTML = drawer(x.name, `${x.id} · ${x.gpu} × ${x.count}`, body, tabsHTML, actionsHTML);
 }
 
+// ===== 高危操作统一二次确认 =====
+// 说明：原实现里 drain 节点、删除工作负载、撤销 Key、停用租户 / 成员都是点一下即生效，
+// 反而是删除工作空间有确认弹窗。这里收敛为统一入口，避免误操作造成不可逆损失。
+const CONFIRM_SPEC = {
+  "node-drain": {
+    title: B("排空节点", "Drain node"),
+    label: B("确认排空", "Confirm drain"),
+    body: (a) => `<p>${esc(L(B("即将排空节点", "About to drain node")))} <b>${esc(a.split(":")[1])}</b>。</p><div class="callout warn">${esc(L(B("节点上的 Pod 会被驱逐并重新调度，运行中的训练任务可能中断。", "Pods on the node will be evicted and rescheduled; running training jobs may be interrupted.")))}</div>`,
+  },
+  "pod-delete": {
+    title: B("删除工作负载", "Delete workload"),
+    label: B("确认删除", "Confirm delete"),
+    body: (a) => `<p>${esc(L(B("即将删除工作负载", "About to delete workload")))} <b>${esc(a.split(":")[1])}</b>。</p><div class="callout danger">${esc(L(B("删除不可恢复，正在处理的请求会失败。", "Deletion is irreversible; in-flight requests will fail.")))}</div>`,
+  },
+  "revoke-key": {
+    title: B("撤销 API Key", "Revoke API key"),
+    label: B("确认撤销", "Confirm revoke"),
+    body: () => `<p>${esc(L(B("撤销后使用该 Key 的调用将立即失败，请确认没有在线服务依赖它。", "Calls using this key fail immediately after revocation — make sure no live service depends on it.")))}</p>`,
+  },
+  rollback: {
+    title: B("回滚服务", "Roll back service"),
+    label: B("确认回滚", "Confirm rollback"),
+    body: () => `<p>${esc(L(B("将回滚到上一个版本，当前版本上的变更会丢失。", "This rolls back to the previous version; changes in the current version will be lost.")))}</p>`,
+  },
+  "admin-tenant-status": {
+    when: (a) => a.split(":")[2] === "suspended",
+    title: B("停用租户", "Suspend tenant"),
+    label: B("确认停用", "Confirm suspend"),
+    body: (a) => `<p>${esc(L(B("停用后该租户下所有工作负载将无法访问。", "All workloads under this tenant become inaccessible after suspension.")))}</p><div class="callout danger">${esc(a.split(":")[1])}</div>`,
+  },
+  "admin-user-status": {
+    when: (a) => a.split(":")[2] === "suspended",
+    title: B("停用成员", "Suspend member"),
+    label: B("确认停用", "Confirm suspend"),
+    body: (a) => `<p>${esc(L(B("停用后该成员将无法登录控制台。", "The member will not be able to sign in after suspension.")))}</p><div class="callout danger">${esc(a.split(":")[1])}</div>`,
+  },
+};
+
+// 关闭最上层浮层：先模态框，再抽屉。
+// Esc 原先只调用了 closeModal()，导致实例抽屉关不掉、且仍然拦截后续点击。
+function closeTopLayer() {
+  const m = $("#modal-root");
+  if (m && m.innerHTML.trim()) { closeModal(); return true; }
+  const d = $("#drawer-root");
+  if (d && d.innerHTML.trim()) {
+    d.innerHTML = "";
+    S.drawerPod = "";
+    S.drawerTab = "overview";
+    save();
+    return true;
+  }
+  return false;
+}
+
 async function runAction(a) {
+  // 二次确认：确认后以 confirmed: 前缀回到原动作继续执行
+  if (a.startsWith("confirmed:")) a = a.slice("confirmed:".length);
+  else {
+    const spec = CONFIRM_SPEC[a.split(":")[0]];
+    if (spec && (!spec.when || spec.when(a))) return confirmAction(spec.title, spec.body(a), "confirmed:" + a, spec.label);
+  }
   if (a === "close-modal") return closeModal();
-  if (a === "drawer-close") { S.drawerPod = ""; S.drawerTab = "overview"; save(); const d = $("#drawer-root"); if (d) d.innerHTML = ""; return; }
+  if (a === "drawer-close") { closeTopLayer(); return; }
   if (a.startsWith("drawer-tab:")) {
     S.drawerTab = a.split(":")[1];
     save();
@@ -197,15 +289,9 @@ async function runAction(a) {
         { label: B("切换语言", "Toggle language"), icon: "translate", act: "toggle-lang", keywords: "language i18n" },
       ]);
     $("#modal-root").innerHTML = commandPanel(items, "");
+    bindCommandInput(items); // 统一绑定：避免每次打开重复挂载监听器导致事件累积
     const inp = document.getElementById("command-input");
-    if (inp) {
-      inp.focus();
-      inp.addEventListener("input", () => {
-        $("#modal-root").innerHTML = commandPanel(items, inp.value);
-        const inp2 = document.getElementById("command-input");
-        if (inp2) { inp2.focus(); inp2.setSelectionRange(inp2.value.length, inp2.value.length); bindCommandInput(items); }
-      });
-    }
+    if (inp) inp.focus();
     return;
   }
   if (a.startsWith("cmd-nav:")) { closeModal(); return navigate(a.split(":")[1]); }
@@ -235,10 +321,16 @@ async function runAction(a) {
   if (a === "create-cluster") { S.create.mode = "cluster"; S.create.step = 2; S.create.name = "my-gpu-cluster"; save(); return navigate("create"); }
   if (a === "reset-market") { S.market = { query: "", gpu: "all", region: "all", sort: "recommended", mode: "all" }; save(); return render(); }
   if (a === "reset-create") { S.create = { ...S.create, step: 1 }; save(); return render(); }
+  if (a.startsWith("page:")) { S.instancePage = Math.max(1, Number(a.split(":")[1]) || 1); save(); render(); return window.scrollTo({ top: 0, behavior: "instant" }); }
   if (a === "next-step") { S.create.step = Math.min(4, Number(S.create.step) + 1); save(); render(); return window.scrollTo({ top: 0, behavior: "instant" }); }
   if (a === "prev-step") { S.create.step = Math.max(1, Number(S.create.step) - 1); save(); render(); return window.scrollTo({ top: 0, behavior: "instant" }); }
   if (a === "deploy") return deploy();
-  if (a === "refresh") { await refreshDomain(); render(); return toast(B("资源列表已刷新", "Resource list refreshed")); }
+  if (a === "refresh") { await refreshDomain(); S.lastSyncAt = Date.now(); save(); render(); return toast(B("资源列表已刷新", "Resource list refreshed")); }
+  if (a === "toggle-auto-refresh") {
+    S.autoRefresh = !S.autoRefresh;
+    save();
+    return toast(S.autoRefresh ? B("已开启自动刷新（60 秒）", "Auto refresh on (60s)") : B("已关闭自动刷新", "Auto refresh off"));
+  }
 
   // ===== 部署中心：区域 / 规格两级联动 =====
   if (a.startsWith("pick-region:")) {
@@ -749,15 +841,54 @@ document.addEventListener("change", (e) => {
     }
     return;
   }
-  if (el.dataset.set) {
+  if (el.dataset.set && el.tagName !== "INPUT") {
+    // 文本框改由 input 事件 + 防抖处理：change 只在失焦 / 回车时触发，
+    // 体验上不完整；这里避免与 input 事件重复触发整页重渲。
     set(el.dataset.set, el.value);
     render();
   }
 });
 
+// 文本类筛选输入：输入过程中不整页重渲，改为防抖后刷新列表
+// （原实现只监听 change，输入时要么不生效、要么每字符重建一次上千节点）
+const DEBOUNCED_INPUTS = new Set(["instanceQuery", "market.query", "global-search"]);
+let inputTimer = null;
+
+document.addEventListener("input", (e) => {
+  const el = e.target;
+  if (!el || !el.dataset || !el.dataset.set) return;
+  set(el.dataset.set, el.value);
+  clearTimeout(inputTimer);
+  inputTimer = setTimeout(() => {
+    // 过滤条件变化后回到第一页，避免停留在空页
+    if (DEBOUNCED_INPUTS.has(el.dataset.set)) S.instancePage = 1;
+    render();
+  }, 260);
+});
+
 document.addEventListener("keydown", (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); runAction("open-command"); }
-  if (e.key === "Escape") closeModal();
+  if (e.key === "Escape") { closeTopLayer(); return; }
+  // ⌘K 面板：↑↓ 选择、↵ 打开
+  const cmdRoot = $("#modal-root");
+  if (cmdRoot && cmdRoot.querySelector(".command-panel")) {
+    const items = [...cmdRoot.querySelectorAll(".command-item")];
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      if (!items.length) return;
+      let i = items.findIndex((x) => x.classList.contains("active"));
+      i = e.key === "ArrowDown" ? Math.min(items.length - 1, i + 1) : Math.max(0, i - 1);
+      items.forEach((x, k) => { x.classList.toggle("active", k === i); x.setAttribute("aria-selected", String(k === i)); });
+      items[i].scrollIntoView({ block: "nearest" });
+      return;
+    }
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const cur = items.find((x) => x.classList.contains("active"));
+      if (cur) runAction(cur.dataset.act);
+      return;
+    }
+  }
   if (e.key === "Enter" && e.target.id === "global-search") {
     const q = e.target.value.trim();
     if (!q) return;
@@ -771,9 +902,34 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
+// ===== 自动刷新 =====
+// 默认关闭，可在顶栏开启；开启后每 60s 拉一次领域状态并重渲。
+// 三重保护：页面不可见 / 正在输入 / 有模态框或抽屉打开时跳过，避免打断用户操作。
+const AUTO_REFRESH_MS = 60000;
+let autoTimer = null;
+
+function setupAutoRefresh() {
+  clearInterval(autoTimer);
+  autoTimer = setInterval(async () => {
+    if (!S.autoRefresh) return;
+    if (document.visibilityState !== "visible") return;
+    const ae = document.activeElement;
+    if (ae && /^(input|textarea|select)$/i.test(ae.tagName)) return;
+    const m = $("#modal-root"), d = $("#drawer-root");
+    if ((m && m.innerHTML.trim()) || (d && d.innerHTML.trim())) return;
+    try {
+      await refreshDomain();
+      S.lastSyncAt = Date.now();
+      save();
+      await render();
+    } catch (e) { /* 自动刷新失败静默重试，不打扰用户 */ }
+  }, AUTO_REFRESH_MS);
+}
+
 async function boot() {
   loadUI();
   setLang(S.lang || "zh");
+  initChartCursor(); // 图表 hover / 触摸数值提示：事件委托，全局只挂一次
   await refreshCatalog();
   window.__GPU = S.GPU;
   window.__IMAGES = S.IMAGES;
@@ -783,7 +939,9 @@ async function boot() {
   window.__REGIONS = S.REGIONS;
   window.__CLUSTER_SKUS = S.CLUSTER_SKUS;
   await refreshDomain();
+  S.lastSyncAt = Date.now();
   await render();
+  setupAutoRefresh();
 }
 
 boot();

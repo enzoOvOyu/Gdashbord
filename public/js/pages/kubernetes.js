@@ -2,7 +2,7 @@
 // 覆盖：集群概览 / GPU 节点 / 资源配额 / 调度队列 / 工作负载
 // 设计参考 CoreWeave CKS + SUNK + Mission Control
 import { api } from "../api.js";
-import { header, metric, section, btn, esc, status, chart, tabs, select, opt, input, modal, closeModal, toast, copy, t, L } from "../ui.js";
+import { header, metric, section, btn, esc, status, chart, tabs, select, opt, input, modal, closeModal, toast, copy, timeAxis, t, L } from "../ui.js";
 
 // 双语标签快捷函数（返回已转义文案）
 const b = (zh, en) => esc(L({ zh, en }));
@@ -58,7 +58,7 @@ function overviewTab(sum, cabinets, S) {
     `<div class="callout mt16">${b("拓扑感知调度把 Gang 任务尽量收敛在同一 NVLink 域内，减少跨机架通信；当队列阻塞时，低优先级任务可被抢占。", "Topology-aware scheduling keeps gang jobs inside one NVLink domain to cut cross-rack traffic; when the queue blocks, lower-priority jobs can be preempted.")}</div>`,
     `</div>`,
     `<div class="card card-pad">${section(b("GPU 利用率 / 分配趋势", "Utilization / allocation trend"), `<span class="pill blue">LIVE</span>`)}`,
-    chart(m.primary || [40, 60, 55, 70, 65, 80], { second: m.secondary, color2: "#34383b", height: 214 }),
+    chart(m.primary || [40, 60, 55, 70, 65, 80], { second: m.secondary, color2: "#34383b", height: 214, unit: "%", xLabels: timeAxis((m.primary || []).length, (S && S.k8sRange) || "1h") }),
     `<div class="statline">`,
     `<div><span>${b("利用率", "Utilization")}</span><b>${vals[0]}</b></div><div><span>Goodput</span><b>${vals[1]}</b></div><div><span>MTTF</span><b>${vals[2]}</b></div><div><span>Straggler</span><b>${vals[3]}</b></div>`,
     `</div></div>`,

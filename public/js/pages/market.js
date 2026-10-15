@@ -60,7 +60,7 @@ export default async function market(S) {
         <div class="mk-metric"><i class="bi bi-memory"></i><div><label>${esc(B("GPU 显存", "GPU memory"))}</label><b>${g.vram} GB HBM</b></div></div>
         <div class="mk-metric"><i class="bi bi-diagram-3"></i><div><label>${esc(B("高速互联", "Interconnect"))}</label><b>${esc(g.network)}</b></div></div>
         <div class="mk-metric"><i class="bi bi-cpu"></i><div><label>${esc(B("计算特性", "Compute"))}</label><b>${esc(L(cmp))}</b></div></div>
-        <div class="mk-metric"><i class="bi bi-globe"></i><div><label>${esc(B("可选区域", "Regions"))}</label><b>${regions.length} ${esc(B("个部署区域", "regions"))}</b></div></div>
+        <div class="mk-metric"><i class="bi bi-globe"></i><div><label>${esc(B("可选区域", "Regions"))}</label><b>${g.regionsAvailable != null ? g.regionsAvailable : regions.length} ${esc(B("个部署区域", "regions"))}</b></div></div>
       </div>
       <div class="mk-scenarios">${scen.map((s) => `<span class="mk-scenario">${esc(L(s))}</span>`).join("")}</div>
       <div class="mk-bottom">
@@ -96,8 +96,8 @@ export default async function market(S) {
     // 筛选工具条
     `<div class="mk-toolbar">`,
     `<div class="search-field"><i class="bi bi-search"></i><input value="${esc(m.query)}" data-set="market.query" placeholder="${esc(B("搜索 GPU 型号…", "Search GPU models…"))}"/></div>`,
-    `<select class="field select" data-set="market.region">${opt([["all", B("全部区域", "All regions")], ...regions.map((r) => [r.id, r.name])], m.region)}</select>`,
-    `<select class="field select" data-set="market.gpu">${opt([["all", B("全部型号", "All GPUs")], ...(S.GPU || []).map((g) => [g.id, g.id])], m.gpu)}</select>`,
+    `<select class="select" data-set="market.region">${opt([["all", B("全部区域", "All regions")], ...regions.map((r) => [r.id, r.name])], m.region)}</select>`,
+    `<select class="select" data-set="market.gpu">${opt([["all", B("全部型号", "All GPUs")], ...(S.GPU || []).map((g) => [g.id, g.id])], m.gpu)}</select>`,
     `<span class="results-label">${gpus.length} ${esc(B("个型号", "types"))} · ${totalAvail.toLocaleString()} ${esc(B("卡可分配", "GPUs available"))}</span>`,
     `</div>`,
 

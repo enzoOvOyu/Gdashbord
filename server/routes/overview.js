@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { get } from "../store.js";
-import { costSummary } from "../services/cost.js";
+import { get, save } from "../store.js";
+import { costSummary, budgetInsight } from "../services/cost.js";
 import { fleetFromState } from "../data/fleet.js";
 
 export default function overviewRouter() {
@@ -10,12 +10,17 @@ export default function overviewRouter() {
     const s = get();
     const cost = costSummary(s);
     const f = fleetFromState(s);
+    const insight = budgetInsight(s); // 与费用中心同源：预算使用率 / 环比 / 账单历史
+    save();
 
     const runningGpus = f.allocated;
     const endpointGpus = (s.endpoints || []).reduce((a, x) => a + Number(x.replicas || 0) * Number(x.gpusPerReplica || 1), 0);
     const done = (s.jobs || []).filter((x) => x.status === "completed").length;
     const failed = (s.jobs || []).filter((x) => x.status === "failed").length;
-    const rate = (done + failed) ? Math.round((done / (done + failed)) * 1000) / 10 : 96.8;
+    const terminal = done + failed;
+    // 口径修正：终态样本过少时百分比没有统计意义（2 个样本里 0 个成功 ≠ 成功率 0%），
+    // 这里低于 3 个样本直接返回 null，由前端展示「暂无终态样本」。
+    const rate = terminal >= 3 ? Math.round((done / terminal) * 1000) / 10 : null;
 
     const tenants = s.admin?.tenants || [];
     const users = s.admin?.users || [];
@@ -31,7 +36,10 @@ export default function overviewRouter() {
         endpointsTotal: (s.endpoints || []).length,
         jobsRunning: runningJobs,
         jobsQueued: queuedJobs,
-        jobSuccessRate: rate + "%",
+        jobSuccessRate: rate === null ? "—" : rate + "%",
+        jobSuccessSample: terminal,
+        budgetUsedPct: insight.usedPct,
+        budgetOver: insight.overBudget,
         monthCost: cost.monthly,
         hourlyCost: cost.hourly,
         runningGpus,
@@ -53,6 +61,7 @@ export default function overviewRouter() {
       balance: s.balance,
       budget: s.budget,
       currency: cost.currency,
+      insight,
     });
   });
   return r;

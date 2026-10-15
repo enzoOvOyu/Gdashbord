@@ -5,28 +5,64 @@ import { header, metric, section, btn, esc, money, chart, tabs, segmented, field
 const S = (zh, en) => ({ zh, en });
 const colors = ["#ff6000", "#f9a825", "#34383b", "#ffcc32"];
 
+// 百分比展示：超过 100% 时保留整数位即可，避免「1586.3%」这类过长数字挤压卡片
+const pct = (v) => (Math.abs(v) >= 100 ? Math.round(v) + "%" : v.toFixed(1) + "%");
+
 export default async function billingPage(S0) {
   const b = await api.billing();
   const tab = S0.billingTab;
-  const p = Math.min(100, (b.monthCost / (b.budget || 30000)) * 100);
+  // 预算与环比由服务端实算（services/cost.js → budgetInsight），与总览同源
+  const ins = b.insight || {};
+  const budget = Number(b.budget || 0);
+  // 口径修正：预算使用率取整后不再做 100% 截断，超支必须可见；
+  // 只有进度条的填充宽度取 min(100)，防止"刚好用完"的错觉。
+  const p = ins.usedPct != null ? ins.usedPct : (budget > 0 ? (b.monthCost / budget) * 100 : 0);
+  const barW = Math.min(100, p);
+  const over = p > 100;
+  const warn = !over && p >= 80;
+  const barCls = "progress mt12" + (over ? " over" : warn ? " warn" : "");
+  const delta = ins.deltaPct;
+  const deltaLabel = delta == null
+    ? L(S("暂无环比", "n/a"))
+    : (delta >= 0 ? "↑ " : "↓ ") + Math.abs(delta).toFixed(1) + "%";
+  const history = ins.history || [];
+  const trendValues = history.map((x) => Number(x.cost) || 0);
+  const trendLabels = history.map((x) => x.label || x.key);
   const m = await api.metrics("gpu", S0.billingRange === "7d" ? "24h" : "7d");
 
   return [
     header(S("费用中心与 FinOps", "Billing & FinOps"), S("按项目、工作负载和 GPU 规格分析成本，管理预算、用量配额与费用优化。", "Analyze cost by project, workload and GPU SKU; manage budget, quotas and optimization."),
-      `<a class="btn" href="/api/billing/export">${esc(t("common.copy"))} CSV</a>` + btn(S("＋ 账户充值", "＋ Add credits"), "recharge", "primary")),
+      `<a class="btn" href="/api/billing/export">${esc(L(S("导出 CSV", "Export CSV")))}</a>` + btn(S("＋ 账户充值", "＋ Add credits"), "recharge", "primary")),
     tabs([["overview", S("费用概览", "Overview")], ["details", S("成本明细", "Line items")], ["budgets", S("预算与告警", "Budget & alerts")]], tab, "billingTab"),
     `<div class="grid cols-4 mb16 kpi-row">`,
     metric(S("账户余额", "Balance"), money(b.balance), S("账户余额 · USD", "Account balance · USD"), "<i class='bi bi-cash-stack'></i>", "", "hero"),
-    metric(S("月度预估消费", "Monthly estimate"), money(b.monthCost), `${b.hoursPerMonth || 730}h · ${b.gpuCount || 0} GPU`, "<i class='bi bi-cpu'></i>", "↓ 8.6%", ""),
+    metric(S("月度预估消费", "Monthly estimate"), money(b.monthCost), `${b.hoursPerMonth || 730}h · ${b.gpuCount || 0} GPU`, "<i class='bi bi-cpu'></i>", deltaLabel, ""),
     metric(S("当前小时费率", "Current hourly rate"), money(b.hourlyCost || 0), S("含存储与快照", "Incl. storage & snapshots"), "<i class='bi bi-lightning-charge-fill'></i>", "", ""),
-    metric(S("预算使用率", "Budget used"), Math.round(p) + "%", L(S("月度预算", "Monthly budget")) + " " + money(b.budget), "<i class='bi bi-clock-history'></i>", "", ""),
+    metric(S("预算使用率", "Budget used"), pct(p), L(S("月度预算", "Monthly budget")) + " " + money(budget), "<i class='bi bi-clock-history'></i>", "", over ? "danger" : warn ? "warn" : ""),
     `</div>`,
+
+    // 超支 / 临阈警示：把「超了多少、月底会到多少」直接说清楚
+    over || warn
+      ? `<div class="callout ${over ? "danger" : "warn"} mb16"><i class="bi ${over ? "bi-exclamation-octagon-fill" : "bi-exclamation-triangle-fill"}"></i>
+          <b>${esc(L(over ? S("已超出月度预算", "Monthly budget exceeded") : S("接近预算阈值", "Approaching budget threshold")))}：</b>
+          ${esc(L(S("当前", "Spend")))} ${money(b.monthCost)} · ${esc(L(S("预算", "Budget")))} ${money(budget)} · ${esc(L(S("使用率", "Used")))} <b>${pct(p)}</b>${
+            over ? ` · ${esc(L(S("超支", "Overage")))} <b>${money(ins.overage || 0)}</b>` : ""
+          }${ins.forecast ? ` · ${esc(L(S("按当前速率月底预计", "Month-end forecast")))} ${money(ins.forecast)}` : ""}
+        </div>`
+      : "",
+
     tab === "overview"
       ? [
           `<div class="split-65 mb16">`,
           `<div class="card card-pad">${section(S("费用趋势", "Cost over time"), segmented([["7d", S("近7天", "7d")], ["30d", S("近30天", "30d")]], S0.billingRange, "billingRange"))}`,
-          `<div class="billing-total">${money(b.monthCost)} <span class="pill orange">+ 12.6%</span></div>`,
-          `${chart(m.primary, { color: "#ff6000", height: 205 })}<div class="row between tiny-text"><span>${esc(L(S("期初", "Period start")))}</span><span>${esc(L(S("期末", "Period end")))}</span></div><div class="small muted mt12">USD</div></div>`,
+          `<div class="billing-total">${money(b.monthCost)} <span class="pill ${over ? "red" : delta == null ? "gray" : delta >= 0 ? "orange" : "green"}">${deltaLabel}</span></div>`,
+          // 图表：Y 轴带刻度，X 轴为真实月份，hover 可读取具体数值
+          `${chart(trendValues.length ? trendValues : m.primary, {
+            color: "#ff6000",
+            height: 205,
+            xLabels: trendLabels,
+            ariaLabel: "Monthly cost trend",
+          })}<div class="small muted mt12">USD · ${esc(L(S("按月账单（当月为实算预估）", "Monthly bills (current month is a live estimate)")))}</div></div>`,
           `<div class="card card-pad">${section(S("按工作负载分摊", "Cost breakdown"))}`,
           `<div class="stacked">${b.bills.map((x, i) => `<i style="width:${x.pct}%;background:${colors[i]}"></i>`).join("")}</div>`,
           `<div class="bill-breakdown">${b.bills.map((x, i) => `<div class="bill-row"><span class="bill-mark" style="background:${colors[i]}"></span><span class="bill-name">${esc(L(x.name))} <span class="tiny-text">${x.pct}%</span></span><span class="bill-val">${money(x.cost)}</span></div>`).join("")}</div>`,
@@ -46,7 +82,10 @@ export default async function billingPage(S0) {
           `<div class="card card-pad">${section(S("月度预算与阈值", "Monthly budget & thresholds"))}<div class="form-grid">`,
           field(S("月度预算（USD）", "Monthly budget (USD)"), `<input id="budget-input" type="number" min="100" step="100" value="${b.budget}"/>`),
           field(S("通知阈值", "Alert threshold"), `<select><option>80%</option><option>50%</option><option>95%</option></select>`),
-          `</div><div class="between mt16"><b>${esc(L(S("已使用", "Used")))} ${money(b.monthCost)}</b><b>${p.toFixed(1)}%</b></div><div class="progress mt12"><span style="width:${p}%"></span></div>`,
+          `</div><div class="between mt16"><b>${esc(L(S("已使用", "Used")))} ${money(b.monthCost)}</b><b>${pct(p)}</b></div><div class="${barCls}"><span style="width:${barW}%"></span></div>`,
+          over
+            ? `<div class="callout danger mt16">${esc(L(S("消费已超出预算", "Spend has exceeded the budget")))} ${money(ins.overage || 0)}${ins.forecastOverage ? ` · ${esc(L(S("按当前速率月底超支约", "Projected overage by month end")))} ${money(ins.forecastOverage)}` : ""}</div>`
+            : "",
           `<div class="callout mt16">${esc(L(S("预算不等于硬性消费上限。真实系统应结合项目配额、服务副本上限、实例自动关机与告警通知。", "A budget is not a hard cap. Production systems combine quotas, replica limits, auto-shutdown and alerts.")))}</div>`,
           btn(S("保存预算设置", "Save budget"), "save-budget", "primary mt16"),
           `</div>`,
@@ -54,7 +93,7 @@ export default async function billingPage(S0) {
           [[S("项目成本中心", "Project cost center"), S("按项目 / 标签聚合 GPU 消费", "Aggregate GPU spend by project / tag")],
            [S("用量配额", "Usage quotas"), S("GPU 卡数、Endpoint 副本、存储限额", "GPU count, endpoint replicas, storage caps")],
            [S("异常消费检测", "Anomaly detection"), S("费用突增、空闲 GPU、低利用率", "Spend spikes, idle GPUs, low utilization")],
-           [S("资源生命周期", "Resource lifecycle"), S("自动关机、Scale-to-Zero、过期释放", "Auto-shutdown, scale-to-zero, expiry")]]
+           [S("资源生命周期", "Resource lifecycle"), S("自动关机、Scale-to-Zero、过期释放", "Auto shutdown, scale-to-zero, expiry release")]]
             .map((x) => `<div class="flex"><span class="pill blue"><i class='bi bi-check2-circle'></i></span><div><b>${esc(L(x[0]))}</b><div class="small muted" style="margin-top:4px">${esc(L(x[1]))}</div></div></div>`).join(""),
           `</div></div></div>`,
         ].join(""),

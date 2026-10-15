@@ -1,9 +1,14 @@
 // GPU Pods（工作空间与实例）— 按素材包 Pods 页重构：
 // stat KPI → 筛选 tabs(带计数)+搜索 → pod-card 卡片流（ident/meta/4 项利用率/操作排）→ 停止态 Storage billed 语义
 import { api } from "../api.js";
-import { header, metric, section, btn, esc, money, status, gpu, t, L } from "../ui.js";
+import { save } from "../store.js";
+import { header, metric, section, btn, esc, money, status, gpu, pager, t, L } from "../ui.js";
 
 const B = (zh, en) => ({ zh, en });
+
+// 分页大小：一次性渲染上千张卡片会产生两万多个 DOM 节点，
+// 首屏渲染与每次输入都会被拖慢，这里按页切片渲染。
+const PAGE_SIZE = 24;
 
 // pod-card：素材包卡片结构（pod-top / pod-meta / pod-middle 4 进度 / pod-footer）
 function podCard(x, selected) {
@@ -68,7 +73,12 @@ export default async function instancesPage(S) {
 
   const f = S.instanceFilter === "running" ? "running" : S.instanceFilter === "stopped" ? "stopped" : "all";
   const q = (S.instanceQuery || "").toLowerCase();
-  const list = all.filter((x) => (f === "all" || x.status === f) && (!q || (x.name + " " + x.gpu + " " + x.id).toLowerCase().includes(q)));
+  const filtered = all.filter((x) => (f === "all" || x.status === f) && (!q || (x.name + " " + x.gpu + " " + x.id).toLowerCase().includes(q)));
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const page = Math.min(Math.max(1, Number(S.instancePage) || 1), totalPages);
+  if (page !== Number(S.instancePage)) { S.instancePage = page; save(); }
+  const list = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return [
     header("ins.title", "ins.sub",
@@ -92,9 +102,10 @@ export default async function instancesPage(S) {
     `<label class="search-field"><i class="bi bi-search"></i><input value="${esc(S.instanceQuery || "")}" data-set="instanceQuery" placeholder="${esc(L(B("搜索 Pods...", "Search Pods...")))}"/></label>`,
     `</div>`,
 
-    // Pod 卡片流
+    // Pod 卡片流（分页 + 响应式多列网格）
     list.length
-      ? `<div class="pod-list">${list.map((x) => podCard(x, S.selectedInstance === x.id)).join("")}</div>`
+      ? `<div class="pod-list pod-grid">${list.map((x) => podCard(x, S.selectedInstance === x.id)).join("")}</div>`
+        + pager(page, totalPages, "page", filtered.length, PAGE_SIZE)
       : `<div class="empty-state"><div class="empty-icon"><i class="bi bi-search"></i></div><h3>${esc(L(B("没有匹配的 Pods", "No matching Pods")))}</h3><p>${esc(L(B("试试调整筛选条件，或部署一个新的 GPU Pod。", "Adjust filters, or deploy a new GPU Pod.")))}</p>${btn(`<i class="bi bi-plus-lg"></i> ${esc(L(B("部署 Pod", "Deploy Pod")))}`, "create-workspace", "primary")}</div>`,
 
     `<div class="notice mt16"><i class="bi bi-shield-check"></i> ${esc(L(B(

@@ -270,6 +270,7 @@ export function fleetFromState(s) {
   const byRegion = {};
   const byModel = {};
   const byZone = {};
+  const byRegionModel = {}; // region×gpu 交叉口径：供算力市场按型号 / 区域展示真实空闲库存
   const health = { healthy: 0, degraded: 0, provisioning: 0, maintenance: 0 };
 
   const demand = workloadDemand(s);
@@ -338,12 +339,17 @@ export function fleetFromState(s) {
     byZone[c.zone] = byZone[c.zone] || { zone: c.zone, region: c.region, total: 0, allocated: 0, free: 0 };
     byZone[c.zone].total += c.count;
     byZone[c.zone].allocated += used;
+    const rmKey = c.region + ":" + c.gpu;
+    byRegionModel[rmKey] = byRegionModel[rmKey] || { region: c.region, gpu: c.gpu, total: 0, allocated: 0, free: 0 };
+    byRegionModel[rmKey].total += c.count;
+    byRegionModel[rmKey].allocated += used;
     const healthKey = c.status === "running" ? "healthy" : c.status;
     if (health[healthKey] !== undefined) health[healthKey] += 1;
   }
   for (const k in byRegion) byRegion[k].free = byRegion[k].total - byRegion[k].allocated;
   for (const k in byModel) byModel[k].free = byModel[k].total - byModel[k].allocated;
   for (const k in byZone) byZone[k].free = byZone[k].total - byZone[k].allocated;
+  for (const k in byRegionModel) byRegionModel[k].free = byRegionModel[k].total - byRegionModel[k].allocated;
   const free = total - allocated;
   return {
     total,
@@ -357,6 +363,7 @@ export function fleetFromState(s) {
     byRegion: Object.values(byRegion),
     byModel: Object.values(byModel),
     byZone: Object.values(byZone),
+    byRegionModel: Object.values(byRegionModel),
     health,
     tenantUsage,
     _assigned: assigned,

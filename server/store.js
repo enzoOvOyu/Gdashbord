@@ -25,18 +25,40 @@ export function load() {
     console.error("[store] 读取状态失败，回退种子数据:", e.message);
   }
   if (!state) state = seed();
-  save();
+  flush();
   return state;
 }
 
-export function save() {
+let saveTimer = null;
+let dirty = false;
+
+// 落盘：同步写，保证退出前数据不丢
+export function flush() {
+  if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
+  if (!dirty || !state) return;
   try {
     ensureDir(config.dataFile);
     fs.writeFileSync(config.dataFile, JSON.stringify(state, null, 2));
+    dirty = false;
   } catch (e) {
     console.error("[store] 持久化失败:", e.message);
   }
 }
+
+// 保存：合并高频写入（批量部署 / 连续 PATCH）后延迟落盘，
+// 避免上千条数据时每条都触发一次全量 JSON 序列化 + 磁盘同步写。
+export function save() {
+  dirty = true;
+  if (saveTimer) return;
+  saveTimer = setTimeout(flush, 120);
+}
+
+["exit", "SIGINT", "SIGTERM"].forEach((sig) => {
+  process.on(sig, () => {
+    flush();
+    if (sig !== "exit") process.exit(0);
+  });
+});
 
 export function get() {
   return load();
