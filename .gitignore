@@ -10,7 +10,7 @@ coverage
 .env.*.local
 
 # ===== Docker 运行时数据（落盘在仓库内但不入版本库）=====
-.docker-data
+docker/postgres/data
 
 # ===== 日志 =====
 *.log
@@ -30,3 +30,6 @@ pnpm-debug.log*
 
 # ===== 项目内部记忆（不入版本库）=====
 .workbuddy
+
+# ===== pnpm 内容寻址存储(缓存, 不入版本库) =====
+.pnpm-store

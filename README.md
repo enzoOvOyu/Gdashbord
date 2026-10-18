@@ -49,8 +49,18 @@ docker compose up -d   # 前台容器 frontend + 数据库 db + 管理 UI admine
 - 前端：**http://localhost:5173**
 - PostgreSQL：**localhost:5432**（库/用户/口令见 `.env`，默认 `runsun/runsun/runsun`）
 - Adminer（数据库管理）：**http://localhost:8081**
-- 数据落盘：`.docker-data/postgres`（已 gitignore，销毁用 `docker compose down -v`）
+- 数据落盘：`./docker/postgres/data`（已 gitignore，销毁用 `docker compose down -v`）
 - 初始化：`docker/postgres/init/*.sql` 在首次启动时被挂载到 `/docker-entrypoint-initdb.d` 自动执行
+
+### ⚠️ 容器出网代理（必须，否则前端容器起不来）
+
+前端容器启动时会执行 `pnpm install` 拉取 npm 包。若宿主网络需经代理访问外网（本机即如此），**容器默认不会自动走代理**，会卡在 `pnpm install` 导致前端容器无法就绪。
+
+- 代理已在 `docker-compose.yml` 的 `frontend.environment` 中配置，指向宿主代理 `host.docker.internal:<端口>`（容器内解析到宿主网关）。
+- 端口取自 `.env` 的 `COMPOSE_HTTP_PROXY` / `COMPOSE_HTTPS_PROXY`，默认 `62294`，**须与你的宿主代理端口一致**。
+- 查看/修改宿主代理端口：`echo $HTTP_PROXY`（本机）；
+- 若端口变动，同步修改 `.env`（以及 `.env.example`）中的这两个值后，执行 `docker compose up -d --build` 重新生效。
+- 说明：Docker daemon 自身的镜像拉取代理（`http.docker.internal:3128`）由 Docker Desktop 自动注入，与上面"容器内出网代理"是两回事。
 
 ## 环境变量（ARCH §12.7，构建期注入，仅 `VITE_*` 进前端产物）
 

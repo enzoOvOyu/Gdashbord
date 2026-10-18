@@ -33,6 +33,14 @@ services:
       - VITE_MOCK_SEED=${VITE_MOCK_SEED:-20261017}
       - VITE_ENABLE_CONSISTENCY_CHECK=${VITE_ENABLE_CONSISTENCY_CHECK:-true}
       - VITE_MOCK_FAULT=${VITE_MOCK_FAULT:-}
+      # 容器访问外网所需的代理：指向宿主代理（host.docker.internal 解析到宿主网关）。
+      # 默认端口取自宿主代理（见 .env 的 COMPOSE_HTTP_PROXY / COMPOSE_HTTPS_PROXY）。
+      # 若宿主代理端口变动，请同步修改 .env 中这两个值。
+      - HTTP_PROXY=${COMPOSE_HTTP_PROXY}
+      - HTTPS_PROXY=${COMPOSE_HTTPS_PROXY}
+      - http_proxy=${COMPOSE_HTTP_PROXY}
+      - https_proxy=${COMPOSE_HTTPS_PROXY}
+      - NO_PROXY=localhost,127.0.0.1,db,adminer,host.docker.internal
     ports:
       - "5173:5173"
     volumes:
