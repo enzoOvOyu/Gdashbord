@@ -27,7 +27,13 @@ export type UserRole = 'owner' | 'admin' | 'member' | 'billing' | 'viewer';
 export type OrderStatus = 'pending' | 'provisioning' | 'fulfilled' | 'failed';
 export type StepState = 'pending' | 'running' | 'done' | 'failed' | 'skipped';
 export type EventLevel = 'info' | 'warning' | 'error' | 'success';
-export type RateUnit = 'per_gpu_hour' | 'per_gb_hour' | 'per_instance_hour';
+/** 计费单位（ARCH §12.4）：裸金属按「台·小时」，vGPU 控制面按「集群·小时」 */
+export type RateUnit =
+  | 'per_gpu_hour'
+  | 'per_gb_hour'
+  | 'per_instance_hour'
+  | 'per_machine_hour'
+  | 'per_cluster_hour';
 export type QuotaMetric = 'gpu' | 'vcpu' | 'storage_gb' | 'public_ip';
 export type SourceType = 'direct' | 'image' | 'model' | 'template' | 'notebook';
 export type InvoiceStatus = 'open' | 'paid' | 'overdue' | 'void';
@@ -64,33 +70,73 @@ export interface GpuVmSpec {
   ports?: number[];
   ssh_pubkey?: string;
 }
+/** 裸金属：整机采购，数量语义为「台」（PRD §4.2.2），gpu_count 仅为展示用的总卡数 */
 export interface GpuBareMetalSpec {
   machine_type: string;
+  /** 台数（计费数量单位 = 台） */
+  machine_count: number;
   gpu_model: string;
+  /** 整机总卡数 = 台数 × gpus_per_node（仅展示，不计费） */
   gpu_count: number;
   passthrough: boolean;
+  mig_partition?: string | null;
   cpu_model: string;
   local_nvme_gb: number;
+  raid_level: 'none' | 'raid0' | 'raid1' | 'raid10';
   ipmi_enabled?: boolean;
+  bmc_network?: 'shared' | 'dedicated';
   ib_enabled?: boolean;
+  hostname_prefix?: string;
+  firmware_baseline?: string;
+}
+/** vGPU 节点池条目（§4.2.3：支持多节点池） */
+export interface VgpuPoolEntry {
+  node_pool: string;
+  node_count: number;
+  slicing_policy: 'none' | 'mig' | 'time_slicing' | 'mps';
+  mig_profile?: string | null;
+  time_slice_share?: number | null;
+  autoscale?: { min: number; max: number } | null;
 }
 export interface VgpuSpec {
   k8s_version: string;
+  control_plane_tier: 'standard' | 'ha';
+  api_server_public?: boolean;
+  api_server_allow_cidrs?: string[];
+  pools: VgpuPoolEntry[];
+  /** 节点总数（= Σ 各池节点数） */
   node_count: number;
   gpu_count: number;
-  slicing_policy: string;
-  storage_gb: number;
-  network_plugin?: string;
+  network_plugin: 'cilium' | 'calico';
   ingress_enabled?: boolean;
+  ingress_class?: string | null;
+  ib_enabled?: boolean;
+  storage_class: 'ssd' | 'nvme' | 'shared-fs';
+  default_pvc_gb?: number;
+  storage_gb: number;
+  kubeconfig_access: 'download' | 'console';
+  rbac_default_admin?: boolean;
 }
 export interface InferenceSpec {
   model_ref: string;
+  model_slug: string;
+  quantization: 'bf16' | 'fp8' | 'fp4' | 'awq';
+  max_model_len: number;
   replicas: number;
+  /** 单副本 GPU 数 */
   gpu_count: number;
   port: number;
+  engine: 'vllm' | 'sglang' | 'trt-llm';
   auth_enabled: boolean;
-  hpa?: { min: number; max: number; target: string };
-  traffic_split?: Array<{ version: string; weight: number }>;
+  api_key?: string | null;
+  max_batch_size?: number;
+  enable_prefix_caching?: boolean;
+  enable_chunked_prefill?: boolean;
+  hpa?: { min: number; max: number; metric: string; target: number } | null;
+  canary?: { replicas: number; traffic_percent: number } | null;
+  cold_standby?: boolean;
+  warmup_prompt?: string | null;
+  env?: Record<string, string>;
 }
 export type ResourceSpec =
   | GpuVmSpec
@@ -130,6 +176,11 @@ export interface Project {
   org_id: InternalId;
   name: string;
   slug: string;
+  /** 默认项目（slug='default'）不可删除（PRD §3.5） */
+  is_default: boolean;
+  /** 该项目的默认区域（项目与区域共同构成成本归集维度） */
+  default_region: RegionCode;
+  created_at: string;
 }
 
 /** 资源实例主表（resources）— 对外暴露 resource_uuid / display_id */
@@ -177,7 +228,8 @@ export interface ProvisioningStep {
   id: InternalId;
   resource_id: InternalId;
   seq: number;
-  step_key: 'schedule' | 'provision' | 'pull_image' | 'attach_storage' | 'ready';
+  /** 步骤名按资源类型区分（MOCK-DATA §5.1 PROVISION_SUBSTEPS） */
+  step_key: string;
   state: StepState;
   message: string | null;
   started_at: string | null;
@@ -304,11 +356,47 @@ export interface Invoice {
 }
 export interface BillingTransaction {
   id: InternalId;
+  org_id: InternalId;
   type: TxnType;
   amount: number;
   balance_after: number;
   reference_type: string | null;
+  reference_id: string | null;
+  summary: string;
   created_at: string;
+}
+/** 结构化逐行日志（PRD §4.4.1 日志页 / §4.3.4 推理日志 Tab，Modal 风格） */
+export interface LogEntry {
+  id: string;
+  ts: string;
+  level: 'debug' | 'info' | 'warning' | 'error';
+  region: RegionCode;
+  resource_id: InternalId | null;
+  resource_uuid: string | null;
+  source: string;
+  message: string;
+  request_id?: string | null;
+  route?: string | null;
+  status?: number | null;
+  latency_ms?: number | null;
+  traceback?: string | null;
+}
+/** 用量明细行（PRD §7.8 ③，UNIQUE(resource_id, usage_hour, unit)） */
+export interface UsageRow extends BillingUsage {
+  resource_uuid: string;
+  resource_name: string;
+  project_name: string;
+}
+/** 成本页四维下钻聚合结果（PRD §4.4.1 成本分析） */
+export interface CostSlice {
+  key: string;
+  label: string;
+  kind: ResourceKind | null;
+  amount: number;
+  gpu_hours: number;
+  storage_gb_hours: number;
+  share: number;
+  resources: Array<{ uuid: string; name: string; amount: number }>;
 }
 
 export interface ModelItem {

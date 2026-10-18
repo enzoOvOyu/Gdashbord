@@ -147,7 +147,11 @@ function bareMetalMetrics(r: Resource, range: RangeKey): MetricSeries[] {
 
 // ─────────── vGPU · 托管 K8s（§6.4） ───────────
 function vgpuMetrics(r: Resource, range: RangeKey): MetricSeries[] {
-  const specJson = r.spec_json as { k8s_version: string; node_count: number; slicing_policy: string };
+  const specJson = r.spec_json as unknown as {
+    k8s_version: string;
+    node_count: number;
+    slicing_policy: string;
+  };
   const apiP99 = series(r, 'apiserver_latency_p99', range, 60, 480);
   const etcdP99 = series(r, 'etcd_fsync_p99', range, 2, 9);
   const alloc = series(r, 'gpu_allocation', range, 55, 92);

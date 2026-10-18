@@ -32,3 +32,18 @@ ON CONFLICT (email) DO NOTHING;
 INSERT INTO projects (org_id, name, slug) VALUES
   ((SELECT id FROM orgs WHERE slug = 'runsun-demo'), 'Default Project', 'default')
 ON CONFLICT (org_id, slug) DO NOTHING;
+
+-- ---- 配额（PRD §7.3：作用域 (org_id, resource_kind?, region?)；used_value 为派生值默认 0）----
+-- 与 Mock fixtures/users-orgs.ts 的 QUOTAS 严格同源：4 区域 × 4 指标 = 16 行，
+-- limit 按种子资源在该区域的占用量预留 10%–40% 水位（th 的 GPU 为 94% 紧张水位，演示告警路径）。
+INSERT INTO quotas (org_id, resource_kind, region, metric, limit_value)
+SELECT o.id, NULL, q.region::region_code, q.metric::quota_metric, q.limit_value
+FROM orgs o
+CROSS JOIN (VALUES
+  ('jp', 'gpu',         48),    ('jp', 'vcpu',        640),   ('jp', 'storage_gb',  12288), ('jp', 'public_ip',   6),
+  ('th', 'gpu',         16),    ('th', 'vcpu',        256),   ('th', 'storage_gb',  4096),  ('th', 'public_ip',   8),
+  ('sg', 'gpu',         32),    ('sg', 'vcpu',        320),   ('sg', 'storage_gb',  16384), ('sg', 'public_ip',   8),
+  ('us', 'gpu',         96),    ('us', 'vcpu',        1280),  ('us', 'storage_gb',  40960), ('us', 'public_ip',   16)
+) AS q(region, metric, limit_value)
+WHERE o.slug = 'runsun-demo'
+ON CONFLICT (org_id, resource_kind, region, metric) DO NOTHING;

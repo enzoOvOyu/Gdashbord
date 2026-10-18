@@ -1,171 +1,162 @@
-// 部署向导数据契约（ARCH §12.9 `spec_json` 契约 + PRD §4.2 六步向导）
-// requested_spec（订单请求）与 spec_json（实际供给）皆过 Zod，允许存在调度降级差异。
+// 四类向导的分步校验 schema（PRD §4.2.0：进入下一步前必须通过当前步校验）
+// 单一来源：本文件枚举与领域类型对齐，禁止在表单里另写一套。
 import { z } from 'zod';
+import { REGION_LIST, NODE_POOL_LIST } from '../../lib/ids';
 
-// ─────────── 枚举（与 types/domain.ts 单一来源保持一致） ───────────
-export const REGION_CODES = ['jp', 'th', 'sg', 'us'] as const;
-export const NODE_POOL_CODES = [
-  'H100_SXM',
-  'H200_NVL',
-  'B200_NVL72',
-  'B300',
-  'GB300_NVL72',
-] as const;
-export const RESOURCE_KINDS = [
-  'gpu_vm',
-  'gpu_baremetal',
-  'vgpu',
-  'inference',
-] as const;
+const region = z.enum(REGION_LIST as [string, ...string[]]);
+const pool = z.enum(NODE_POOL_LIST as [string, ...string[]]);
 
-export const regionSchema = z.enum(REGION_CODES);
-export const nodePoolSchema = z.enum(NODE_POOL_CODES);
-export const resourceKindSchema = z.enum(RESOURCE_KINDS);
-
-// ─────────── 四步公共字段 ───────────
-const base = {
-  /** 实例/集群名称 */
+/** 公共第 1 步：项目与区域（§4.2.0） */
+export const projectRegionSchema = z.object({
+  project_id: z.number().min(1, '请选择项目（可在下方直接新建）'),
+  region,
   name: z
     .string()
-    .min(2, '名称至少 2 个字符')
-    .max(63, '名称最多 63 个字符')
-    .regex(/^[a-zA-Z0-9][a-zA-Z0-9-_]*$/, '仅支持字母、数字、- 与 _，且以字母或数字开头'),
-  region: regionSchema,
-  node_pool: nodePoolSchema,
-};
+    .trim()
+    .min(3, '名称至少 3 个字符')
+    .max(63, '名称最多 63 个字符'),
+  labels: z.array(z.string()).optional(),
+});
 
-// ─────────── §12.9 spec_json 契约（逐键对齐） ───────────
-
-/** gpu_vm 必需：gpu_model/gpu_count/vcpu/memory_gb/storage_gb/image_ref；可选：env/ports/ssh_pubkey */
-export const gpuVmSpecSchema = z.object({
-  gpu_model: z.string().min(1, '请选择 GPU 型号'),
+// ─────────── ① GPU 云服务器 ───────────
+export const vmStep2Schema = z.object({
+  node_pool: pool,
   gpu_count: z.number().int().min(1, '至少 1 张 GPU').max(8),
-  vcpu: z.number().int().min(2).max(224),
-  memory_gb: z.number().min(8).max(2048),
-  storage_gb: z.number().min(20, '系统盘至少 20 GB').max(16384),
+  vcpu: z.number().int().min(4),
+  memory_gb: z.number().int().min(16),
+});
+export const vmStep3Schema = z.object({
   image_ref: z.string().min(1, '请选择镜像'),
-  env: z.record(z.string()).optional(),
-  ports: z.array(z.number().int().min(1).max(65535)).optional(),
-  ssh_pubkey: z.string().optional(),
+  system_disk_gb: z
+    .number()
+    .int()
+    .min(40, '系统盘 40–2048 GB')
+    .max(2048, '系统盘 40–2048 GB'),
+  data_disk_gb: z.number().int().min(0).max(32768),
+  system_disk_type: z.enum(['nvme_ssd', 'ssd']),
+});
+export const vmStep4Schema = z.object({
+  vpc: z.string().min(1, '请选择 VPC'),
+  subnet: z.string().min(1, '请选择子网'),
+  security_group: z.string().min(1, '请选择安全组'),
+  public_ip: z.boolean(),
+  bandwidth_mbps: z.number().int().min(1).max(1000),
+  ssh_pubkey: z.string().min(10, '请填入 SSH 公钥'),
+});
+export const vmStep5Schema = z.object({
+  quantity: z.number().int().min(1, '至少 1 台').max(50, '单次最多 50 台'),
+  auto_shutdown_idle_min: z.number().int().min(0).max(120),
 });
 
-/** gpu_baremetal 必需：machine_type/gpu_model/gpu_count/passthrough/cpu_model/local_nvme_gb；可选：ipmi_enabled/ib_enabled */
-export const gpuBareMetalSpecSchema = z.object({
-  machine_type: z.string().min(1, '请选择机型'),
-  gpu_model: z.string().min(1, '请选择 GPU 型号'),
-  gpu_count: z.number().int().min(1).max(72),
+// ─────────── ② GPU 裸金属（按「台」） ───────────
+export const bmStep2Schema = z.object({
+  machine_type: pool,
+});
+export const bmStep3Schema = z.object({
+  machine_count: z
+    .number()
+    .int()
+    .min(1, '至少 1 台')
+    .max(32, '最多 32 台，批量采购请提工单'),
   passthrough: z.boolean(),
-  cpu_model: z.string().min(1),
-  local_nvme_gb: z.number().min(0).max(61440),
-  ipmi_enabled: z.boolean().optional(),
-  ib_enabled: z.boolean().optional(),
+  mig_partition: z.string().optional(),
+  raid_level: z.enum(['none', 'raid0', 'raid1', 'raid10']),
+});
+export const bmStep4Schema = z.object({
+  vpc: z.string().min(1, '请选择 VPC'),
+  subnet: z.string().min(1, '请选择子网'),
+  ib_enabled: z.boolean(),
+  ipmi_enabled: z.boolean(),
+  bmc_network: z.enum(['shared', 'dedicated']),
+});
+export const bmStep5Schema = z.object({
+  image_ref: z.string().min(1, '请选择 OS 镜像'),
+  hostname_prefix: z
+    .string()
+    .trim()
+    .min(2, '主机名前缀至少 2 个字符')
+    .max(24, '主机名前缀最多 24 个字符'),
+  ssh_pubkey: z.string().min(10, '请填入 SSH 公钥'),
+  firmware_baseline: z.enum(['recommended', 'latest']),
 });
 
-/** vgpu 必需：k8s_version/node_count/gpu_count/slicing_policy/storage_gb；可选：network_plugin/ingress_enabled */
-export const vgpuSpecSchema = z.object({
-  k8s_version: z.string().min(1, '请选择 K8s 版本'),
-  node_count: z.number().int().min(1, '至少 1 个节点').max(64),
-  gpu_count: z.number().int().min(1).max(72),
-  slicing_policy: z.string().min(1, '请选择 GPU 切片策略'),
-  storage_gb: z.number().min(20).max(32768),
-  network_plugin: z.string().optional(),
-  ingress_enabled: z.boolean().optional(),
+// ─────────── ③ vGPU（托管 K8s） ───────────
+export const vgpuStep2Schema = z.object({
+  k8s_version: z.enum(['1.28', '1.29', '1.30', '1.31']),
+  control_plane_tier: z.enum(['standard', 'ha']),
+  api_server_public: z.boolean(),
+});
+export const vgpuStep3Schema = z.object({
+  pools: z
+    .array(
+      z.object({
+        node_pool: pool,
+        node_count: z.number().int().min(1).max(64),
+        slicing_policy: z.enum(['none', 'mig', 'time_slicing', 'mps']),
+        mig_profile: z.string().optional(),
+        time_slice_share: z.number().int().min(2).max(8).optional(),
+      }),
+    )
+    .min(1, '至少需要 1 个节点池')
+    .max(5, '最多 5 个节点池'),
+});
+export const vgpuStep4Schema = z.object({
+  vpc: z.string().min(1, '请选择 VPC'),
+  subnet: z.string().min(1, '请选择子网'),
+  network_plugin: z.enum(['cilium', 'calico']),
+  ingress_enabled: z.boolean(),
+  storage_class: z.enum(['ssd', 'nvme', 'shared-fs']),
+  default_pvc_gb: z.number().int().min(0).max(32768),
+});
+export const vgpuStep5Schema = z.object({
+  kubeconfig_access: z.enum(['download', 'console']),
+  rbac_default_admin: z.boolean(),
 });
 
-/** inference 必需：model_ref/replicas/gpu_count/port/auth_enabled；可选：hpa/traffic_split */
-export const inferenceSpecSchema = z.object({
-  model_ref: z.string().min(1, '请选择模型'),
-  replicas: z.number().int().min(1, '至少 1 个副本').max(64),
-  gpu_count: z.number().int().min(1).max(8),
-  port: z.number().int().min(1).max(65535),
+// ─────────── ④ 推理服务 ───────────
+export const infStep2Schema = z
+  .object({
+    model_slug: z.string().min(1, '请选择模型'),
+    quantization: z.enum(['bf16', 'fp8', 'fp4', 'awq']),
+    max_model_len: z.number().int().min(4096, '上下文 4096–1000000').max(1_000_000),
+    concurrency: z.number().int().min(1, '并发至少 1').max(512, '并发最多 512'),
+    avg_context_tokens: z.number().int().min(256, '平均上下文至少 256').max(1_000_000),
+  })
+  .refine((v) => v.avg_context_tokens <= v.max_model_len, {
+    message: '平均上下文不得超过最大上下文长度',
+    path: ['avg_context_tokens'],
+  });
+export const infStep3Schema = z.object({
+  replicas: z.number().int().min(1, '至少 1 个副本').max(32),
+  node_pool: pool,
+  gpu_per_replica: z.number().int().min(1).max(8),
+  hpa_enabled: z.boolean(),
+  hpa_min: z.number().int().min(1),
+  hpa_max: z.number().int().min(1).max(64),
+  hpa_metric: z.enum(['ttft_p99', 'kv_cache_usage', 'requests_waiting']),
+  hpa_target: z.number().min(1),
+});
+export const infStep4Schema = z.object({
+  engine: z.enum(['vllm', 'sglang', 'trt-llm']),
+  port: z.number().int().min(1, '端口 1–65535').max(65535),
   auth_enabled: z.boolean(),
-  hpa: z
-    .object({
-      min: z.number().int().min(1),
-      max: z.number().int().min(1),
-      target: z.string().min(1),
-    })
-    .optional(),
-  traffic_split: z
-    .array(z.object({ version: z.string().min(1), weight: z.number().min(0).max(100) }))
-    .optional(),
+  max_batch_size: z.number().int().min(1).max(512),
+  enable_prefix_caching: z.boolean(),
+  enable_chunked_prefill: z.boolean(),
+});
+export const infStep5Schema = z.object({
+  canary_enabled: z.boolean(),
+  canary_replicas: z.number().int().min(1).max(32),
+  traffic_percent: z.number().int().min(1).max(99),
+  cold_standby: z.boolean(),
 });
 
-export const resourceSpecSchema = z.discriminatedUnion('__kind', [
-  z.object({ __kind: z.literal('gpu_vm'), ...gpuVmSpecSchema.shape }),
-  z.object({ __kind: z.literal('gpu_baremetal'), ...gpuBareMetalSpecSchema.shape }),
-  z.object({ __kind: z.literal('vgpu'), ...vgpuSpecSchema.shape }),
-  z.object({ __kind: z.literal('inference'), ...inferenceSpecSchema.shape }),
-]);
+/** 逐步校验表：kind → 每一步 schema（含公共第 1 步） */
+export const WIZARD_STEP_SCHEMAS = {
+  gpu_vm: [projectRegionSchema, vmStep2Schema, vmStep3Schema, vmStep4Schema, vmStep5Schema],
+  gpu_baremetal: [projectRegionSchema, bmStep2Schema, bmStep3Schema, bmStep4Schema, bmStep5Schema],
+  vgpu: [projectRegionSchema, vgpuStep2Schema, vgpuStep3Schema, vgpuStep4Schema, vgpuStep5Schema],
+  inference: [projectRegionSchema, infStep2Schema, infStep3Schema, infStep4Schema, infStep5Schema],
+} as const;
 
-// ─────────── 向导表单：公共字段 + spec ───────────
-export const gpuVmFormSchema = z.object({ ...base, spec: gpuVmSpecSchema });
-export const gpuBareMetalFormSchema = z.object({ ...base, spec: gpuBareMetalSpecSchema });
-export const vgpuFormSchema = z.object({ ...base, spec: vgpuSpecSchema });
-export const inferenceFormSchema = z.object({ ...base, spec: inferenceSpecSchema });
-
-export type GpuVmForm = z.infer<typeof gpuVmFormSchema>;
-export type GpuBareMetalForm = z.infer<typeof gpuBareMetalFormSchema>;
-export type VgpuForm = z.infer<typeof vgpuFormSchema>;
-export type InferenceForm = z.infer<typeof inferenceFormSchema>;
-export type WizardForm = GpuVmForm | GpuBareMetalForm | VgpuForm | InferenceForm;
-
-/** 四 kinds 各自的规格 spec 键集合（用于从表单拆出 requested_spec） */
-const SPEC_KEYS: Record<string, readonly string[]> = {
-  gpu_vm: ['gpu_model', 'gpu_count', 'vcpu', 'memory_gb', 'storage_gb', 'image_ref', 'env', 'ports', 'ssh_pubkey'],
-  gpu_baremetal: ['machine_type', 'gpu_model', 'gpu_count', 'passthrough', 'cpu_model', 'local_nvme_gb', 'ipmi_enabled', 'ib_enabled'],
-  vgpu: ['k8s_version', 'node_count', 'gpu_count', 'slicing_policy', 'storage_gb', 'network_plugin', 'ingress_enabled'],
-  inference: ['model_ref', 'replicas', 'gpu_count', 'port', 'auth_enabled', 'hpa', 'traffic_split'],
-};
-
-/** 从表单提取 requested_spec（只保留该 kind 契约内的键） */
-export function pickSpec(kind: string, form: unknown): Record<string, unknown> {
-  const spec = (form as { spec?: Record<string, unknown> }).spec ?? {};
-  const out: Record<string, unknown> = {};
-  for (const k of SPEC_KEYS[kind] ?? []) {
-    if (spec[k] !== undefined) out[k] = spec[k];
-  }
-  return out;
-}
-
-/** 表单元信息（向导标题、步骤、各 kind 允许的采购层级） */
-export const KIND_FORM_META: Record<
-  string,
-  { title: string; routeKey: string; gpuStepLabel: string; imageStepLabel: string }
-> = {
-  gpu_vm: {
-    title: '新建 GPU 云服务器',
-    routeKey: 'gpu-cloud-server',
-    gpuStepLabel: '选择节点池与 GPU',
-    imageStepLabel: '选择镜像与系统盘',
-  },
-  gpu_baremetal: {
-    title: '新建 GPU 裸金属',
-    routeKey: 'gpu-bare-metal',
-    gpuStepLabel: '选择机型与 GPU 直通',
-    imageStepLabel: '选择操作系统镜像',
-  },
-  vgpu: {
-    title: '新建 vGPU 集群（托管 K8s）',
-    routeKey: 'vgpu',
-    gpuStepLabel: '选择 K8s 版本与节点池',
-    imageStepLabel: '选择 GPU 切片策略（MIG）',
-  },
-  inference: {
-    title: '新建推理服务',
-    routeKey: 'inference-service',
-    gpuStepLabel: '选择节点池与 GPU',
-    imageStepLabel: '选择模型',
-  },
-};
-
-/** 可选 K8s 版本（CKS 风格） */
-export const K8S_VERSIONS = ['v1.34.1', 'v1.33.4', 'v1.32.8', 'v1.31.12'] as const;
-/** MIG / Time-Slicing 切片策略（与 gpu-specs.migInstances 同源语义） */
-export const NETWORK_PLUGINS = ['Calico', 'Cilium', 'Flannel'] as const;
-/** HPA 目标指标口径（服务治理用 QPS/延迟观测，§7.1） */
-export const HPA_TARGETS = [
-  'gpu_utilization=70',
-  'qps=100',
-  'p99_latency_ms=500',
-] as const;
+export type WizardKind = keyof typeof WIZARD_STEP_SCHEMAS;

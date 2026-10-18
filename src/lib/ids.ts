@@ -1,5 +1,6 @@
-// 单一事实来源：资源类型 ↔ 路由 ↔ 标识 ↔ 色彩（PRD §5.2.1 / ARCH §12.6）
+// 单一事实来源：资源类型 ↔ 路由 ↔ 标识 ↔ 色彩 ↔ 图标（PRD §5.2.1 / ARCH §12.6 / DESIGN §2.6）
 // 任何页面/组件引用类型都必须取本表同一份常量，禁止第二套命名。
+import { Boxes, Cpu, Server, Zap, type LucideIcon } from 'lucide-react';
 import type {
   DisplayId,
   NodePoolCode,
@@ -7,6 +8,18 @@ import type {
   ResourceKind,
   ResourceUuid,
 } from '../types/domain';
+
+/**
+ * 资源类型图标唯一来源（DESIGN §2.6）。
+ * 部署中心入口、资源列表、资源详情、类型筛选器必须引用同一套图标组件，
+ * 禁止各写一套 emoji 或图标（v0.5 的「图标不对应」缺陷已修复）。
+ */
+export const KIND_ICON: Record<ResourceKind, LucideIcon> = {
+  gpu_vm: Server,
+  gpu_baremetal: Cpu,
+  vgpu: Boxes,
+  inference: Zap,
+};
 
 export type { DisplayId, ResourceUuid };
 export type RouteKey = 'servers' | 'baremetal' | 'vgpu' | 'inference';

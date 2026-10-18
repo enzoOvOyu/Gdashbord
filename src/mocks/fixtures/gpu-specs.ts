@@ -169,3 +169,20 @@ export const nodeIdlePowerW = (code: NodePoolCode): number =>
   GPU_SPECS[code].gpusPerNode * 80 + 400;
 
 export const gpuSpec = (code: NodePoolCode): GpuSpec => GPU_SPECS[code];
+
+/**
+ * 固件与驱动基线（§3.2 扩展，用于裸金属「固件与驱动」Tab）。
+ * 展示口径：驱动版本需 ≥ 镜像 CUDA 版本要求，不合规需高亮（Vast.ai 卡片信息）。
+ */
+export const FIRMWARE_BASELINE: Record<
+  NodePoolCode,
+  { vbios: string; driverVersion: string; cudaVersion: string; bmcFirmware: string }
+> = {
+  H100_SXM: { vbios: '96.00.7E.00.1F', driverVersion: '560.35.03', cudaVersion: '12.6', bmcFirmware: '2.14' },
+  H200_NVL: { vbios: '96.00.9B.00.0A', driverVersion: '560.35.03', cudaVersion: '12.6', bmcFirmware: '2.14' },
+  B200_NVL72: { vbios: '97.00.4A.00.16', driverVersion: '570.86.15', cudaVersion: '12.8', bmcFirmware: '3.02' },
+  B300: { vbios: '97.00.5C.00.02', driverVersion: '570.86.15', cudaVersion: '12.8', bmcFirmware: '3.02' },
+  GB300_NVL72: { vbios: '98.00.1A.00.04', driverVersion: '575.51.03', cudaVersion: '12.9', bmcFirmware: '3.10' },
+};
+
+export const firmwareOf = (code: NodePoolCode) => FIRMWARE_BASELINE[code];

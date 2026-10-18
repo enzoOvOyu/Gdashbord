@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import type { InternalId, Org, Project, User, UserRole } from '../types/domain';
 import { VITE_DEFAULT_REGION } from '../mocks/lib/env';
 import type { RegionCode } from '../types/domain';
+import { defaultProjectId, projectById } from '../mocks/fixtures/projects';
 
 interface AuthState {
   user: User;
@@ -36,7 +37,8 @@ export const useAuthStore = create<AuthState>((set) => ({
     low_balance_threshold_usd: 50,
     created_at: '2026-06-11T08:00:00Z',
   },
-  project: { id: 1 as InternalId, org_id: 1 as InternalId, name: 'llm-training', slug: 'llm-training' },
+  // 默认项目取项目实体（is_default），与部署向导/成本归集同源（PRD §3.5）
+  project: projectById(defaultProjectId()) as Project,
   role: 'owner',
   setUser: (u) => set({ user: u, role: u.role }),
   setOrg: (o) => set({ org: o }),

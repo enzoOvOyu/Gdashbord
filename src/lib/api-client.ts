@@ -37,20 +37,33 @@ export const api = {
 // ─────────── 端点常量（避免散落字符串） ───────────
 export const EP = {
   me: '/api/auth/me',
+  projects: '/api/projects',
+  project: (id: number): string => `/api/projects/${id}`,
   resources: '/api/resources',
   resource: (uuid: string): string => `/api/resources/${uuid}`,
+  resourceStart: (uuid: string): string => `/api/resources/${uuid}/start`,
+  resourceStop: (uuid: string): string => `/api/resources/${uuid}/stop`,
   resourceSteps: (uuid: string): string => `/api/resources/${uuid}/steps`,
   resourceEvents: (uuid: string): string => `/api/resources/${uuid}/events`,
+  resourceUsage: (uuid: string): string => `/api/resources/${uuid}/usage`,
+  resourceTransactions: (uuid: string): string => `/api/resources/${uuid}/transactions`,
+  resourceLogs: (uuid: string): string => `/api/resources/${uuid}/logs`,
   orders: '/api/deployment-orders',
   nodePools: '/api/node-pools',
   nodes: '/api/nodes',
+  node: (uid: string): string => `/api/nodes/${uid}`,
   nodeEvents: '/api/node-events',
+  maintenanceWindows: '/api/maintenance-windows',
   clusterDist: '/api/cluster/state-distribution',
   clusterEfficiency: '/api/cluster/efficiency',
   statusBar: '/api/status-bar',
   metrics: (uuid: string): string => `/api/metrics/resources/${uuid}`,
   metricOne: (uuid: string, key: string): string => `/api/metrics/resources/${uuid}/${key}`,
   metricsCluster: '/api/metrics/cluster',
+  logs: '/api/logs',
+  logContext: (id: string): string => `/api/logs/${id}/context`,
+  cost: '/api/billing/cost',
+  billingUsage: '/api/billing/usage',
   models: '/api/models',
   images: '/api/images',
   appTemplates: '/api/app-templates',
@@ -66,7 +79,22 @@ export const EP = {
   storagePacks: '/api/assets/storage-packs',
   notifications: '/api/notifications',
   tickets: '/api/tickets',
+  ticket: (id: string | number): string => `/api/tickets/${id}`,
 } as const;
+
+/** 带查询串的构造（区域为第一维度，必传） */
+export function withQuery(
+  path: string,
+  params: Record<string, string | number | undefined | null>,
+): string {
+  const usp = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v === undefined || v === null || v === '') continue;
+    usp.set(k, String(v));
+  }
+  const qs = usp.toString();
+  return qs ? `${path}?${qs}` : path;
+}
 
 /** 向后兼容旧引用 */
 export const apiClient = { BASE_URL: BASE, get: api.get };

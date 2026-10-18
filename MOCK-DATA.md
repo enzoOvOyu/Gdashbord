@@ -1,7 +1,8 @@
 # Mock 数据约束规范（MOCK-DATA）
 
 > 配套文档：`PRD.md`（产品需求） · `ARCHITECTURE.md`（架构说明） · `DESIGN-SYSTEM.md`（UI 规范） · `REVIEW.md`（评审报告）
-> 版本：v1.0 · 2026-10-17 · 适用：GPU 公有云控制台**前端原型阶段**
+> 版本：**v1.1 · 2026-10-18** · 适用：GPU 公有云控制台**前端原型阶段**
+> v1.1 要点：**§6.8 字段→数据源映射表**（让每条 Mock 都有库表来源）、**§7.7 计费派生**、**§8.3 扩充至 C1–C12 断言**、竞品补齐阿里云/火山引擎/Lambda。
 
 ---
 
@@ -71,6 +72,17 @@
 - 所有 fixture 由**固定种子**的伪随机数生成器（推荐 `seedrandom` 或自实现 mulberry32）产出，`MOCK_SEED` 见 ARCH §12.7。
 - 同一 `resourceUuid` 在同一时刻多次刷新，必须得到**同一条时间序列**（禁止 `Math.random()` 直接用于初始值）。
 - 实时追加点（`VITE_WS_URL`）允许随机游走，但**必须围绕种子基线**，且遵守 §8 噪声模型。
+
+### G9 区域维度真实切换（v0.6 新增，MUST）
+
+> 回应评审：「很多 mock 数据在区域切换的时候没有切换」。区域不是装饰性过滤——**区域必须是所有 Mock 数据的第一维度**。
+
+- 所有实体与派生量都必须带 `region`：`resources` / `gpu_nodes` / `node_pools` 可用量 / `billing_usage` 聚合 / 指标基线全部按 `region` 区分；切换区域必须产生**可见且自洽的差异**。
+- **价格**：通过 `region_multiplier`（§4.2）真实作用于 `billing_rates`，不同区域单价不同（已定义，须落地到每条计费记录）。
+- **供给/容量**：`poolSupply(region, pool)` 按 §5.4 区域×节点池矩阵给出不同可用量（如 `GB300_NVL72` 仅 `us` 有货）。
+- **指标基线**：时序生成器必须以 `region` 参与种子（`mulberry32(seed + region + uuid)`），使同一资源在不同区域的曲线基线不同；禁止"切区域曲线不变"。
+- **成本/状态栏**：`cost_mtd` 等必须按 `billing_period + region` 聚合派生（PRD §3.2），禁止写死常量。
+- **红旗**：切换区域后列表/指标/成本数值完全相同 → 视为不合格（命中 G8 同类缺陷）。
 
 ### G6 事件必须携带度量上下文（MUST）
 详情页「事件时间线」不得出现 `系统更新完成`、`操作成功` 这类无信息量文案。每条事件应满足 §9 的事件契约：**谁 / 何时 / 哪个组件 / 触发了什么度量阈值 / before→after 快照 / 建议动作**。这是"有意义的监控事件"的核心要求。
@@ -228,7 +240,7 @@
 
 `resource_provisioning_steps` 每条含 `started_at / finished_at / progress`，UI 进度条**必须由已完成步骤数派生**，不得是独立随机数。
 
-### 5.3 节点状态占比（集群层，落实 G7"不完美即真实"）
+### 5.3 节点状态占比（节点基础设施层，落实 G7"不完美即真实"）
 
 | 节点状态 | 占比区间 | 典型成因（用于事件文案） |
 | --- | --- | --- |
@@ -378,7 +390,9 @@
 
 **日志流（Modal 风格）**：详情页「日志与监控」标签必须提供**结构化逐行日志**，含 `ts / level / request_id / route / status / latency_ms / prompt_tokens / gen_tokens / cache_hit`，滚动追加；错误行用 danger 色并有 `Traceback` 折叠块。禁止只有"正常日志刷屏"。
 
-### 6.6 集群层（供给侧，集群模块）
+### 6.6 运营&运维 · 节点基础设施层（供给侧）
+
+> **v0.6 改名**：旧称「集群层（供给侧，集群模块）」。本节的指标（Xid、MFU/goodput/straggler）服务于 **§4.4.1 的 节点池 / 节点 / 事件与维护 三页**，以及 vGPU 详情页的节点池 Tab。
 
 #### 6.6.1 节点故障判据（NVIDIA Xid 标准）
 
@@ -394,7 +408,7 @@
 
 > Mock 中每一个 `NotReady`/`Remediation` 节点 **MUST** 至少有一条匹配上述 Xid 的 `node_events` 记录。
 
-#### 6.6.2 训练集群效能指标（CoreWeave goodput 语义）
+#### 6.6.2 训练效能指标（CoreWeave goodput 语义）
 
 | 指标 | 定义 | 公认区间 | 说明 |
 | --- | --- | --- | --- |
@@ -414,14 +428,119 @@
 
 ### 6.7 顶部状态栏所需指标（PRD §3.2）
 
+> **v0.6 修订**：原实现把余额/花费/延迟写死常量（如 `cost_mtd=3284.4`、`ping_ms=42`）——属 G8 假数据红旗，已移除。所有数值必须真实派生，且**按当前页 region** 过滤。
+
 | 展示位 | 指标 | 派生来源 |
 | --- | --- | --- |
 | 服务健康 | `healthy_regions / total_regions`、`active_incidents` | `node_events` + 区域聚合 |
-| 当前区域算力供给 | `available_gpu / total_gpu`（按模型分） | `node_pools`；紧张阈值 `available/total < 0.15` |
-| 账户余额 | `credit_balance` | `orgs.credit_balance`（§4 扣减规则） |
-| 本月花费 | `cost_mtd` | `billing_usage` 聚合，含折扣与代金券 |
-| 运行中资源数 | 按 4 类分列计数 | `resources.status='running'` |
-| 实时指示 | WS 心跳延迟 `ping_ms` | Mock WS，> 3s 降级显示 |
+| 当前区域算力供给 | `available_gpu / total_gpu`（按模型分，按 region） | `node_pools`；紧张阈值 `available/total < 0.15` |
+| 账户余额 | `credit_balance`（真实，非写死） | `orgs.credit_balance`（§4 扣减规则） |
+| 本月花费 | `cost_mtd`（真实聚合，非写死） | `billing_usage` 按 `billing_period + region` 聚合，含折扣与代金券 |
+| 运行中资源数 | 按 4 类分列计数（按 region） | `resources.status='running' AND region` |
+| 实时指示 | WS 心跳**可达性**（连通/断连），非写死延迟 | 真实 WS；断连转灰并提示 |
+
+---
+
+### 6.8 详情页字段 → 数据源 → 派生方式 映射表（v0.6 新增，MUST）
+
+> **回应"引入数据库的目的是让整体 Mock 数据更有真实性，详情与计费信息更严谨"**。
+> PRD §4.3.1–4.3.4 上展示的**每一个字段，都必须能在下表中查到来源**。凡不在表中的字段 = 装饰性字段 = 视为不合格。
+> 记法：`DB:表.列` = 直接取库；`TSDB:指标键` = 时序接口（不落 PG，§11）；`ƒ()` = 由 §7 派生公式算出。
+
+#### 6.8.1 四类共用（详情页头部 + 概览）
+
+| UI 字段             | 来源                                    | 说明                            |
+| ------------------ | ------------------------------------- | ----------------------------- |
+| 类型图标 / 类型名         | `DB:resources.kind` → ARCH §12.6      | 图标取 `lib/ids.ts` 唯一来源         |
+| 名称                 | `DB:resources.name`                   |                               |
+| `display_id`       | `DB:resources.display_id`             | 前缀按类型（§5.2.1）                 |
+| 生命周期状态             | `DB:resources.status`（+`deleted_at`）   | 6 态，色见 DESIGN §8.2            |
+| 区域 / 节点池           | `DB:resources.region` + `.node_pool`  | **切区域必须变化**（G9）               |
+| 创建时间 / 运行时长         | `DB:resources.created_at` / `.running_since` | 时长 = `now − running_since`   |
+| 所有者 / 项目           | `DB:users.display_name` / `DB:projects.name` | **project 必填**（ARCH C1）  |
+| 来源（镜像/模型/模板）        | `DB:deployment_orders.source_type` + `.source_ref_id` | → `images`/`models`/`app_templates` |
+| 物理落位（机架/交换机/节点）     | `DB:resource_placements.rack_id/.node_id` → `gpu_nodes` |                               |
+| **`$`/时**          | `ƒ(costPerHour)` §7.1                 | 单位随类型：GPU·h / **台·h**         |
+| 今日 / 本月花费           | `DB:billing_usage` 聚合                 | 按 `billing_period` + `region` |
+| **预计可运行 X 小时**      | `ƒ(remainingHours)` = `orgs.credit_balance / costPerHour` | AutoDL 心智，余额不足时提示   |
+| 下单时预估 vs 实际         | `DB:deployment_orders.price_snapshot` vs 当前 ƒ() | 差异 > 10% 时详情页标注原因（如换池/折扣到期） |
+
+#### 6.8.2 GPU 云服务器（§4.3.1）
+
+| UI 字段                     | 来源                                                      |
+| ------------------------- | ------------------------------------------------------- |
+| 规格族 / GPU 型号·数量 / vCPU / 内存 | `DB:resources.spec_json.{gpu_model,gpu_count,vcpu,memory_gb}` |
+| 镜像（名称/tag/CUDA）             | `DB:images.*` ← `deployment_orders.source_ref_id`        |
+| 私网 / 公网 IP                  | `DB:spec_json` + `resource_placements`                   |
+| 安全组 / VPC / 子网              | `DB:spec_json`（网络段）                                      |
+| 算力概览四卡（利用率/显存/功耗/温度）        | `TSDB:gpu_utilization` `gpu_memory_used/total` `gpu_power_draw` `gpu_temperature`（§6.1） |
+| 按卡明细                        | 同上 × 每卡（`gpu_indices` 来自 `DB:resource_placements`）        |
+| 主机资源（CPU/内存/swap/load）      | `TSDB:` §6.2 主机资源键                                      |
+| 存储 / 网络 / 进程 TOP            | `TSDB:` §6.2 存储/网络/进程键                                   |
+| 控制台（Jupyter/Terminal/SSH）   | `DB:notebooks.url_path` + 由 `resource_uuid` 派生的 SSH 串     |
+| 数据盘 / 挂载 / 环境变量             | `DB:spec_json.{storage_gb,env}`                          |
+
+#### 6.8.3 GPU 裸金属（§4.3.2，**台**语义）
+
+| UI 字段                     | 来源                                                      |
+| ------------------------- | ------------------------------------------------------- |
+| 机型                         | `DB:spec_json.machine_type`                              |
+| **台数**                     | `DB:spec_json.machine_count`（1–32）**← 计费数量 = 此值**         |
+| 整机总卡数（仅展示）                  | `ƒ()` = `machine_count × node_pools.gpus_per_node`         |
+| CPU / 内存 / 本地 NVMe / RAID  | `DB:spec_json.{cpu_model,memory_gb,local_nvme_gb,raid_level}` |
+| 直通策略 / MIG 分区               | `DB:spec_json.{passthrough,mig_partition?}`              |
+| 机架位 / 节点 UID 列表             | `DB:resource_placements.rack_id` → `gpu_nodes.node_uid`    |
+| GPU 健康（ECC/row-remap/retired） | `TSDB:` §6.3 GPU 健康键（`ecc_dbe` ≥1 红色）                      |
+| PCIe 链路（gen/width/AER）       | `TSDB:` §6.3；`width` 应为 x16，**x8 即告警**                     |
+| NIC / InfiniBand            | `TSDB:` §6.3（端口速率应 400 Gb/s）                              |
+| NVMe SMART / PSU / 风扇        | `TSDB:` §6.3                                             |
+| BMC / SEL 日志                 | `TSDB:bmc_*` + `sel_log_count`                            |
+| 固件 / 驱动 / CUDA              | `TSDB:vbios` `driver_version` `cuda_version`              |
+| **单价行**                     | `DB:billing_rates(unit='per_machine_hour')` × 区域系数 → `ƒ(costPerHour)` |
+
+#### 6.8.4 vGPU（§4.3.3）
+
+| UI 字段              | 来源                                                      |
+| ------------------ | ------------------------------------------------------- |
+| K8s 版本 / 控制面规格       | `DB:spec_json.{k8s_version,control_plane_tier}`          |
+| 节点池列表 / 每池节点数        | `DB:spec_json.node_pools[].{poolCode,nodeCount}`          |
+| 切片策略 / MIG profile  | `DB:spec_json.node_pools[].{slicingPolicy,migProfile?}`   |
+| GPU 容量 vs 已分配        | `ƒ()` = 各池 `nodeCount × gpusPerNode` vs 实际占用（来自 placements 聚合） |
+| 控制面健康（apiserver/etcd） | `TSDB:` §6.4 控制面键                                        |
+| 节点状态 5 态 / straggler  | `DB:gpu_nodes.state/.straggler`                          |
+| 工作负载（NS/Deploy/Pod）   | `TSDB:` §6.4 工作负载键（phase/restarts/waiting_reason）        |
+| 调度失败原因 TopN           | `TSDB:` §6.4；**必须包含 `Insufficient nvidia.com/gpu`**       |
+| 网络 / 存储（PVC）          | `TSDB:` §6.4                                            |
+| 拓扑视图                  | `DB:resource_placements` → `gpu_nodes{rack_id,switch_group}` → `node_pools` |
+| 费用三行                  | 控制面费（§4.3 表）+ 各池 GPU·h + 附加存储 → `ƒ(costPerHour)`          |
+
+#### 6.8.5 推理服务（§4.3.4）
+
+| UI 字段                    | 来源                                                      |
+| ------------------------ | ------------------------------------------------------- |
+| 模型（名称/参数量/量化/许可）           | `DB:models.*` ← `deployment_orders.source_ref_id`        |
+| 副本数 / 期望副本数 / HPA           | `DB:spec_json.replicas` + `spec_json.hpa?{min,max,metric,target}` |
+| 单副本 GPU 数 / 引擎 / 端口        | `DB:spec_json.{gpu_per_replica,engine,port}`             |
+| 端点 URL / 鉴权                | `DB:spec_json`（API Key 仅创建时展示一次）                          |
+| `max_model_len` / 批处理参数      | `DB:spec_json.{maxModelLen,max_batch_size}`              |
+| 延迟分位 TTFT / TPOT / E2E      | `TSDB:` §6.5 键（P50/P90/P99）                              |
+| 吞吐 / 并发（running/waiting/swapped） | `TSDB:` §6.5                                             |
+| KV cache / 前缀缓存命中率         | `TSDB:gpu_cache_usage_perc` / `prefix_cache_hit_rate`      |
+| 错误率 4xx/5xx                | `TSDB:` §6.5                                             |
+| 结构化日志                     | `TSDB/日志流`（§6.5 日志契约，含 request_id）                       |
+| **显存可行性闸门**               | `ƒ(weightsGb)` §7.3 + `ƒ(kvRequiredGb)` §7.4，创建时校验（PRD §4.2.4） |
+
+#### 6.8.6 计费 Tab（PRD §7.8 四段，四类共用）
+
+| UI 段                 | 来源                                                           |
+| -------------------- | ------------------------------------------------------------ |
+| ① 实时费用卡              | `ƒ(costPerHour)` §7.1 + `DB:billing_usage` 聚合 + `DB:orgs.credit_balance` |
+| ② 单价构成明细             | `DB:billing_rates{price,unit}` × 区域系数 §4.2 × 折扣 §4.4（逐项列出）      |
+| ③ 用量明细表              | `DB:billing_usage{usage_hour,unit,quantity,unit_price,amount}` |
+| ④ 扣费流水               | `DB:billing_transactions{type,amount,balance_after,reference_type,reference_id}` |
+| 停止态提示                 | `DB:resources.status='stopped'` → 算力行 0、存储行继续（§7.4）             |
+
+> **禁止项**：上表之外不得出现"按调用量计费""令牌单价"等 v1 未启用的计费行（PRD §7.1）。
 
 ---
 
@@ -432,14 +551,26 @@
 ### 7.1 资源费用派生
 
 ```
-gpu_hourly_cost      = base_rate(pool) × region_multiplier(region) × gpu_count × discount_factor(plan)
+# v0.6：按类型区分计费数量（裸金属按「台」，其余按「卡」）
+if kind == 'gpu_baremetal':
+    machine_hourly_cost = base_machine_rate(pool) × region_multiplier(region)
+                          × machine_count(台) × discount_factor(plan)
+    compute_cost        = machine_hourly_cost              # 禁止再乘 gpu_count
+else:
+    gpu_hourly_cost     = base_rate(pool) × region_multiplier(region) × gpu_count × discount_factor(plan)
+    # vgpu: gpu_count = Σ(每池 nodeCount × gpusPerNode)
+    # inference: gpu_count = replicas × gpu_per_replica
+    compute_cost        = gpu_hourly_cost
+    if kind == 'vgpu':  compute_cost += control_plane_rate(0.10, HA ×3 → 0.30)
+
 storage_monthly_cost = storage_gb × storage_rate_gb_month
-running_cost_per_hour= (status == 'running' ? gpu_hourly_cost : 0) + storage_monthly_cost / 730
+running_cost_per_hour= (status == 'running' ? compute_cost : 0) + storage_monthly_cost / 730
 cost_today           = Σ hourly_usage_last_24h + today_transactions_adjust
 remaining_hours      = credit_balance / running_cost_per_hour      // 用于"预计可运行 X 小时"
 ```
 - `discount_factor`：按需 1.0；Spot `0.40–0.55`；1 年预留 `0.70`；3 年 `0.45`。
 - **`730`** 为一月小时数（365×24/12），全文统一。
+- **`base_machine_rate`** 取自 `billing_rates(unit='per_machine_hour')`，**不得**由 `base_rate × 8` 臆造（整机价含整机溢价/折扣，是一等公民价格）。
 
 ### 7.2 训练吞吐（6ND / 8ND）
 
@@ -487,6 +618,45 @@ gpu_memory_used = model_weights + kv_cache + activations + fragmentation + frame
 // framework_overhead：PyTorch/CUDA context 通常 0.5 – 1.5 GB（必须计入，否则数字对不上）
 ```
 
+### 7.7 计费派生（v0.6 新增，支撑 PRD §7.8 四段）
+
+> 详情页「计费」Tab 展示的每一个数字，都必须能由本节公式从 `billing_usage` 复算得到。
+
+```
+# ① 逐小时用量行（写入 billing_usage；UNIQUE(resource_id, usage_hour, unit) 幂等）
+if r.kind == 'gpu_baremetal':
+    quantity = spec.machine_count;        unit = 'per_machine_hour'
+elif r.kind == 'vgpu':
+    quantity = Σ(各池 nodeCount × gpusPerNode); unit = 'per_gpu_hour'
+elif r.kind == 'inference':
+    quantity = replicas × gpu_per_replica;     unit = 'per_gpu_hour'
+else:
+    quantity = spec.gpu_count;                 unit = 'per_gpu_hour'
+
+unit_price = billing_rates(kind, pool, region, unit).price × region_multiplier(region) × discount_factor
+amount     = quantity × unit_price                 # 不可变快照（改价不追溯）
+
+# vGPU 控制面单独成行（kind 相同但 unit 不同，靠 UNIQUE 的 unit 列区分）
+vgpu_control_plane: quantity = 1; unit = 'per_instance_hour'; unit_price = 0.10 (HA: 0.30)
+
+# 存储行（running 与 stopped 都写）
+storage: quantity = storage_gb; unit = 'per_gb_hour'; unit_price = 0.08 / 730
+
+# ② 汇总（供详情页费用卡 / 状态栏 / 成本页）
+cost_per_hour  = Σ(当前生效单价行 amount)
+cost_today     = Σ(amount WHERE usage_hour ≥ start_of_today)
+cost_mtd       = Σ(amount WHERE billing_period = 当前账期)
+remaining_hours= credit_balance / cost_per_hour
+
+# ③ 扣费流水（billing_transactions）
+charge : amount = −Σ(本小时 amount)；balance_after = credit_balance − Σ
+refund / adjustment / credit：见 PRD §7.6，均须写 reference_type + reference_id
+```
+
+- **停止态**：`status='stopped'` 时**不写算力行**，只写存储行 → 详情页费用卡显示「算力停计中 · 仅计存储 $X/月」。
+- **`provisioning`**：不写任何用量行 → 费用卡显示「供给中 · 尚未计费」（非 0）。
+- **删除时**：最后一小时按实际秒数比例结算（`quantity × 秒数/3600`），随即停写（PRD §7.4）。
+
 ---
 
 ## 8. 生成器实现规范（`mocks/lib/`）
@@ -500,9 +670,11 @@ mocks/
 │   ├─ pricing.ts               # §4 价格与系数
 │   ├─ models.ts                # 模型库真实模型/显存需求/上下文
 │   ├─ images.ts                # 镜像商城（NGC/PyTorch/vLLM/SGLang 等）
-│   ├─ regions-pools.ts         # §5.4 容量分布
-│   ├─ resources.ts             # 4 类资源种子
+│   ├─ pool-regions.ts          # §5.4 区域×池可用矩阵（ARCH C2，切区域差异的根源）
+│   ├─ projects.ts              # 项目种子（含 isDefault 的 default 项目，PRD §3.5）
+│   ├─ resources.ts             # 4 类资源种子（每类必带 region + project_id）
 │   ├─ orders-steps.ts          # 工作项与 Provisioning 子步骤（ARCH §13）
+│   ├─ usage.ts                 # 逐小时用量种子（§7.7，供 §7.8 三表）
 │   └─ users-orgs.ts            # 租户/角色/配额/余额
 ├─ lib/
 │   ├─ derive.ts                # §7 全部纯函数（可单测）
@@ -543,6 +715,25 @@ assert(0 <= utilization <= 100)
 assert(power_draw <= tdp * 1.02)
 assert(mfu <= 1 && hfu >= mfu)
 assert(available_gpu <= total_gpu && available_gpu >= 0)
+
+// v0.6 新增（对应 ARCH §12.10.3 C1–C12）
+assert(resource.project_id != null)                       // C1
+assert(POOL_REGIONS.has(`${pool}@${region}`))             // C2 区域×池矩阵
+assert(kind !== 'gpu_baremetal'
+    || (spec.machine_count >= 1 && spec.machine_count <= 32
+        && spec.gpu_count === spec.machine_count * gpusPerNode))   // C3 台数
+assert(kind === 'gpu_baremetal' || (gpu_count >= 1 && gpu_count <= 8)) // C4
+assert(unitMatchesKind(kind, unit))                       // C5 计费单位
+assert(status !== 'running' || running_since != null)      // C7
+assert(deleted_at === null || status === 'terminating')    // C8
+assert(kind !== 'inference'
+    || weights_gb + kv_gb + 2 <= gpu_per_replica * vram_gb) // C9 显存可行性
+assert(region != null)                                     // C10
+assert(state !== 'ready' || node_events.length >= 0)
+assert(nodeState === 'ready' || nodeEvents.some(e => XID_CODES.has(e.xid))) // C12
+assert(cost_per_hour === derive.costPerHour(spec, region, plan, kind)) // 含台/卡分支
+assert(listByRegion(r1).totalCount !== listByRegion(r2).totalCount
+    || listByRegion(r1).digest !== listByRegion(r2).digest)  // G9：切区域必变（至少数据指纹不同）
 ```
 
 ### 8.4 受控异常注入（SHOULD）
@@ -614,11 +805,14 @@ interface MonitorEvent {
 
 | 竞品（PRD §2 设计原则） | 借鉴点 | 落到本文件的位置 |
 | --- | --- | --- |
+| **阿里云 ECS/ACK** | 地域可用区→规格族→镜像→存储网络→确认的五段购买流；右侧费用明细；规格族命名 `gpu.8xh100.128c.1024g`；实例详情分区 Tabs；账单/用量/流水三表 | §6.8 字段映射（规格/镜像/网络/安全组字段的库表来源）；§7.7 计费派生三表；§4.1–4.3 单价与存储价（供费用明细逐项计算） |
+| **火山引擎** | 可用区+VPC+安全组为购买前置；按量/包年包月/抢占式三计费模式；详情页摘要字段（实例 ID/规格/镜像/到期/计费方式）；费用中心三表 | §6.8 摘要卡字段来源；§4.4 三模式折扣；§7.7 用量明细与扣费流水结构 |
+| **Lambda** | **整机（1 台 = 8 卡）裸金属采购语义**；1-Click Cluster 多节点整机下单；On-Demand/Reserved 两价 | §6.8 裸金属行（`machine_count` 台 / `unit='per_machine_hour'`）；§4.1 单价；§5.1 裸金属 8–20 min 供给时长 |
 | **CoreWeave** Mission Control / CKS / SUNK | goodput、straggler 检测、拓扑感知、cordon/drain 与节点健康 | §6.6.2 goodput/MFU/straggler 定义与派生；§6.6.1 Xid 判据；§5.3 状态分布 |
 | **RunPod** | Pod 卡片的 GPU% / VRAM% /累计费用；部署步序与秒级计费 | §6.2 算力概览卡四项；§4.1 单价；§7.1 费用派生与"预计可运行 X 小时" |
 | **AutoDL** | 实例控制台（进程/资源面板）、按时/按量、关机仅收存储费 | §6.2 主机资源与进程 TOP；§4.3 块存储 $/GB·月；§6.2 闲置 > 2h 提醒 |
 | **Vast.ai** | 复杂筛选与比价、可靠性评分、机器 `cuda/driver` 与磁盘/网络列 | §4.1 价格区间用于排序比价；§6.3 固件版本；§6.2 网络/磁盘列；节点可用性作为可靠性分 |
-| **优云智算** | 镜像商城卡片、AI 应用一键部署、模型分类 | §8.1 `fixtures/images.ts` 与 `models.ts`；§6.5 模型→显存→单卡可行性校验 |
+| **优云智算 / Nebius** | 镜像商城卡片、AI 应用一键部署、模型分类 | §8.1 `fixtures/images.ts` 与 `models.ts`；§6.5 模型→显存→单卡可行性校验 |
 | **Modal** | 开发者体验、结构化日志流、冷启动、逐请求指标 | §6.5 结构化逐行日志契约；§5.1 推理冷启动（含权重加载派生）；§9.2 带 request_id 的事件 |
 
 ---
@@ -647,6 +841,22 @@ interface MonitorEvent {
 - [ ] 推理服务指标覆盖 vLLM 语义全集（TTFT/TPOT/e2e/KV cache/waiting/running/hit-rate/error-rate）。
 - [ ] 集群 goodput ≤ 100%，MFU ≤ HFU，straggler 标记可由 P99/P50 复算得到。
 - [ ] 所有派生公式有对应单测，且锚点校验（LLaMA-65B MFU≈47%）通过。
+- [ ] **区域维度真实切换（G9）**：切换区域后，列表/供给/指标基线/成本数值**可见且自洽地变化**；同一资源跨区指标基线由 `region` 参与种子派生，禁止"切区域不变"。
+- [ ] **顶部状态栏真实（PRD §3.2）**：余额/花费/运行中数均来自接口聚合，无写死常量；不展示写死延迟。
+- [ ] **项目真实（§3.3）**：`project` 来自 `projects`，创建资源必选并写入 `project_id`；资源列表/成本可按 project 过滤；无写死 `PROJECTS[0]`。
+- [ ] **裸金属按「台·小时」计（§7.1/ARCH §12.4）**：`gpu_baremetal` 计费 `unit='per_machine_hour'`、`quantity=machine_count`，不按 GPU·小时。
+- [ ] **删除真实（§12.10）**：`DELETE /api/resources/:uuid` 置 `deleted_at` 软删并释放配额/停计；前端删除按钮调用该接口并失效缓存。
+
+**v0.6 第二轮补强项**
+
+- [ ] **详情页字段全部有来源（§6.8）**：PRD §4.3.1–4.3.4 的每个展示字段都能在 §6.8 查到 `DB:表.列` / `TSDB:指标键` / `ƒ()` 三种来源之一；**表中不存在的字段一律视为装饰性字段并删除**。
+- [ ] **裸金属整机价不臆造**：`base_machine_rate` 取自 `billing_rates(unit='per_machine_hour')`，**代码里不得出现 `rate × 8`**；整机总卡数仅展示、不计费。
+- [ ] **计费可复算**：详情页计费 Tab 四段（§7.8）的每个数字都能由 §7.7 从 `billing_usage` 复算得到；无独立于用量表的"展示金额"。
+- [ ] **停止态与供给态计费正确**：`stopped` 只写存储行；`provisioning` 不写任何行且费用卡显示"尚未计费"而非 0；删除时最后一小时按秒折算。
+- [ ] **项目种子真实**：`fixtures/projects.ts` 含 `isDefault` 的 default 项目；每条资源种子都有非空 `project_id`；删除有资源的项目返回 409。
+- [ ] **区域×池矩阵生效**：`fixtures/pool-regions.ts` 落地；`GB300_NVL72` 仅 `us`、`B200_NVL72` 仅 `us/jp`、`B300` 仅 `us/sg`；切换区域后节点池可用量与列表条数**可见地变化**。
+- [ ] **§8.3 全部断言通过**：含 v0.6 新增的 C1–C12 与"切区域数据指纹不同"断言；dev 控制台无 G8 红旗。
+- [ ] **推理显存闸门**：创建推理服务时 `weights + kv + 2 ≤ 单副本卡数 × 单卡显存` 校验生效；70B BF16 单卡 80GB 场景被阻断。
 
 ---
 
@@ -655,3 +865,4 @@ interface MonitorEvent {
 | 版本 | 日期 | 说明 |
 | --- | --- | --- |
 | v1.0 | 2026-10-17 | 初版。建立 Mock 数据真实值约束、硬件基线、价格与区域系数、四类资源与集群的指标字典、派生公式引擎、有意义事件规范、生成器与验收清单；同步 PRD / ARCHITECTURE / DESIGN-SYSTEM 交叉引用。 |
+| **v1.1** | **2026-10-18** | **第二轮评审修订**：①新增 **§6.8 详情页字段→数据源→派生方式映射表**（四类 + 计费段），落实"引入数据库让 Mock 更真实"；②新增 **§7.7 计费派生**（逐小时用量行/汇总/扣费流水，支撑 PRD §7.8 四段）；③§7.1 按类型区分计费数量，新增 `base_machine_rate`（整机价，禁止 `rate×8`）；④§8.1 fixtures 新增 `pool-regions.ts`/`projects.ts`/`usage.ts`；⑤§8.3 断言扩充至 ARCH §12.10.3 的 C1–C12 与"切区域数据指纹必变"；⑥§10 竞品表补齐**阿里云 / 火山引擎 / Lambda / Nebius**；⑦§6.6 标题按新导航改为「运营&运维·节点基础设施层」；⑧§12 验收清单新增 8 项。 |

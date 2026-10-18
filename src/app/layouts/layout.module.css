@@ -20,6 +20,14 @@
   overflow-y: auto;
 }
 .sidebarCollapsed { width: 64px; }
+/* 品牌条：冻结常驻（sticky 于侧栏顶部，滚动/路由切换均不隐藏） */
+.brandBar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  flex: none;
+  background: var(--rs-surface);
+}
 .brand {
   height: 56px;
   display: flex;
@@ -31,6 +39,14 @@
   font-size: var(--rs-fs-md);
   color: var(--rs-text);
   text-decoration: none;
+}
+.brandName { display: flex; flex-direction: column; line-height: 1.15; }
+.brandTag {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--rs-text-muted);
 }
 .brandMark {
   width: 26px; height: 26px; border-radius: 50%;
@@ -203,3 +219,21 @@
   .searchBox .kbd { display: none; }
   .content { padding: var(--rs-s4); }
 }
+
+/* ── Topbar 品牌区（冻结常驻，§3.1） ── */
+.topBrand {
+  display: flex;
+  align-items: center;
+  gap: var(--rs-s2);
+  flex: none;
+  text-decoration: none;
+  color: var(--rs-text);
+  font-weight: 700;
+  font-size: var(--rs-fs-md);
+}
+.topBrandName { white-space: nowrap; }
+
+/* 旋转动画（供给步骤 running） */
+.spin { animation: spin 1.1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin { animation: none; } }

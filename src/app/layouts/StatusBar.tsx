@@ -1,112 +1,110 @@
-// StatusBar 顶部状态栏（PRD §3.2 / DESIGN-SYSTEM §5.17；高度 40px，surface-2 底）
-// 状态簇：服务健康 / 区域算力供给 / 余额 / 本月花费 / 运行中资源 / 实时指示。
-// 颜色 + 图标 + 文本并存（可访问性）；「算力紧张」判据 available/total < 0.15（MOCK-DATA §6.7）。
+// StatusBar 顶部状态栏（PRD §3.2：全部由接口真实派生，禁止前端写死常量）
+// v0.6：移除被判定为假数据的「区域余额 / 月度消费 / 延迟」硬编码值与写死延迟。
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import {
+  CircleCheck, AlertTriangle, XCircle, MapPin,
+  CreditCard, TrendingUp, MonitorPlay, Radio,
+} from 'lucide-react';
 import clsx from 'clsx';
 import s from './layout.module.css';
-import { EP, api } from '../../lib/api-client';
+import { EP, api, withQuery } from '../../lib/api-client';
 import { useRegionStore } from '../../stores/auth';
-import { REGION_META } from '../../lib/ids';
+import { REGION_META, KIND_META, KIND_LIST, KIND_ICON } from '../../lib/ids';
 import { formatUsd } from '../../lib/money';
-import { VITE_FEATURE_STATUS_BAR } from '../../mocks/lib/env';
-
-interface StatusBarData {
-  region: string;
-  service_health: 'ok' | 'degraded' | 'down';
-  healthy_ratio: number;
-  incident_count: number;
-  supplies: Array<{
-    code: string;
-    display_name: string;
-    totalGpu: number;
-    availableGpu: number;
-    tight: boolean;
-  }>;
-  credit_balance: number;
-  low_balance_threshold: number;
-  cost_mtd: number;
-  budget: number;
-  running_by_kind: Record<string, number>;
-  running_total: number;
-  ping_ms: number;
-}
+import type { StatusBarView } from '../../features/shared/api';
 
 const HEALTH = {
-  ok: { text: '服务正常', icon: '✓', color: 'var(--rs-success)' },
-  degraded: { text: '服务降级', icon: '⚠', color: 'var(--rs-warning)' },
-  down: { text: '服务故障', icon: '✕', color: 'var(--rs-danger)' },
+  ok: { icon: CircleCheck, color: 'var(--rs-success)', label: '服务正常' },
+  degraded: { icon: AlertTriangle, color: 'var(--rs-warning)', label: '部分降级' },
+  down: { icon: XCircle, color: 'var(--rs-danger)', label: '服务故障' },
 } as const;
 
 export function StatusBar() {
   const region = useRegionStore((st) => st.region);
-  const { data } = useQuery<StatusBarData>({
+  const { data } = useQuery<StatusBarView>({
     queryKey: ['status-bar', region],
-    queryFn: () => api.get<StatusBarData>(`${EP.statusBar}?region=${region}`),
-    refetchInterval: 15_000,
+    queryFn: () => api.get<StatusBarView>(withQuery(EP.statusBar, { region })),
+    refetchInterval: 30_000,
   });
 
-  if (!VITE_FEATURE_STATUS_BAR) return null;
-  if (!data) return <div className={s.statusbar} />;
+  if (!data) {
+    return (
+      <div className={s.statusbar}>
+        <span className={s.statusItem}>…</span>
+      </div>
+    );
+  }
 
-  const h = HEALTH[data.service_health];
+  const health = HEALTH[data.service_health as keyof typeof HEALTH] ?? HEALTH.ok;
+  const HealthIcon = health.icon;
+  const tight = data.supplies.filter((x) => x.tight);
   const lowBalance = data.credit_balance < data.low_balance_threshold;
-  const overBudget = data.cost_mtd / data.budget > 0.9;
-  const tightPools = data.supplies.filter((x) => x.tight);
 
   return (
-    <div className={s.statusbar} role="status" aria-label="运营状态">
-      {/* 服务健康 */}
-      <span className={s.statusItem} style={{ color: h.color }}>
-        <span aria-hidden>{h.icon}</span>
-        {h.text}
-        {data.incident_count > 0 && ` · ${data.incident_count} 起事件`}
+    <div className={s.statusbar}>
+      <span
+        className={clsx(s.statusItem, s.statusItemClickable)}
+        style={{ color: health.color }}
+        title={`就绪节点占比 ${(data.healthy_ratio * 100).toFixed(1)}% · 近 24h 故障事件 ${data.incident_count} 起`}
+      >
+        <HealthIcon size={14} />
+        {health.label}
       </span>
 
-      {/* 区域与算力供给 */}
-      <span className={s.statusItem}>
-        <span aria-hidden>📍</span>
-        {REGION_META[region as keyof typeof REGION_META]?.label ?? region} ·{' '}
-        {tightPools.length === 0 ? (
-          <span style={{ color: 'var(--rs-success)' }}>算力充足</span>
-        ) : (
-          <span style={{ color: 'var(--rs-warning)' }}>
-            {tightPools.map((p) => `${p.display_name} 紧张`).join(' / ')}
-          </span>
+      <span className={s.statusItem} title={`当前区域共 ${data.total_nodes} 节点`}>
+        <MapPin size={14} />
+        {REGION_META[region].label} {REGION_META[region].iso}
+        {tight.length > 0
+          ? ` · ${tight.map((t) => t.display_name).join('、')} 紧张`
+          : data.supplies.length > 0
+            ? ` · ${data.supplies.map((x) => `${x.display_name} 可用 ${x.availableGpu}`).join(' / ')}`
+            : ' · 该区域无节点池'}
+      </span>
+
+      <Link
+        to="/ops/cost"
+        className={clsx(s.statusItem, s.statusItemClickable)}
+        style={{ color: lowBalance ? 'var(--rs-warning)' : undefined }}
+        title={lowBalance ? `余额低于阈值 ${formatUsd(data.low_balance_threshold)}` : '账户余额'}
+      >
+        <CreditCard size={14} />
+        余额 {formatUsd(data.credit_balance)}
+      </Link>
+
+      <Link
+        to="/ops/cost"
+        className={clsx(s.statusItem, s.statusItemClickable)}
+        style={{ color: data.cost_mtd > data.budget * 0.8 ? 'var(--rs-warning)' : undefined }}
+        title={`本月花费（由 billing_usage 按 ${REGION_META[region].iso} 区域聚合）`}
+      >
+        <TrendingUp size={14} />
+        本月 {formatUsd(data.cost_mtd)} / 预算 {formatUsd(data.budget)}
+      </Link>
+
+      <span className={s.statusItem} title="该区域运行中的资源数（按类型分列）">
+        <MonitorPlay size={14} />
+        运行中 {data.running_total}
+        {KIND_LIST.map((k) =>
+          data.running_by_kind[k] ? (
+            <span key={k} className={s.statusItem} title={KIND_META[k].label}>
+              {(() => {
+                const Icon = KIND_ICON[k];
+                return <Icon size={12} />;
+              })()}
+              {data.running_by_kind[k]}
+            </span>
+          ) : null,
         )}
       </span>
 
-      {/* 账户余额 */}
-      <Link
-        to="/operations/cost"
-        className={clsx(s.statusItem, s.statusItemClickable)}
-        style={{ color: lowBalance ? 'var(--rs-warning)' : undefined }}
+      <span
+        className={s.statusItem}
+        title="监控/计费流心跳可达性（WS 实时；降级为轮询时显示轮询）"
       >
-        <span aria-hidden>💳</span>
-        余额 {formatUsd(data.credit_balance)}
-        {lowBalance && ' · 低于阈值，请充值'}
-      </Link>
-
-      {/* 本月花费 */}
-      <Link
-        to="/operations/cost"
-        className={clsx(s.statusItem, s.statusItemClickable)}
-        style={{ color: overBudget ? 'var(--rs-warning)' : undefined }}
-      >
-        <span aria-hidden>📊</span>
-        本月 {formatUsd(data.cost_mtd)}
-      </Link>
-
-      {/* 运行中资源 */}
-      <Link to="/resources/servers" className={clsx(s.statusItem, s.statusItemClickable)}>
-        <span aria-hidden>🖥</span>
-        运行中 {data.running_total}
-      </Link>
-
-      {/* 实时指示 */}
-      <span className={s.statusItem}>
-        <span className={s.pulse} aria-hidden />
-        实时 · {data.ping_ms} ms
+        <span className={s.pulse} />
+        {data.heartbeat === 'live' ? '实时' : '轮询'}
+        <Radio size={14} />
       </span>
     </div>
   );

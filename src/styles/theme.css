@@ -28,6 +28,12 @@
   --rs-purple: #7c3aed;
   --rs-status-terminating: #475569;
 
+  /* 语义色弱化底（提示条/徽标，DESIGN-SYSTEM §2.3） */
+  --rs-success-soft: #e8f7ee;
+  --rs-warning-soft: #fdf3e3;
+  --rs-danger-soft: #fdeaea;
+  --rs-info-soft: #e8f0fe;
+
   /* 资源类型分类色（ARCH §12.6） */
   --rs-type-server: #2563eb;
   --rs-type-baremetal: #7c3aed;
@@ -86,6 +92,11 @@
   --rs-gold: #ffcf6b;
 
   --rs-status-terminating: #94a3b8;
+
+  --rs-success-soft: #12261a;
+  --rs-warning-soft: #2a2110;
+  --rs-danger-soft: #2b1414;
+  --rs-info-soft: #12203a;
 
   --rs-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --rs-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.5);

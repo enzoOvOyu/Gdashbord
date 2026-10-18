@@ -5,6 +5,8 @@ import s from './layout.module.css';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 import { StatusBar } from './StatusBar';
+import { ToastHost } from '../../components/ui';
+import { VITE_FEATURE_STATUS_BAR } from '../../mocks/lib/env';
 
 export function ConsoleLayout() {
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -13,11 +15,12 @@ export function ConsoleLayout() {
       <Sidebar open={drawerOpen} onClose={() => setDrawerOpen(false)} />
       <div className={s.main}>
         <Topbar onToggleSidebar={() => setDrawerOpen((v) => !v)} />
-        <StatusBar />
+        {VITE_FEATURE_STATUS_BAR && <StatusBar />}
         <main className={s.content}>
           <Outlet />
         </main>
       </div>
+      <ToastHost />
     </div>
   );
 }

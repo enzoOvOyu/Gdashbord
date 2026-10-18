@@ -3,7 +3,6 @@ import type {
   InternalId,
   Org,
   Plan,
-  Project,
   Quota,
   QuotaMetric,
   RegionCode,
@@ -70,19 +69,36 @@ export const USERS: User[] = [
 /** 默认演示用户（owner，可见全部） */
 export const CURRENT_USER: User = USERS[0];
 
-export const PROJECTS: Project[] = [
-  { id: 1 as InternalId, org_id: 1 as InternalId, name: 'llm-training', slug: 'llm-training' },
-  { id: 2 as InternalId, org_id: 1 as InternalId, name: 'inference-prod', slug: 'inference-prod' },
-  { id: 3 as InternalId, org_id: 1 as InternalId, name: 'research', slug: 'research' },
-];
+// 项目已迁至 fixtures/projects.ts（PRD §3.5：真实可增删改的实体，不再写死）
+export { PROJECTS, defaultProjectId, projectName } from './projects';
 
-/** 配额（§7.3：used_value 为派生值，由占用口径重算，禁止业务代码直写） */
-export const QUOTAS: Quota[] = [
-  { id: 1 as InternalId, org_id: 1 as InternalId, resource_kind: null, region: null, metric: 'gpu', limit_value: 64, used_value: 0 },
-  { id: 2 as InternalId, org_id: 1 as InternalId, resource_kind: null, region: null, metric: 'vcpu', limit_value: 512, used_value: 0 },
-  { id: 3 as InternalId, org_id: 1 as InternalId, resource_kind: null, region: null, metric: 'storage_gb', limit_value: 20480, used_value: 0 },
-  { id: 4 as InternalId, org_id: 1 as InternalId, resource_kind: null, region: null, metric: 'public_ip', limit_value: 16, used_value: 0 },
-];
+/**
+ * 配额（PRD §7.3：作用域 (org_id, resource_kind?, region?)；
+ * used_value 为派生值，由占用口径重算，禁止业务代码直写）。
+ * 行按**区域作用域**组织（4 区域 × 4 指标 = 16 行），limit 按种子资源占用量留 10%–40% 水位，
+ * 其中 th 的 GPU 配额故意设为紧张水位（94%）以演示「接近上限」告警路径。
+ * org 级行（region=null）表示不限区域，本版本不使用。
+ */
+const QUOTA_LIMITS: Record<RegionCode, Record<QuotaMetric, number>> = {
+  jp: { gpu: 48, vcpu: 640, storage_gb: 12288, public_ip: 6 },
+  th: { gpu: 16, vcpu: 256, storage_gb: 4096, public_ip: 8 },
+  sg: { gpu: 32, vcpu: 320, storage_gb: 16384, public_ip: 8 },
+  us: { gpu: 96, vcpu: 1280, storage_gb: 40960, public_ip: 16 },
+};
+
+const QUOTA_REGIONS: RegionCode[] = ['jp', 'th', 'sg', 'us'];
+
+export const QUOTAS: Quota[] = QUOTA_REGIONS.flatMap((region) =>
+  (Object.keys(QUOTA_LIMITS[region]) as QuotaMetric[]).map((metric, i) => ({
+    id: (QUOTA_REGIONS.indexOf(region) * 4 + i + 1) as InternalId,
+    org_id: 1 as InternalId,
+    resource_kind: null,
+    region,
+    metric,
+    limit_value: QUOTA_LIMITS[region][metric],
+    used_value: 0,
+  })),
+);
 
 /**
  * 配额占用口径（PRD §7.3，明确避免歧义）：
@@ -101,4 +117,5 @@ export function occupiesQuota(
   return status === 'provisioning' || status === 'running';
 }
 
-export const RESERVED_REGIONS: RegionCode[] = ['jp', 'th', 'sg', 'us'];
+/** 预留区域清单（与 QUOTA_REGIONS 同序，保持单一事实来源） */
+export const RESERVED_REGIONS: RegionCode[] = QUOTA_REGIONS;

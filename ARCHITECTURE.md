@@ -1,8 +1,10 @@
 # ARCHITECTURE — RunSun GPU Cloud 控制台（前端架构）
 
 > 文档类型：架构说明（前端为主；后端为蓝图，不在本次实现）
-> 版本：**v0.2 · 草稿（评审修订版）**
-> 关联文档：`PRD.md`（需求）、`DESIGN-SYSTEM.md`（UI 规范）、`REVIEW.md`（评审报告）
+> 版本：**v0.3 · 草稿（v0.6 产品评审第二轮修订）**
+> 关联文档：`PRD.md`（需求）、`DESIGN-SYSTEM.md`（UI 规范）、`MOCK-DATA.md`（数据约束）、`REVIEW.md`（评审报告）
+>
+> **v0.3 变更要点**：①§3 目录结构清除悬空项（删 `cluster`/`model-library`/`operations`，改 `ops`），四类资源详情各自独立目录；②§4.1 路由补齐 `/ops/*` 三类整页详情 + API 契约清单；③§4.2 角色表同步删除权限与去"监控"；④§7 组件分层按新导航重组（新增 `MachineCard`/`EntityDrawer`/`ConfirmDeleteDialog`/`TopologyView` 内嵌化）；⑤§12.7 修正 `VITE_FEATURE_TOPOLOGY` 消费位置（不再指向已删路径）；⑥新增 **§12.10.3 DDL 级约束清单 C1–C14**；⑦新增 **§12.11 接口契约**（删除 / 项目 / 区域感知 / 四类详情返回体）；⑧§13.2 UI→表对照扩充详情页与计费/项目/删除行。
 
 ---
 
@@ -49,18 +51,26 @@ src/
 ├─ features/                  # 按业务域切分（与 PRD §2 导航一一对应）
 │  ├─ overview/
 │  ├─ deployment/             # 创建入口：server / baremetal / vgpu / inference 向导
-│  ├─ resources/              # 展示菜单：by-type(server/baremetal/vgpu/inference)
-│  ├─ cluster/                # 节点池 / 节点 / 拓扑 / 事件（辅助层）
-│  ├─ development/            # notebook / images / app-templates（工具链，辅助层）
+│  ├─ resources/              # 展示菜单：4 类各自独立（PRD §4.3.1–4.3.4，禁止共用模板）
+│  │  ├─ servers/             #   GPU 云服务器：列表 + 详情（概览/监控/控制台/配置/事件/计费）
+│  │  ├─ baremetal/           #   GPU 裸金属：列表 + 详情（含硬件监控/带外/固件）
+│  │  ├─ vgpu/                #   vGPU：列表 + 详情（含控制面/节点池/工作负载/拓扑）
+│  │  └─ inference/           #   推理服务：列表 + 详情（含实例管理/监控/服务治理/日志）
+│  │                          #   共享：ResourceListShell（列表骨架 + 区域/项目筛选）
+│  ├─ ops/                    # 运营&运维：节点池 / 节点 / 事件与维护 / 日志 / 成本 / 配额 / 工单
+│  │                          #   （原 cluster + operations 合并；无 monitoring、无 topology 独立页）
+│  ├─ development/            # notebook / images（含模型卡片）/ app-templates（工具链，辅助层）
 │  ├─ data/
-│  ├─ operations/             # monitoring / logs / cost / quotas / tickets
-│  ├─ model-library/
 │  └─ assets/
 ├─ components/
-│  ├─ ui/                     # Button/Card/Table/Tabs/Badge/Modal...
-│  ├─ charts/                 # GPU 利用率 / goodput / 拓扑图
-│  └─ state-machine/          # 节点状态机 & 资源生命周期可视化
-├─ stores/                    # Zustand：auth / region / theme / project / billing
+│  ├─ ui/                     # Button/Card/Table/Tabs/Badge/Modal/Tooltip/
+│  │                          #   EntityDrawer（PRD §3.4 展开）、RowExpander（C 档行内展开）、
+│  │                          #   ConfirmDeleteDialog（键入 display_id 确认）、
+│  │                          #   MetricCard（DESIGN §8.3 五要素）、CostBreakdownCard（PRD §7.8）
+│  ├─ charts/                 # GPU 利用率 / goodput / 成本趋势 / 延迟分位
+│  ├─ state-machine/          # 节点状态机 & 资源生命周期可视化
+│  └─ ops/                    # TopologyView（仅供 vGPU 详情内嵌，非独立页）
+├─ stores/                    # Zustand：auth（含 project）/ region / theme / billing
 ├─ mocks/                     # MSW handlers + fixtures + 契约 schema
 │  ├─ handlers/               # 各域接口拦截
 │  ├─ fixtures/               # 种子数据（与 §12 DDL 同构）
@@ -77,24 +87,48 @@ src/
 
 ### 4.1 路由表（节选，详情路由参数统一为 `resourceUuid`）
 
+> **v0.6 路由重构**：删除 `/cluster/*`（并入 运营&运维）、删除 `/operations/monitoring`（监控收敛到资源详情）、删除 `/model-library`（并入开发·镜像商城）。区域切换不再靠全局路由参数，而是**资源列表页的区域下拉 + 项目筛选**（PRD §3.3）与运营&运维各页的区域筛选控件（PRD §4.4.1）。
+>
+> **v0.6 第二轮**：补充运营&运维的三类**整页详情路由**（PRD §3.4 A 档），并新增 `/projects` 支撑项目真实化（PRD §3.5）。
+
 ```
 /overview
 /deployment/server               /deployment/baremetal
-/deployment/vgpu                 /deployment/inference          （创建向导，4 类）
+/deployment/vgpu                 /deployment/inference          （4 类独立向导）
 /resources/servers               /resources/servers/:resourceUuid
 /resources/baremetal             /resources/baremetal/:resourceUuid
 /resources/vgpu                  /resources/vgpu/:resourceUuid
 /resources/inference             /resources/inference/:resourceUuid
-/cluster/pools                   /cluster/nodes        /cluster/topology   /cluster/events
-/development/notebooks           /development/images   /development/apps
+/development/notebooks           /development/images（含模型卡片）  /development/apps
 /data/datasets                   /data/storage         /data/pipelines
-/operations/monitoring           /operations/logs      /operations/cost
-/operations/quotas               /operations/tickets
-/model-library
+/ops/pools                       /ops/pools/:poolCode            （A 档整页详情）
+/ops/nodes                       /ops/nodes/:nodeUid             （A 档整页详情）
+/ops/events                      /ops/logs                       （B 档 Drawer 即详情）
+/ops/cost                        /ops/quotas                     （C 档行内展开）
+/ops/tickets                     /ops/tickets/:id                （A 档整页详情）
 /assets/compute                  /assets/vouchers      /assets/reserved    /assets/storage
 ```
 
+**API 契约（前端调用面，见 §12.11）**
+
+```
+GET    /api/projects                     # 项目列表（真实）
+POST   /api/projects                     # 部署向导内联新建项目
+PATCH  /api/projects/:id
+DELETE /api/projects/:id                 # 有未释放资源时返回 409
+GET    /api/resources?kind&region&project_id&status&q&page&size&sort
+GET    /api/resources/:uuid              # 详情（含 spec_json / placement / 来源）
+DELETE /api/resources/:uuid              # 真实软删（PRD §5.4.1）
+POST   /api/resources/:uuid/start|stop|restart
+GET    /api/metrics/:kind/:uuid?window&metrics=   # 时序，与业务实体分离（§12.8）
+GET    /api/billing/usage?resource_id&from&to     # 用量明细（PRD §7.8 ③）
+GET    /api/billing/transactions?resource_id      # 扣费流水（PRD §7.8 ④）
+GET    /api/node-pools?region                    # 区域化容量（G9）
+GET    /api/nodes?region&state&pool
+```
+
 - `routeKey ↔ kind ↔ display_id 前缀` 的唯一映射见 **§12.6**（组件不得自定义第二套）。
+- **资源类型图标统一**：部署中心（`/deployment/:kind`）与资源列表/详情共用 `lib/ids.ts` 的 `KIND_META.icon`，禁止第二套图标（DESIGN §2.6）。
 
 ### 4.2 前端 RBAC（仅控制可见性，非安全边界）
 
@@ -104,7 +138,7 @@ src/
 | ---------------- | --------------------------------------------- |
 | `owner`          | 全部（含计费主体、成员管理、删除资源）                           |
 | `admin`          | 除计费主体外的全部 + 用户/配额/工单管理                        |
-| `member`         | 部署中心、资源（创建/启停/扩缩/控制台）、开发、数据、监控               |
+| `member`         | 部署中心、资源（创建/启停/扩缩/控制台/**删除本人创建的**）、开发、数据、运营&运维（节点侧只读 + 提工单） |
 | `billing`        | 资产、成本分析、发票、代金券/预留；资源**只读**（不可删除/启停）           |
 | `viewer`         | 全部页面**只读**                                   |
 
@@ -115,12 +149,11 @@ src/
 ## 5. 状态管理层
 
 - **全局 Store（Zustand）**：
-  - `auth`：**用户（uuid/role）+ 当前 org + 当前 project**（对应 §12.1）。
-  - `region`：`jp|th|sg|us`，驱动列表过滤与 Query key。
+  - `auth`：**用户（uuid/role）+ 当前 org + 当前 project**（对应 §12.1，`project` 来自接口 `projects`，真实可切换，创建资源时必选并写入订单）。
+  - `region`：`jp|th|sg|us`，**按页上下文驱动列表过滤与 Query key**（PRD §3.3）；全局 Topbar 不再承载区域控件。
   - `theme`：light/dark → `data-theme`。
-  - `billing`：余额与本月花费（来源 §12.4 表，Mock 由 `mocks/fixtures` 提供）。
-- **服务端状态（TanStack Query）**：key 含 `region` + `routeKey`，多区域缓存隔离。
-- **资源生命周期**：`provisioning → running | stopped | error → terminating → deleted_at`（PRD §5.4），与计量严格挂钩（PRD §7.4）。
+- **服务端状态（TanStack Query）**：key 含 `region` + `routeKey` + `project`，多维度缓存隔离；**区域/项目切换必须触发真实重取，禁止"切换无反应"**。
+- **资源生命周期**：`provisioning → running | stopped | error → terminating → deleted_at`（PRD §5.4），与计量严格挂钩（PRD §7.4）；**删除走 `DELETE /api/resources/:uuid`，后端置 `deleted_at` 软删并释放配额（§12.10）**。
 - **节点状态机**：见 §9，UI 仅渲染派生态。
 
 ---
@@ -150,9 +183,16 @@ src/
 ## 7. 组件分层
 
 1. **Primitives（ui/）**：Button、Card、Input、Select、Tabs、Badge、StatusDot、Modal、Drawer、Toast、Table、Tooltip。
-2. **Domain Blocks（components/）**：ResourceCard（RunPod 风选购卡）、FilterBar（Vast.ai 风）、DeployWizard、ConsolePanel（AutoDL 风）、TopologyGraph、StateMachineBadge、**LifecycleBadge**（资源生命周期 6 态）、**StatusBar**（§12.7 可开关）。
-3. **Layouts**：Sidebar + Topbar + StatusBar + Outlet。
-4. **Pages（features/）**：组合上述组件，绑定 Query/Store。
+2. **Domain Blocks（components/）**：
+   - `ResourceCard`（RunPod 风卡片化比价）、`MachineCard`（**裸金属整机卡，"一台=8卡"**）、`ImageCard` / `ModelCard`
+   - `FilterBar`（Vast.ai 风多条件）、`RegionProjectBar`（资源列表页区域+项目筛选，PRD §4.3.0）
+   - `DeployWizard`（**四类各自 5 步**，PRD §4.2.1–4.2.4）+ `CostSummaryCard`（右侧费用明细，PRD §4.2.5）
+   - `EntityDrawer` / `RowExpander`（PRD §3.4 三档展开）、`ConfirmDeleteDialog`（键入确认）
+   - `ConsolePanel`（AutoDL 四合一）、`HardwareHealthPanel`（裸金属）、`TopologyView`（**仅内嵌于 vGPU 详情**）
+   - `MetricCard`（DESIGN §8.3 五要素）、`CostBreakdownCard`（PRD §7.8）
+   - `StateMachineBadge`（节点 5 态）、`LifecycleBadge`（资源 6 态）、`StatusBar`（§12.7 可开关）
+3. **Layouts**：Sidebar（品牌区冻结） + Topbar（**无区域选择器**） + StatusBar（真实派生，可开关） + Outlet。
+4. **Pages（features/）**：组合上述组件，绑定 Query/Store。**四类资源列表/详情各自独立组件，禁止共用一套模板**（PRD §4.3）。
 
 ---
 
@@ -406,7 +446,7 @@ CREATE TABLE resource_provisioning_steps (
 
 > **循环外键已拆除（评审修订）**：旧版 `deployment_orders.resulting_resource_id ↔ resources.order_id` 双向引用会造成插入时序死锁且两份关系可能不一致。现仅保留 **单向** `resources.order_id`；"某订单产出了什么资源"通过 `WHERE order_id = ?` 查询获得。
 
-### 12.3 supply — 供给侧（集群模块）
+### 12.3 supply — 供给侧（运营&运维 · 节点基础设施）
 
 > 旧版 `resource_placements.node_id` 指向了**不存在的节点实体**；现补齐 `node_pools` / `gpu_nodes` / `node_events`。
 
@@ -457,7 +497,8 @@ CREATE INDEX idx_node_events ON node_events(node_id, created_at DESC);
 
 ```sql
 -- ===== 枚举 =====
-CREATE TYPE rate_unit         AS ENUM ('per_gpu_hour','per_gb_hour','per_instance_hour');
+-- per_machine_hour 为 v0.6 新增：GPU 裸金属按「整台物理机·小时」计价（不是按卡）
+CREATE TYPE rate_unit         AS ENUM ('per_gpu_hour','per_machine_hour','per_gb_hour','per_instance_hour');
 CREATE TYPE invoice_status    AS ENUM ('open','paid','overdue','void');
 CREATE TYPE txn_type          AS ENUM ('charge','refund','credit','adjustment');
 CREATE TYPE voucher_status    AS ENUM ('unused','partial','used','expired','void');
@@ -772,7 +813,7 @@ CREATE INDEX idx_notifications_org_user ON notifications(org_id, user_id, read_a
 | `VITE_WS_URL`              | string  | 空                         | `lib/api-client`（实时通道）              | 为空则退化为轮询       |
 | `VITE_POLL_INTERVAL_MS`    | number  | `3000`                    | 轮询降级路径                              | 仅在无 WS 时生效     |
 | `VITE_FEATURE_STATUS_BAR`  | boolean | `true`                    | `layouts`（StatusBar 渲染开关）           | 紧急下线状态栏时用      |
-| `VITE_FEATURE_TOPOLOGY`    | boolean | `true`                    | `features/cluster/topology`         | 拓扑图较重，可降级      |
+| `VITE_FEATURE_TOPOLOGY`    | boolean | `true`                    | `components/ops/TopologyView`（**内嵌于 `features/resources/vgpu` 详情页**，无独立路由） | 拓扑图较重，可降级为隐藏该 Tab |
 | `VITE_THEME_DEFAULT`       | enum    | `light`                   | `stores/theme` 初始值                  | light/dark     |
 | `VITE_LOW_BALANCE_THRESHOLD_USD` | number | `50`                 | StatusBar 提示阈值（真实阈值以后端 `orgs.low_balance_threshold_usd` 为准） | 前端兜底展示  |
 | `VITE_MOCK_SEED`           | number  | `20261017`                | `mocks/lib/rng.ts`（种子随机）          | 固定种子保证 fixture 可复现（G5） |
@@ -790,16 +831,153 @@ CREATE INDEX idx_notifications_org_user ON notifications(org_id, user_id, read_a
 
 ### 12.9 `spec_json` 契约（Zod 校验）
 
+> **v0.6 修订（裸金属单位是「台」）**：GPU 裸金属按**整台物理机**采购，计费 `unit='per_machine_hour'`、`quantity = machine_count`。`gpu_count` 在裸金属语境下表示"整机总卡数 = machine_count × gpus_per_node"，仅用于展示，**不得作为计费数量**。
+
 | `kind`           | 必需键                                                                                 | 可选键                                        |
 | ---------------- | ----------------------------------------------------------------------------------- | ------------------------------------------ |
 | `gpu_vm`         | `gpu_model`, `gpu_count`, `vcpu`, `memory_gb`, `storage_gb`, `image_ref`            | `env`, `ports`, `ssh_pubkey`               |
-| `gpu_baremetal`  | `machine_type`, `gpu_model`, `gpu_count`, `passthrough`(bool), `cpu_model`, `local_nvme_gb` | `ipmi_enabled`, `ib_enabled`         |
+| `gpu_baremetal`  | `machine_type`, `machine_count`(台), `gpu_model`, `gpu_count`(整机总卡), `passthrough`(bool), `cpu_model`, `local_nvme_gb` | `ipmi_enabled`, `ib_enabled` |
 | `vgpu`           | `k8s_version`, `node_count`, `gpu_count`, `slicing_policy`(MIG profile), `storage_gb` | `network_plugin`, `ingress_enabled`        |
 | `inference`      | `model_ref`, `replicas`, `gpu_count`, `port`, `auth_enabled`                         | `hpa`(min/max/target), `traffic_split`     |
 
 - `requested_spec`（订单请求）与 `spec_json`（实际供给）**允许不同**，UI 详情展示"实际规格"，差异来自库存/调度降级；两者皆过 Zod。
 
 ---
+
+### 12.10 删除语义与数据自洽约束（v0.6 新增）
+
+> 回应评审：删除必须为**真实数据操作**；Mock 数据须逻辑自洽；前后端不得有悬空配置/空指针。
+
+#### 12.10.1 删除语义（真实软删）
+- 前端删除按钮 → `DELETE /api/resources/:uuid`；后端置 `resources.deleted_at = now()`（软删终态），**不物理删除**（保留审计）。
+- 副作用（同一事务或级联）：释放 `quotas.used_value`（按 §7.3 口径重算）、停止 `billing_usage` 写入、取消 `resource_provisioning_steps` 进行中步骤。
+- 列表查询恒加 `WHERE deleted_at IS NULL`；详情对 `deleted_at` 非空返回 410/软删态。前端失效该资源 Query 缓存并从列表移除。
+- **禁止**再把删除按钮做成禁用占位或只弹 Toast。
+
+#### 12.10.2 数据自洽约束（逻辑自洽，强制）
+- **project 必填**：`resources.project_id NOT NULL REFERENCES projects(id)`；下单 `deployment_orders.project_id NOT NULL`；**不得写死 `PROJECTS[0]`**。
+- **region 维度一致**：所有区域相关实体（`resources`/`gpu_nodes`/`node_pools` 可用量/`billing_usage`）的 `region` 必须 ∈ `region_code`；**切换区域后查询必须按 `region` 过滤重算**，Mock 与真实后端一致。
+- **裸金属单位约束**：`gpu_baremetal` 计费 `unit='per_machine_hour'`、`quantity = machine_count`；`gpu_count = machine_count × node_pools.gpus_per_node`。
+- **容量/规格一致性**：`gpu_vm.gpu_count ≤ node_pools.gpus_per_node`；`gpu_count > 0`；`storage_gb ≥ 0`。
+- **区域×节点池可用性矩阵**：`POOL_REGIONS` 约束（如 `GB300_NVL72` 仅 `us`）；前端对该池在非可用区域必须置灰且**不可下单**。
+- **阈值/枚举单一来源**：所有阈值（`thresholds.ts`）、区域/节点池/类型映射（`lib/ids.ts`、`fixtures/*`）为唯一来源；**组件不得硬编码数字/枚举/第二套命名**，杜绝悬空配置。
+- **无悬空外键**：`resource_events` / `resource_placements` / `resource_provisioning_steps` 随 `resources` `ON DELETE CASCADE`；软删后子表仍可查（审计保留）。
+- **派生值不可直写**：`quotas.used_value` / `billing_usage.amount` 仅为派生/快照，业务代码不直接写主表双份。
+
+#### 12.10.3 DDL 级约束清单（可直接落库，Mock 亦须遵守）
+
+> 回应"建立新的约束条件，制定 Mock 数据结构使其逻辑自洽"。下表既是**真实建表约束**，也是 **Mock fixture 的运行时断言来源**（`mocks/lib/consistency.ts` 逐条实现）。
+
+| #  | 约束                | DDL（PostgreSQL）                                                                                                                                                                                             |
+| -- | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| C1 | **项目必填**          | `ALTER TABLE resources ALTER COLUMN project_id SET NOT NULL;`<br>`ALTER TABLE deployment_orders ALTER COLUMN project_id SET NOT NULL;`                                                                        |
+| C2 | **区域×节点池可用矩阵**    | `CREATE TABLE pool_regions (pool node_pool_code, region region_code, PRIMARY KEY(pool,region));`<br>按 MOCK-DATA §5.4 填充：`GB300_NVL72` 仅 `us`；`B200_NVL72` 仅 `us,jp`；`B300` 仅 `us,sg` 等                        |
+| C3 | **裸金属按台**         | `ADD CONSTRAINT chk_bm CHECK (kind<>'gpu_baremetal' OR (spec_json->>'machine_count')::int BETWEEN 1 AND 32 AND (spec_json->>'gpu_count')::int = (spec_json->>'machine_count')::int * 8);`                      |
+| C4 | **GPU 数不超单节点上限**   | `ADD CONSTRAINT chk_gpu_count CHECK (kind='gpu_baremetal' OR gpu_count BETWEEN 1 AND 8);`（非裸金属按卡，上限 = `node_pools.gpus_per_node`）                                                                             |
+| C5 | **计费单位与类型绑定**      | `ADD CONSTRAINT chk_unit CHECK ((kind='gpu_baremetal' AND unit='per_machine_hour') OR (kind<>'gpu_baremetal' AND unit IN ('per_gpu_hour','per_gb_hour')));`（在 `billing_rates`/`billing_usage` 各加一份）        |
+| C6 | **容量非负且不超总量**      | `CHECK (available_gpu >= 0 AND available_gpu <= total_gpu)`；`billing_usage.quantity >= 0`；`storage_gb >= 0`                                                                                                       |
+| C7 | **时间与生命周期一致**      | `CHECK (status<>'running' OR running_since IS NOT NULL)`；<br>`CHECK (running_since IS NULL OR running_since <= now())`；<br>`CHECK (stopped_at IS NULL OR stopped_at >= running_since)`                        |
+| C8 | **终态互斥**          | `CHECK (deleted_at IS NULL OR status = 'terminating')`；软删后不得再变更为其他状态                                                                                                                                          |
+| C9 | **显存可行性**（推理）     | 写入前校验：`weights_gb + kv_gb + 2 <= gpu_per_replica * vram_gb`（MOCK-DATA §7.3/§7.4）；不满足则拒绝下单                                                                                                                       |
+| C10 | **区域维度非空**        | `resources.region` / `gpu_nodes.region` / `billing_usage.region` / `node_pools` 容量行 **全部 `NOT NULL`**，杜绝"切区域无变化"的结构性诱因                                                                                            |
+| C11 | **配额作用域唯一**       | `UNIQUE (org_id, resource_kind, region, metric)`（已定义，注意 `NULL` 需 `UNIQUE NULLS NOT DISTINCT` 或改为哨兵值）                                                                                                             |
+| C12 | **度量与事件一致**       | 每个 `state <> 'ready'` 的 `gpu_nodes` 行，必须存在 ≥1 条 `node_events`（应用层断言，无法用 FK 表达）                                                                                                                                  |
+| C13 | **默认项目不可删**       | `projects` 增加 `is_default BOOLEAN NOT NULL DEFAULT false`，删除时 `CHECK (NOT is_default)`                                                                                                                        |
+| C14 | **删除项目前必须无资源**    | 应用层：`DELETE /api/projects/:id` 前 `SELECT COUNT(*) FROM resources WHERE project_id=? AND deleted_at IS NULL`，>0 则 409                                                                                            |
+
+> **Mock 侧等价要求**：`mocks/lib/consistency.ts` 在 dev 模式下对每条 fixture 执行上表可断言项（C1–C10、C12），失败即 `console.error` + Toast（MOCK-DATA §8.3）。
+
+### 12.11 接口契约（v0.6 新增，前后端唯一约定）
+
+> 回应"保证前后端逻辑通畅"：以下为前端实际调用面，**Mock（MSW）与真实后端必须实现同一套**，字段级一致；`VITE_ENABLE_MOCK=false` 时仅 baseURL 变化，前端代码零改动。
+
+#### 12.11.1 删除资源（真实落库）
+
+```
+DELETE /api/resources/:uuid
+Query : ?confirm=<display_id>           // 前端键入确认，后端二次校验
+Resp 200: { resourceUuid, displayId, status: 'terminating', deletedAt: null,
+            releasedQuota: [{ metric:'gpu', amount:8 }, { metric:'storage_gb', amount:100 }],
+            finalSettlement: { amount: 0.42, currency:'USD' } }
+```
+
+| 错误码  | body.code                 | 触发条件                       | 前端处理（PRD §5.4.1）           |
+| ---- | ------------------------- | -------------------------- | --------------------------- |
+| 403  | `FORBIDDEN`               | 角色无权                       | 提示所需角色                      |
+| 404  | `NOT_FOUND` / `ALREADY_DELETED` | 资源不存在或已软删                  | 刷新列表                        |
+| 409  | `INVALID_STATE`           | 当前状态不允许删除（如已在 terminating） | 提示状态                        |
+| 422  | `CONFIRM_MISMATCH`        | confirm 与 display_id 不符    | 保留对话框，要求重新输入                |
+| 423  | `HAS_DEPENDENCIES`        | 存在未释放依赖（预留/工单/挂载）          | 列出 `dependencies[]` 与跳转链接  |
+| 429  | `RATE_LIMITED`            | 限流                         | 允许重试                        |
+| 5xx  | `INTERNAL`                | 服务端                        | 保留对话框 + 重试                  |
+
+**级联（后端同一事务或可靠队列，顺序不可乱）**
+1. `resources.deleted_at = now()`、`status='terminating'`；
+2. 结算最后一小时：按实际秒数写 `billing_usage`（`UNIQUE` 冲突则忽略）+ `billing_transactions(type='charge')` + 更 `orgs.credit_balance`；
+3. 释放 `quotas.used_value`（按 PRD §7.3 口径重算）；
+4. `resource_provisioning_steps` 中 `state IN (pending,running)` → `skipped`；
+5. 写 `resource_events(type='deleted')`，`payload` 含操作人与删除前快照；
+6. 释放 `resource_placements` 占用的 `gpu_indices`（卡位归还节点）。
+7. **不物理 DELETE**：子表随外键 `ON DELETE CASCADE` 仅在前述硬删场景生效；软删保留审计。
+
+#### 12.11.2 项目（真实 CRUD）
+
+```
+GET    /api/projects                     -> [{ id, name, slug, isDefault, resourceCount }]
+POST   /api/projects  { name, slug? }    -> 201 { id, name, slug, isDefault:false }
+PATCH  /api/projects/:id { name? }
+DELETE /api/projects/:id                 -> 204 | 409 PROJECT_HAS_RESOURCES { resourceCount }
+```
+
+- **默认项目**：org 创建时生成 `slug='default'` 的项目，`isDefault=true`，**不可删除**（返回 409）。
+- 删除前必须满足 `resourceCount === 0`（仅统计 `deleted_at IS NULL` 的资源）。
+- 部署向导内新建项目即调用 `POST /api/projects`，成功后入 `deployment_orders.project_id`。
+
+#### 12.11.3 区域感知查询（G9 落地）
+
+| 接口                                         | 必传参数         | 后端义务                                                                             |
+| ------------------------------------------ | ------------ | -------------------------------------------------------------------------------- |
+| `GET /api/resources`                       | `kind`,`region`,`project_id?`,`status?`,`q?`,`page`,`size`,`sort` | 按 `region` 精确过滤（**不得忽略**）；默认附加 `deleted_at IS NULL`；返回 `X-Total-Count`；`includeDeleted` 参数为 true 时才含已释放 |
+| `GET /api/node-pools`                      | `region`     | 返回该区域各池 `totalGpu` / `availableGpu` / `pricePerGpuHour`；**该区域不提供的池不返回或标记 `available:false` + `availableRegions[]`** |
+| `GET /api/nodes`                           | `region`     | 仅返回该区域节点，聚合 5 态占比                                                                |
+| `GET /api/billing/summary`                 | `billing_period`,`region?` | 成本 MTD 按 region 聚合，**无 region 时按全部区域求和（前端须明示）**                                  |
+| `GET /api/metrics/:kind/:uuid`             | `window`,`metrics` | **种子含 region**：`mulberry32(seed ⊕ region ⊕ uuid)`，切区域基线必变（MOCK-DATA §1 G9）       |
+
+#### 12.11.4 四类资源详情返回体（每类独立 schema，禁止大一统）
+
+```
+GET /api/resources/:uuid
+公共段: { resourceUuid, displayId, name, kind, status, region, nodePool,
+         createdAt, runningSince, stoppedAt,
+         owner:{ id,name }, project:{ id,name,slug },
+         order:{ orderUuid, priceSnapshot, sourceType, sourceRef },
+         cost:{ perHour, today, month, remainingHours, currency, unit },
+         placement:{ rackId, switchGroup, nodes[] } }
+
+专用段（按 kind 二选一，Zod discriminatedUnion）:
+  gpu_vm       -> { spec:{ gpuModel, gpuCount, vcpu, memoryGb, storageGb, imageRef },
+                     images:{ name, tag, framework, cudaVersion },
+                     access:{ privateIp, publicIp, sshEnabled, jupyterUrl, terminalUrl },
+                     security:{ vpcId, subnetId, securityGroups[], keyName } }
+  gpu_baremetal-> { spec:{ machineType, machineCount(台), gpuCount(整机总卡), passthrough,
+                           migPartition?, cpuModel, memoryGb, localNvmeGb, raidLevel },
+                     physical:{ rackId, nodeUids[], ibEnabled, bmc:{ ip, firmware, reachable } },
+                     firmware:{ vbios, driverVersion, cudaVersion, compliance } }
+  vgpu         -> { spec:{ k8sVersion, controlPlaneTier, nodePools:[{ poolCode, nodeCount,
+                           gpuPerNode, slicingPolicy, migProfile?, timeSliceShare?,
+                           autoscale:{ min,max } }] },
+                     access:{ apiServerEndpoint, kubeconfigUrl, apiServerPublic },
+                     storage:{ storageClass, defaultPvcGb } }
+  inference    -> { spec:{ modelRef:{ slug,name,paramSize,quantization,license },
+                           replicas, gpuPerReplica, engine, port, maxModelLen,
+                           hpa?:{ min,max,metric,target }, canary?{ percent } },
+                     access:{ endpointUrl, authEnabled, apiKeyShownOnce },
+                     runtime:{ maxBatchSize, prefixCaching, chunkedPrefill } }
+```
+
+- **时序指标不得混入业务接口**：监控数据一律走 `GET /api/metrics/:kind/:uuid`（§12.8）。
+- 计费三表另有三接口（PRD §7.8）：`GET /api/billing/usage`、`/api/billing/transactions`、`/api/billing/rates`。
+- **字段可空性**：上表中 `?` 标记字段为可选，前端一律 `?.` 读取并缺省"—"（PRD §13.3 空指针约束）。
 
 ## 13. 实体追溯链路与工作项关联（评审新增）
 
@@ -825,11 +1003,21 @@ plans/orgs/users/projects                      身份与计费主体
 | ----------------------- | ------------------------------------------------------ | --------------------------------------------------- |
 | 部署向导 / 下单               | `deployment_orders`                                    | `order_uuid`, `resource_kind`, `source_type/ref_id` |
 | Provisioning 进度条（PRD §5.3） | `resource_provisioning_steps`                          | `resource_id`, `step_key`, `state`                  |
-| 资源列表 / 详情                | `resources` + placements + events                      | `resource_uuid`(路由), `display_id`(展示)                |
+| 资源列表（四类各自）               | `resources`（+`placements`）                              | `kind`, `region`, `project_id`, `status`, `deleted_at IS NULL` |
+| **详情页：公共段**（PRD §4.3.0）   | `resources` → `projects`/`users`/`deployment_orders`/`resource_placements` | `resource_uuid`, `display_id`, `spec_json`, `running_since` |
+| **详情页：规格/机型/集群/模型段**      | `resources.spec_json`（§12.11.4 按 kind 分支）              | `kind` 决定 schema                                    |
+| **详情页：控制台（云服务器）**         | `resources` + `notebooks`                              | `resource_id`, `url_path`                           |
+| **详情页：硬件健康（裸金属）**         | `gpu_nodes` + 指标 `/api/metrics/*`（不落 PG）                | `node_uid`, ECC/Xid/PSU/NVMe 指标                      |
+| **详情页：控制面·节点池·工作负载（vGPU）** | `resources` → `resource_placements` → `gpu_nodes`       | `node_count`, `slicing_policy`, Pod phase            |
+| **详情页：副本与端点（推理）**         | `resources.spec_json` + 指标 `/api/metrics/*`             | `replicas`, `hpa`, `endpointUrl`                    |
+| **详情页：计费 Tab（PRD §7.8）**   | `billing_usage` + `billing_transactions` + `billing_rates` | `usage_hour`, `unit`, `quantity`, `amount`, `balance_after` |
+| **Drawer 快速预览（PRD §3.4）**  | 同对应实体的公共段子集                                            | `?drawer=<id>` URL 同步                                |
+| **项目（PRD §3.5）**          | `projects`（+`project_members`）                         | `org_id`, `slug`, `isDefault`                       |
+| **删除（PRD §5.4.1）**        | `resources.deleted_at` + `quotas` + `billing_usage`      | `confirm`, 六类错误码（§12.11.1）                           |
 | 详情页事件时间线                 | `resource_events`                                      | `resource_id`, `created_at DESC`                    |
 | 来源（镜像/模型/模板）             | `images`/`models`/`app_templates`  ← orders            | `orders.source_type` + `source_ref_id`              |
-| 拓扑视图（vGPU）               | `resource_placements` → `gpu_nodes` → `node_pools`     | `node_id`, `rack_id`, `gpu_indices`                 |
-| 集群事件与维护                  | `node_events` + `gpu_nodes`                            | `node_id`, `actor_user_id`                          |
+| 拓扑视图（**vGPU 详情内嵌**）       | `resource_placements` → `gpu_nodes` → `node_pools`     | `node_id`, `rack_id`, `gpu_indices`                 |
+| 运营&运维·事件与维护               | `node_events` + `gpu_nodes`                            | `node_id`, `actor_user_id`                          |
 | 顶部状态栏（健康/余额/花费/运行中）      | `gpu_nodes`, `orgs`, `billing_usage`, `resources`      | `state`, `credit_balance`, `billing_period`         |
 | 成本分析（按项目/资源/区域）          | `billing_usage` → `projects`/`resources`               | `project_id`, `resource_id`, `region`               |
 | 配额水位                    | `quotas`                                               | `metric`, `limit_value`, `used_value`               |
@@ -846,6 +1034,10 @@ plans/orgs/users/projects                      身份与计费主体
 | 余额漂移         | `billing_transactions.balance_after` 与 `orgs.credit_balance` 同事务写入 |
 | 配额不准         | `quotas.used_value` 仅由重算任务更新（派生值）                              |
 | 软删与清算        | `resources.deleted_at` 非空即释放配额并停止计量                            |
+| 删除误操作        | 前端键入 `display_id` 确认 + 后端 `confirm` 二次校验（`422 CONFIRM_MISMATCH`）  |
+| 删除依赖         | `423 HAS_DEPENDENCIES` 阻止删除，列出依赖后允许逐个处理                       |
+| 项目被误删        | `is_default` 项目禁止删除；有未释放资源的项目返回 `409 PROJECT_HAS_RESOURCES`    |
+| 区域过滤被忽略      | C10 约束 + 接口层强制 `region` 参数（缺省时须显式返回全部区域并在响应标注 `regionScope`） |
 
 ---
 

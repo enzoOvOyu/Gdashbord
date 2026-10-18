@@ -100,7 +100,7 @@ export function tokensPerSecond(i: {
 }
 
 // ─────────── §7.3 推理 decode 上界（带宽受限） ───────────
-const BYTES_PER_PARAM = { bf16: 2, fp8: 1, fp4: 0.5 } as const;
+export const BYTES_PER_PARAM = { bf16: 2, fp8: 1, fp4: 0.5, awq: 0.56 } as const;
 export type Precision = keyof typeof BYTES_PER_PARAM;
 
 /**
@@ -234,6 +234,98 @@ export function memoryDecomposition(i: {
   };
   const total = round2(Object.values(parts).reduce((a, b) => a + b, 0));
   return { total, parts };
+}
+
+// ─────────── §7.7 推理容量规划（部署向导显存闸门，PRD §4.2.4） ───────────
+export interface MemoryPlan {
+  /** 单副本权重总量（GB，TP 切分前） */
+  weightsGb: number;
+  /** 单副本 KV cache 规划总量（GB，TP 切分前） */
+  kvGb: number;
+  /** 单卡激活预留（GB，≥2） */
+  activationsGbPerGpu: number;
+  /** 单卡框架开销（GB，CUDA context + 引擎运行时） */
+  overheadGbPerGpu: number;
+  /** 单卡所需显存 = (weights + kv) / tp + activation + overhead */
+  requiredPerGpuGb: number;
+  /** 单副本所需显存总量 */
+  requiredTotalGb: number;
+  /** 单卡可分配容量 = vram × 0.95 */
+  capacityPerGpuGb: number;
+  /** 单副本可用容量 = 卡数 × vram × 0.95 */
+  capacityTotalGb: number;
+  /** 满足容量所需的最小 TP 卡数 */
+  minTp: number;
+  fits: boolean;
+  /** 单卡显存占用率（0–1+） */
+  usageRatio: number;
+  parts: Record<string, number>;
+}
+
+/**
+ * 单副本显存规划：
+ *   weights = params × bytes_per_param（§7.3）
+ *   kv      = concurrency × avg_context × kv_bytes_per_token（§7.4）
+ *   单卡    = (weights + kv) / tp + activations(≥2) + framework_overhead(≥1.5)
+ * 阻断条件：单卡 > vram × 0.95（G8 红旗闸门）
+ */
+export function inferenceMemoryPlan(i: {
+  pool: NodePoolCode;
+  paramsBillion: number;
+  precision: Precision;
+  gpusInTp: number;
+  concurrency: number;
+  avgContextTokens: number;
+  layers: number;
+  kvHeads: number;
+  headDim: number;
+  activationsGb?: number;
+  frameworkOverheadGb?: number;
+}): MemoryPlan {
+  const tp = Math.max(1, Math.round(i.gpusInTp));
+  const vram = GPU_SPECS[i.pool].vramGb;
+  const weightsGb = round2(i.paramsBillion * BYTES_PER_PARAM[i.precision]);
+  const kvGb =
+    i.layers > 0
+      ? kvRequiredGb({
+          concurrency: i.concurrency,
+          avgContextTokens: i.avgContextTokens,
+          layers: i.layers,
+          kvHeads: i.kvHeads,
+          headDim: i.headDim,
+        })
+      : 0;
+  const activations = Math.max(i.activationsGb ?? 2, 2);
+  const overhead = Math.max(i.frameworkOverheadGb ?? 1.5, 1.5);
+  const perGpuShared = round2((weightsGb + kvGb) / tp);
+  const requiredPerGpuGb = round2(perGpuShared + activations + overhead);
+  const requiredTotalGb = round2(weightsGb + kvGb + (activations + overhead) * tp);
+  const capacityPerGpuGb = round2(vram * 0.95);
+  const capacityTotalGb = round2(capacityPerGpuGb * tp);
+  // 反解最小 TP： (w+kv)/tp + a + o ≤ vram×0.95 ⇒ tp ≥ (w+kv)/(vram×0.95-a-o)
+  const denom = capacityPerGpuGb - activations - overhead;
+  const minTp =
+    denom <= 0 ? 99 : Math.max(1, Math.ceil((weightsGb + kvGb) / denom));
+  const usageRatio = Math.round((requiredPerGpuGb / capacityPerGpuGb) * 100) / 100;
+  return {
+    weightsGb,
+    kvGb,
+    activationsGbPerGpu: activations,
+    overheadGbPerGpu: overhead,
+    requiredPerGpuGb,
+    requiredTotalGb,
+    capacityPerGpuGb,
+    capacityTotalGb,
+    minTp,
+    fits: requiredPerGpuGb <= capacityPerGpuGb,
+    usageRatio,
+    parts: {
+      weights: round2(perGpuShared * (weightsGb / (weightsGb + kvGb || 1))),
+      kv_cache: round2(perGpuShared * (kvGb / (weightsGb + kvGb || 1))),
+      activations,
+      framework_overhead: overhead,
+    },
+  };
 }
 
 // ─────────── 供给侧派生（§6.7 状态栏） ───────────

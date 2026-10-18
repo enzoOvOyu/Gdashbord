@@ -1,16 +1,15 @@
 // Topbar 顶部全局条（PRD §3.1 / DESIGN-SYSTEM §5.16；高度 56px，左→右三区）
-// 品牌区 · 全局搜索⌘K + 面包屑 ‖ 区域选择器 · +新建 · 通知 · 帮助 · 主题 · 账号菜单。
+// v0.6：移除全局常驻区域选择器（改为按页上下文，§3.3）；品牌区冻结常驻。
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   Plus, Bell, HelpCircle, Sun, Moon, ChevronDown, Search, Menu,
 } from 'lucide-react';
-import clsx from 'clsx';
 import s from './layout.module.css';
 import { EP, api } from '../../lib/api-client';
-import { useAuthStore, useRegionStore, useThemeStore } from '../../stores/auth';
-import { REGION_META, REGION_LIST, KIND_META, KIND_LIST } from '../../lib/ids';
+import { useAuthStore, useThemeStore } from '../../stores/auth';
+import { KIND_META, KIND_LIST, KIND_ICON } from '../../lib/ids';
 import type { Project } from '../../types/domain';
 import { ROLE_LABEL, ROLE_LIST } from '../../lib/rbac';
 import { formatUsd } from '../../lib/money';
@@ -30,8 +29,6 @@ function useBreadcrumb(): string {
 }
 
 export function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
-  const region = useRegionStore((st) => st.region);
-  const setRegion = useRegionStore((st) => st.setRegion);
   const theme = useThemeStore((st) => st.theme);
   const toggleTheme = useThemeStore((st) => st.toggle);
   const role = useAuthStore((st) => st.role);
@@ -48,9 +45,9 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
     staleTime: Infinity,
   });
 
-  const unread = 3; // 由 notifications 派生（演示）
   const org = me?.org;
   const plan = me?.plan;
+  const unread = 3;
 
   return (
     <header className={s.topbar}>
@@ -60,6 +57,13 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
             <Menu size={18} />
           </button>
         )}
+        {/* 品牌区：冻结常驻（PRD §3.1） */}
+        <Link to="/overview" className={s.topBrand} title="RunSun GPU Cloud">
+          <span className={s.brandMark} aria-hidden>
+            ☀
+          </span>
+          <span className={s.topBrandName}>RunSun</span>
+        </Link>
         <div className={s.searchBox} role="button" tabIndex={0} title="全局搜索（⌘K）">
           <Search size={14} />
           <span>搜索资源 / 模型 / 文档</span>
@@ -69,39 +73,30 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
       </div>
 
       <div className={s.topbarRight}>
-        {/* 区域选择器（公有云常驻核心控件） */}
-        <select
-          className={clsx(s.iconBtn)}
-          value={region}
-          onChange={(e) => setRegion(e.target.value as typeof region)}
-          aria-label="区域"
-          title="区域"
-        >
-          {REGION_LIST.map((r) => (
-            <option key={r} value={r}>
-              {REGION_META[r].label} {REGION_META[r].iso}
-            </option>
-          ))}
-        </select>
-
-        {/* + 新建资源（下拉 4 类 → 部署中心向导） */}
+        {/* + 新建资源（下拉 4 类，图标与资源类型唯一来源一致） */}
         <div style={{ position: 'relative' }}>
           <button className={s.iconBtn} onClick={() => setOpenNew((v) => !v)}>
             <Plus size={16} /> 新建
           </button>
           {openNew && (
             <div className={s.menu}>
-              {KIND_LIST.map((k) => (
-                <Link
-                  key={k}
-                  to={`/deployment/${KIND_META[k].routeKey === 'servers' ? 'server' : KIND_META[k].routeKey}`}
-                  className={s.menuItem}
-                  onClick={() => setOpenNew(false)}
-                  style={{ textDecoration: 'none' }}
-                >
-                  <span>{KIND_META[k].icon} 新建 {KIND_META[k].label}</span>
-                </Link>
-              ))}
+              {KIND_LIST.map((k) => {
+                const Icon = KIND_ICON[k];
+                return (
+                  <Link
+                    key={k}
+                    to={`/deployment/${KIND_META[k].routeKey === 'servers' ? 'server' : KIND_META[k].routeKey}`}
+                    className={s.menuItem}
+                    onClick={() => setOpenNew(false)}
+                    style={{ textDecoration: 'none' }}
+                  >
+                    <span className={s.row}>
+                      <Icon size={14} />
+                      新建 {KIND_META[k].label}
+                    </span>
+                  </Link>
+                );
+              })}
             </div>
           )}
         </div>
@@ -117,7 +112,7 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
           {theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}
         </button>
 
-        {/* 账号菜单：用户 / 组织 / 套餐 / 角色 / 项目 */}
+        {/* 账号菜单：用户 / 组织 / 套餐 / 角色 / 项目（项目仅快速切换，新建在部署流程内 §3.5） */}
         <div style={{ position: 'relative' }}>
           <button className={s.accountBtn} onClick={() => setOpenMenu((v) => !v)}>
             <span className={s.avatar}>E</span>
@@ -161,7 +156,7 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
                   </button>
                 ))}
               </div>
-              <div className={s.menuLabel}>项目</div>
+              <div className={s.menuLabel}>项目（快速切换 · 新建在部署向导内）</div>
               {(me?.projects ?? []).map((p) => (
                 <button
                   key={p.id}
@@ -175,7 +170,10 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
                     fontFamily: 'inherit',
                   }}
                 >
-                  <span>{p.name}</span>
+                  <span>
+                    {p.name}
+                    {p.is_default && <span className={s.muted}> · 默认</span>}
+                  </span>
                   {p.id === project.id && <span>✓</span>}
                 </button>
               ))}

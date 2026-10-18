@@ -28,42 +28,43 @@ export function canCreateResource(role: UserRole): boolean {
   return role === 'owner' || role === 'admin' || role === 'member' || role === 'billing';
 }
 
-/** 导航分组 key（与 PRD §2 / DESIGN §5.10 一致） */
+/**
+ * 导航分组 key（与 PRD §2 / DESIGN §5.10 一致）。
+ * v0.6：原「集群 cluster」+ 原「运营 operations」合并为 **运营&运维 ops**；
+ * 原「模型库 models」删除（并入开发·镜像商城）。
+ */
 export type NavGroup =
   | 'overview'
   | 'deployment'
   | 'resources'
-  | 'cluster'
+  | 'ops'
   | 'development'
   | 'data'
-  | 'operations'
-  | 'models'
   | 'assets';
 
 /**
  * 菜单可见性（PRD §8）：
- *  owner/admin 全部；member 部署+资源+开发+数据+监控；
- *  billing 资产/成本/发票/代金券，资源只读；viewer 全部只读。
+ *  owner/admin 全部；member 部署+资源+开发+数据+运维子项；
+ *  billing 资产/成本/配额，资源只读；viewer 全部只读。
  */
 const NAV_VISIBLE: Record<UserRole, NavGroup[]> = {
-  owner: ['overview', 'deployment', 'resources', 'cluster', 'development', 'data', 'operations', 'models', 'assets'],
-  admin: ['overview', 'deployment', 'resources', 'cluster', 'development', 'data', 'operations', 'models', 'assets'],
-  member: ['overview', 'deployment', 'resources', 'cluster', 'development', 'data', 'operations', 'models'],
-  billing: ['overview', 'resources', 'operations', 'assets', 'models'],
-  viewer: ['overview', 'deployment', 'resources', 'cluster', 'development', 'data', 'operations', 'models', 'assets'],
+  owner: ['overview', 'deployment', 'resources', 'ops', 'development', 'data', 'assets'],
+  admin: ['overview', 'deployment', 'resources', 'ops', 'development', 'data', 'assets'],
+  member: ['overview', 'deployment', 'resources', 'ops', 'development', 'data'],
+  billing: ['overview', 'resources', 'ops', 'assets'],
+  viewer: ['overview', 'deployment', 'resources', 'ops', 'development', 'data', 'assets'],
 };
 
 export function canSeeNav(role: UserRole, group: NavGroup): boolean {
   return NAV_VISIBLE[role].includes(group);
 }
 
-/** 运营子项可见性：billing 仅成本/配额相关 */
-export function canSeeOperationsItem(
-  role: UserRole,
-  item: 'monitoring' | 'logs' | 'cost' | 'quotas' | 'tickets',
-): boolean {
+/** 运营&运维子项可见性（billing 仅成本与配额） */
+export type OpsItem = 'pools' | 'nodes' | 'events' | 'logs' | 'cost' | 'quotas' | 'tickets';
+
+export function canSeeOpsItem(role: UserRole, item: OpsItem): boolean {
   if (role === 'owner' || role === 'admin') return true;
-  if (role === 'member') return item === 'monitoring' || item === 'logs';
+  if (role === 'member') return item === 'logs' || item === 'tickets' || item === 'events';
   if (role === 'billing') return item === 'cost' || item === 'quotas';
   return true; // viewer 只读全览
 }

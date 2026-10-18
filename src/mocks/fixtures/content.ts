@@ -91,10 +91,13 @@ export const TRANSACTIONS: BillingTransaction[] = (() => {
     balance = Math.round((balance + amount) * 100) / 100;
     list.push({
       id: (i + 1) as InternalId,
+      org_id: 1 as InternalId,
       type: isCharge ? 'charge' : 'credit',
       amount: Math.round(amount * 100) / 100,
       balance_after: balance,
       reference_type: isCharge ? 'usage' : 'manual',
+      reference_id: isCharge ? `usage-seed-${i}` : `recharge-seed-${i}`,
+      summary: isCharge ? '周期用量扣费（初始化种子）' : '账户充值',
       created_at: iso((24 - i) * 3600_000 * 6),
     });
   }

@@ -11,6 +11,18 @@ export const BASE_RATE_PER_GPU_HOUR: Record<NodePoolCode, number> = {
   GB300_NVL72: 10.99,
 };
 
+/**
+ * 裸金属整机单价（USD / 台·小时）—— MOCK-DATA §7.1 base_machine_rate。
+ * 必须独立成表：整机价格由机型定义，禁止在 UI 里用 `rate × 8` 现算（PRD §4.2.2）。
+ */
+export const BASE_RATE_PER_MACHINE_HOUR: Record<NodePoolCode, number> = {
+  H100_SXM: 27.92,
+  H200_NVL: 38.32,
+  B200_NVL72: 59.92,
+  B300: 67.92,
+  GB300_NVL72: 87.92,
+};
+
 /** 市场观察区间（§4.1），用于比价视图展示区间条 */
 export const MARKET_RATE_RANGE: Record<NodePoolCode, [number, number]> = {
   H100_SXM: [2.69, 6.16],
@@ -58,6 +70,24 @@ export function effectiveRatePerGpuHour(
   region: RegionCode,
 ): number {
   return round2(BASE_RATE_PER_GPU_HOUR[pool] * REGION_MULTIPLIER[region]);
+}
+
+/** 裸金属有效整机单价 = 整机基准价 × 区域系数（§4.2） */
+export function effectiveRatePerMachineHour(
+  pool: NodePoolCode,
+  region: RegionCode,
+): number {
+  return round2(BASE_RATE_PER_MACHINE_HOUR[pool] * REGION_MULTIPLIER[region]);
+}
+
+/** vGPU 托管控制面有效单价 = 0.10 × 区域系数（HA 时 ×3） */
+export function effectiveRatePerClusterHour(
+  region: RegionCode,
+  ha: boolean,
+): number {
+  return round2(
+    VGPU_CONTROL_PLANE_RATE_CLUSTER_HOUR * (ha ? 3 : 1) * REGION_MULTIPLIER[region],
+  );
 }
 
 export function round2(n: number): number {

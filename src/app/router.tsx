@@ -1,4 +1,5 @@
 // 路由表（ARCH §4.1；详情路由参数统一为 resourceUuid）
+// v0.6：集群 + 运营 合并为「运营&运维 /ops/*」；删除调度与拓扑页、运营·监控页、模型库一级菜单。
 // 路由级代码分割（PRD §10 性能）。
 import { lazy } from 'react';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
@@ -8,22 +9,23 @@ import ComingSoon from '../components/ComingSoon';
 const OverviewPage = lazy(() => import('../features/overview/OverviewPage'));
 const ResourceListPage = lazy(() => import('../features/resources/ResourceListPage'));
 const ResourceDetailPage = lazy(() => import('../features/resources/ResourceDetailPage'));
-const NodePoolsPage = lazy(() => import('../features/cluster/NodePoolsPage'));
-const NodesPage = lazy(() => import('../features/cluster/NodesPage'));
-const TopologyPage = lazy(() => import('../features/cluster/TopologyPage'));
-const EventsPage = lazy(() => import('../features/cluster/EventsPage'));
+const NodePoolsPage = lazy(() => import('../features/ops/NodePoolsPage'));
+const NodesPage = lazy(() => import('../features/ops/NodesPage'));
+const EventsPage = lazy(() => import('../features/ops/EventsPage'));
+const LogsPage = lazy(() => import('../features/ops/LogsPage'));
+const CostPage = lazy(() => import('../features/ops/CostPage'));
+const QuotasPage = lazy(() => import('../features/ops/QuotasPage'));
+const TicketsPage = lazy(() => import('../features/ops/TicketsPage'));
+// A 档整页详情（§3.4：行 → Drawer → 整页）
+const NodePoolsDetailPage = lazy(() => import('../features/ops/NodePoolsDetailPage'));
+const NodesDetailPage = lazy(() => import('../features/ops/NodesDetailPage'));
+const TicketsDetailPage = lazy(() => import('../features/ops/TicketsDetailPage'));
 const NotebooksPage = lazy(() => import('../features/development/NotebooksPage'));
 const ImagesPage = lazy(() => import('../features/development/ImagesPage'));
 const AppTemplatesPage = lazy(() => import('../features/development/AppTemplatesPage'));
 const DatasetsPage = lazy(() => import('../features/data/DatasetsPage'));
 const StoragePage = lazy(() => import('../features/data/StoragePage'));
 const PipelinesPage = lazy(() => import('../features/data/PipelinesPage'));
-const MonitoringPage = lazy(() => import('../features/operations/MonitoringPage'));
-const LogsPage = lazy(() => import('../features/operations/LogsPage'));
-const CostPage = lazy(() => import('../features/operations/CostPage'));
-const QuotasPage = lazy(() => import('../features/operations/QuotasPage'));
-const TicketsPage = lazy(() => import('../features/operations/TicketsPage'));
-const ModelLibraryPage = lazy(() => import('../features/model-library/ModelLibraryPage'));
 const ComputeAssetsPage = lazy(() => import('../features/assets/ComputeAssetsPage'));
 const VouchersPage = lazy(() => import('../features/assets/VouchersPage'));
 const ReservationsPage = lazy(() => import('../features/assets/ReservationsPage'));
@@ -38,20 +40,26 @@ export const router = createBrowserRouter([
       { index: true, element: <Navigate to="/overview" replace /> },
       { path: 'overview', element: <OverviewPage /> },
 
-      // 部署中心（创建入口，4 类向导共用同一路由参数 PRD §4.2）
+      // 部署中心（创建入口，四类各自独立向导 §4.2）
       { path: 'deployment/:kind', element: <DeploymentWizard /> },
 
       // 资源（独立展示菜单，4 类：列表 + 详情）
       { path: 'resources/:routeKey', element: <ResourceListPage /> },
       { path: 'resources/:routeKey/:resourceUuid', element: <ResourceDetailPage /> },
 
-      // 集群（辅助：供给侧）
-      { path: 'cluster/pools', element: <NodePoolsPage /> },
-      { path: 'cluster/nodes', element: <NodesPage /> },
-      { path: 'cluster/topology', element: <TopologyPage /> },
-      { path: 'cluster/events', element: <EventsPage /> },
+      // 运营&运维（原集群 + 原运营合并；拓扑仅作为 vGPU 详情页子区块，不设独立页）
+      { path: 'ops/pools', element: <NodePoolsPage /> },
+      { path: 'ops/pools/:code', element: <NodePoolsDetailPage /> },
+      { path: 'ops/nodes', element: <NodesPage /> },
+      { path: 'ops/nodes/:nodeUid', element: <NodesDetailPage /> },
+      { path: 'ops/events', element: <EventsPage /> },
+      { path: 'ops/logs', element: <LogsPage /> },
+      { path: 'ops/cost', element: <CostPage /> },
+      { path: 'ops/quotas', element: <QuotasPage /> },
+      { path: 'ops/tickets', element: <TicketsPage /> },
+      { path: 'ops/tickets/:id', element: <TicketsDetailPage /> },
 
-      // 开发（辅助：工具链）
+      // 开发（辅助：工具链；模型卡片并入镜像商城 §4.8）
       { path: 'development/notebooks', element: <NotebooksPage /> },
       { path: 'development/images', element: <ImagesPage /> },
       { path: 'development/apps', element: <AppTemplatesPage /> },
@@ -61,15 +69,7 @@ export const router = createBrowserRouter([
       { path: 'data/storage', element: <StoragePage /> },
       { path: 'data/pipelines', element: <PipelinesPage /> },
 
-      // 运营
-      { path: 'operations/monitoring', element: <MonitoringPage /> },
-      { path: 'operations/logs', element: <LogsPage /> },
-      { path: 'operations/cost', element: <CostPage /> },
-      { path: 'operations/quotas', element: <QuotasPage /> },
-      { path: 'operations/tickets', element: <TicketsPage /> },
-
-      // 模型库 / 资产
-      { path: 'model-library', element: <ModelLibraryPage /> },
+      // 资产
       { path: 'assets/compute', element: <ComputeAssetsPage /> },
       { path: 'assets/vouchers', element: <VouchersPage /> },
       { path: 'assets/reserved', element: <ReservationsPage /> },
