@@ -1,0 +1,112 @@
+/* RunSun 控制台 — 设计 Token（DESIGN-SYSTEM.md §2/§3/§4）
+   主题切换：<html data-theme="light|dark">，组件不硬编码色值（ARCH §10） */
+
+:root,
+[data-theme='light'] {
+  /* 中性 */
+  --rs-bg: #ffffff;
+  --rs-surface: #f6f8fb;
+  --rs-surface-2: #eef2f7;
+  --rs-border: #e3e8ef;
+  --rs-text: #0e1726;
+  --rs-text-secondary: #51607a;
+  --rs-text-muted: #8a94a6;
+  --rs-text-inverse: #ffffff;
+
+  /* 品牌（Sun） */
+  --rs-brand: #ff7a1a;
+  --rs-brand-strong: #f2640a;
+  --rs-brand-soft: #fff1e6;
+  --rs-brand-gradient: linear-gradient(135deg, #ff9e2c 0%, #ff6a00 100%);
+  --rs-gold: #ffc24b;
+
+  /* 语义色 */
+  --rs-success: #16a34a;
+  --rs-warning: #d97706;
+  --rs-danger: #dc2626;
+  --rs-info: #2563eb;
+  --rs-purple: #7c3aed;
+  --rs-status-terminating: #475569;
+
+  /* 资源类型分类色（ARCH §12.6） */
+  --rs-type-server: #2563eb;
+  --rs-type-baremetal: #7c3aed;
+  --rs-type-vgpu: #0ea5e9;
+  --rs-type-inference: #ff7a1a;
+
+  /* 间距（8pt 栅格，DESIGN-SYSTEM §4） */
+  --rs-s1: 4px;
+  --rs-s2: 8px;
+  --rs-s3: 12px;
+  --rs-s4: 16px;
+  --rs-s5: 24px;
+  --rs-s6: 32px;
+  --rs-s7: 40px;
+  --rs-s8: 48px;
+
+  /* 圆角 */
+  --rs-r-sm: 6px;
+  --rs-r-md: 10px;
+  --rs-r-lg: 16px;
+  --rs-r-pill: 999px;
+
+  /* 阴影/高程 */
+  --rs-shadow-sm: 0 1px 2px rgba(14, 23, 38, 0.06);
+  --rs-shadow-md: 0 4px 16px rgba(14, 23, 38, 0.1);
+  --rs-shadow-lg: 0 12px 32px rgba(14, 23, 38, 0.16);
+
+  /* 字号阶梯（DESIGN-SYSTEM §3） */
+  --rs-fs-xs: 12px;
+  --rs-fs-sm: 13px;
+  --rs-fs-base: 14px;
+  --rs-fs-md: 16px;
+  --rs-fs-lg: 18px;
+  --rs-fs-xl: 20px;
+  --rs-fs-2xl: 24px;
+  --rs-fs-3xl: 30px;
+  --rs-fs-4xl: 36px;
+
+  /* 字体族 */
+  --rs-font-sans: 'Inter', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+  --rs-font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', monospace;
+}
+
+[data-theme='dark'] {
+  --rs-bg: #0b1020;
+  --rs-surface: #121a2e;
+  --rs-surface-2: #1b2540;
+  --rs-border: #243150;
+  --rs-text: #eaf0fb;
+  --rs-text-secondary: #a6b2c9;
+  --rs-text-muted: #6b7894;
+
+  --rs-brand: #ff923a;
+  --rs-brand-strong: #ff7a1a;
+  --rs-brand-soft: #2a1c0e;
+  --rs-gold: #ffcf6b;
+
+  --rs-status-terminating: #94a3b8;
+
+  --rs-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --rs-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.5);
+  --rs-shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.6);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  font-family: var(--rs-font-sans);
+  font-size: var(--rs-fs-base);
+  line-height: 20px;
+  background: var(--rs-bg);
+  color: var(--rs-text);
+}
+
+:focus-visible {
+  outline: 2px solid var(--rs-brand);
+  outline-offset: 2px;
+}

@@ -1,0 +1,83 @@
+# RunSun GPU Cloud 控制台 — 基础开发环境编排
+#
+# 服务组成：
+#   frontend  前端开发容器（Node22 + pnpm + Vite6）          端口 5173
+#   db        PostgreSQL 15（后端蓝图数据库底座）             端口 5432
+#   adminer   轻量数据库管理 UI（可选，便于查看 schema）       端口 8081
+#
+# 数据与配置统一存放于本工作空间内，不依赖外部路径：
+#   - 源码 / 配置：本仓库（bind mount 到 frontend 容器 /app）
+#   - 数据库运行时数据：./docker/postgres/data
+#   - 数据库初始化脚本：./docker/postgres/init（01-schema.sql / 02-seed.sql）
+#
+# 启动：  docker compose up -d
+# 停止：  docker compose down
+# 销毁数据：docker compose down -v   （会删除 ./docker/postgres/data）
+
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend/Dockerfile
+    container_name: runsun-frontend
+    environment:
+      - VITE_ENABLE_MOCK=${VITE_ENABLE_MOCK:-true}
+      - VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:8080}
+      - VITE_DEFAULT_REGION=${VITE_DEFAULT_REGION:-jp}
+      - VITE_WS_URL=${VITE_WS_URL:-}
+      - VITE_POLL_INTERVAL_MS=${VITE_POLL_INTERVAL_MS:-3000}
+      - VITE_FEATURE_STATUS_BAR=${VITE_FEATURE_STATUS_BAR:-true}
+      - VITE_FEATURE_TOPOLOGY=${VITE_FEATURE_TOPOLOGY:-true}
+      - VITE_THEME_DEFAULT=${VITE_THEME_DEFAULT:-light}
+      - VITE_LOW_BALANCE_THRESHOLD_USD=${VITE_LOW_BALANCE_THRESHOLD_USD:-50}
+      - VITE_MOCK_SEED=${VITE_MOCK_SEED:-20261017}
+      - VITE_ENABLE_CONSISTENCY_CHECK=${VITE_ENABLE_CONSISTENCY_CHECK:-true}
+      - VITE_MOCK_FAULT=${VITE_MOCK_FAULT:-}
+    ports:
+      - "5173:5173"
+    volumes:
+      # 源码实时同步（开发热更新）
+      - .:/app
+      # node_modules 使用命名卷，避免 Windows 文件系统下的性能/权限问题
+      - node_modules:/app/node_modules
+    working_dir: /app
+    # 容器内命名卷 node_modules 会遮蔽镜像内置依赖，故启动前在卷内再装一次（幂等、命中缓存极快）
+    command: sh -c "pnpm install && pnpm dev --host 0.0.0.0 --port 5173"
+    depends_on:
+      - db
+    networks:
+      - runsun
+
+  db:
+    image: postgres:15
+    container_name: runsun-db
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-runsun}
+      - POSTGRES_USER=${POSTGRES_USER:-runsun}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-runsun}
+    ports:
+      - "5432:5432"
+    volumes:
+      # 初始化 DDL 与种子（来自 ARCHITECTURE.md §12，落于工作空间内）
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+      # 运行时数据落于工作空间内（满足"数据文件统一存放"要求）
+      - ./docker/postgres/data:/var/lib/postgresql/data
+    networks:
+      - runsun
+
+  adminer:
+    image: adminer:4
+    container_name: runsun-adminer
+    ports:
+      - "8081:8080"
+    depends_on:
+      - db
+    networks:
+      - runsun
+
+volumes:
+  node_modules:
+
+networks:
+  runsun:
+    driver: bridge

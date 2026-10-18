@@ -1,0 +1,12 @@
+# ===== 构建上下文排除 =====
+node_modules
+dist
+dist-ssr
+coverage
+.docker-data
+.git
+.workbuddy
+*.log
+README.md
+.gitignore
+.env
