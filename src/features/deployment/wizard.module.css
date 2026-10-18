@@ -1,0 +1,331 @@
+/* 部署向导样式（PRD §4.2 / DESIGN-SYSTEM Token） */
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rs-s5);
+  max-width: 1080px;
+}
+
+.title {
+  font-size: var(--rs-fs-xl);
+  font-weight: 600;
+  color: var(--rs-text);
+  margin: 0;
+}
+
+.desc {
+  font-size: var(--rs-fs-sm);
+  color: var(--rs-text-secondary);
+  margin: 0;
+}
+
+/* ───────── 步骤条 ───────── */
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: var(--rs-s2);
+  flex-wrap: wrap;
+  padding: var(--rs-s4) var(--rs-s5);
+  background: var(--rs-surface);
+  border: 1px solid var(--rs-border);
+  border-radius: var(--rs-r-lg);
+}
+
+.stepItem {
+  display: flex;
+  align-items: center;
+  gap: var(--rs-s2);
+  font-size: var(--rs-fs-sm);
+  color: var(--rs-text-muted);
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: var(--rs-s1) var(--rs-s2);
+  border-radius: var(--rs-r-sm);
+  transition: color 0.16s ease, background 0.16s ease;
+}
+
+.stepItem:hover:not(:disabled) {
+  color: var(--rs-text);
+  background: var(--rs-surface-2);
+}
+
+.stepDone {
+  color: var(--rs-success);
+}
+
+.stepActive {
+  color: var(--rs-brand);
+  font-weight: 600;
+  background: var(--rs-brand-soft);
+}
+
+.stepNum {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--rs-r-pill);
+  border: 1px solid var(--rs-border);
+  font-size: var(--rs-fs-xs);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.stepActive .stepNum {
+  border-color: var(--rs-brand);
+  background: var(--rs-brand);
+  color: var(--rs-text-inverse);
+}
+
+.stepDone .stepNum {
+  border-color: var(--rs-success);
+  color: var(--rs-success);
+}
+
+.stepSep {
+  width: 18px;
+  height: 1px;
+  background: var(--rs-border);
+  flex-shrink: 0;
+}
+
+/* ───────── 步骤内容 ───────── */
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rs-s5);
+}
+
+.grid2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--rs-s5);
+}
+
+.grid3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--rs-s4);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rs-s2);
+}
+
+.label {
+  font-size: var(--rs-fs-sm);
+  font-weight: 500;
+  color: var(--rs-text);
+  display: flex;
+  align-items: center;
+  gap: var(--rs-s1);
+}
+
+.req::after {
+  content: ' *';
+  color: var(--rs-danger);
+}
+
+.hint {
+  font-size: var(--rs-fs-xs);
+  color: var(--rs-text-muted);
+}
+
+.err {
+  font-size: var(--rs-fs-xs);
+  color: var(--rs-danger);
+}
+
+.rowInline {
+  display: flex;
+  align-items: center;
+  gap: var(--rs-s3);
+}
+
+.switchRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--rs-s4);
+  padding: var(--rs-s3) var(--rs-s4);
+  border: 1px solid var(--rs-border);
+  border-radius: var(--rs-r-md);
+  background: var(--rs-surface-2);
+}
+
+.switchText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.switchTitle {
+  font-size: var(--rs-fs-sm);
+  color: var(--rs-text);
+}
+
+.switchDesc {
+  font-size: var(--rs-fs-xs);
+  color: var(--rs-text-muted);
+}
+
+/* ───────── 卡片选择器 ───────── */
+.cardGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--rs-s4);
+}
+
+.pickCard {
+  text-align: left;
+  cursor: pointer;
+  border: 1px solid var(--rs-border);
+  border-radius: var(--rs-r-md);
+  background: var(--rs-surface);
+  padding: var(--rs-s4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--rs-s2);
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+}
+
+.pickCard:hover {
+  border-color: var(--rs-brand);
+  transform: translateY(-1px);
+}
+
+.pickActive {
+  border-color: var(--rs-brand);
+  box-shadow: 0 0 0 2px var(--rs-brand-soft);
+}
+
+.pickTitle {
+  font-size: var(--rs-fs-md);
+  font-weight: 600;
+  color: var(--rs-text);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--rs-s2);
+}
+
+.pickMeta {
+  font-size: var(--rs-fs-xs);
+  color: var(--rs-text-muted);
+  line-height: 1.6;
+}
+
+.pickPrice {
+  font-size: var(--rs-fs-sm);
+  color: var(--rs-brand);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.kvLine {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--rs-s3);
+  font-size: var(--rs-fs-xs);
+  color: var(--rs-text-secondary);
+}
+
+/* ───────── 底部操作条 ───────── */
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--rs-s4);
+  padding-top: var(--rs-s4);
+  border-top: 1px solid var(--rs-border);
+}
+
+.actionsRight {
+  display: flex;
+  align-items: center;
+  gap: var(--rs-s3);
+}
+
+/* ───────── 确认页 ───────── */
+.summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rs-s1);
+}
+
+.sumRow {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--rs-s4);
+  padding: var(--rs-s2) 0;
+  border-bottom: 1px dashed var(--rs-border);
+  font-size: var(--rs-fs-sm);
+}
+
+.sumRow:last-child {
+  border-bottom: none;
+}
+
+.sumKey {
+  color: var(--rs-text-muted);
+  flex-shrink: 0;
+}
+
+.sumVal {
+  color: var(--rs-text);
+  text-align: right;
+  word-break: break-all;
+}
+
+.totalBox {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rs-s2);
+  padding: var(--rs-s4);
+  border-radius: var(--rs-r-md);
+  background: var(--rs-brand-soft);
+  border: 1px solid var(--rs-brand);
+}
+
+.totalLine {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--rs-s3);
+}
+
+.totalBig {
+  font-size: var(--rs-fs-3xl);
+  font-weight: 700;
+  color: var(--rs-brand);
+  font-variant-numeric: tabular-nums;
+}
+
+.totalSub {
+  font-size: var(--rs-fs-sm);
+  color: var(--rs-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.mono {
+  font-family: var(--rs-font-mono);
+  font-size: var(--rs-fs-xs);
+}
+
+.envRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto;
+  gap: var(--rs-s3);
+  align-items: center;
+}
+
+@media (max-width: 900px) {
+  .grid2,
+  .grid3 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

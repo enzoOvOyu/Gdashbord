@@ -15,7 +15,7 @@ import type {
   ResourceUuid,
   DeploymentOrder,
 } from '../../types/domain';
-import { KIND_META } from '../../lib/ids';
+import { KIND_META, makeDisplayId } from '../../lib/ids';
 import { GPU_SPECS } from './gpu-specs';
 import { intBetween, rngFor } from '../lib/rng';
 
@@ -338,3 +338,99 @@ export const placementOf = (resourceId: InternalId): ResourcePlacement | undefin
   PLACEMENTS.find((p) => p.resource_id === resourceId);
 export const orderOf = (resourceId: InternalId): DeploymentOrder | undefined =>
   ORDERS.find((o) => o.id === resourceId);
+
+// ─────────── 运行期创建（部署向导下单 → 异步映射为资源，PRD §5.3） ───────────
+
+const specNumber = (s: ResourceSpec, key: string, fallback: number): number => {
+  const v = (s as unknown as Record<string, unknown>)[key];
+  return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
+};
+
+/**
+ * 由订单异步供给出资源实例。
+ * 请求规格 requested_spec 与供给规格 spec_json 允许存在降级差异（§12.9），
+ * 此处演示"库存降级"：当 GPU 数超过机型单机上限时按上限供给。
+ */
+export function createResourceFromOrder(order: DeploymentOrder, name: string): Resource {
+  const id = (RESOURCES.length + 1) as InternalId;
+  const rand = rngFor(`created:${order.order_uuid}`);
+  const kind = order.resource_kind;
+  const pool = (order.node_pool ?? 'H100_SXM') as NodePoolCode;
+  const requested = order.requested_spec;
+  const cap = GPU_SPECS[pool].gpusPerNode;
+
+  // 供给降级：超出单机 GPU 上限则钳制，并记录 requested/供给差异
+  const reqGpu = specNumber(requested, 'gpu_count', 1);
+  const gpuCount = Math.min(reqGpu, cap);
+  const storageGb = specNumber(requested, 'storage_gb', 0);
+
+  const ts = new Date().toISOString();
+  const r: Resource = {
+    id,
+    resource_uuid: stableUuid(rand) as ResourceUuid,
+    display_id: makeDisplayId(kind, rand),
+    org_id: order.org_id,
+    owner_id: order.owner_id,
+    project_id: order.project_id,
+    order_id: order.id,
+    kind,
+    name,
+    region: order.region,
+    node_pool: pool,
+    spec_json: requested,
+    gpu_count: gpuCount,
+    storage_gb: storageGb,
+    // 下单受理后进入 provisioning（PRD §5.4 状态图）
+    status: 'provisioning' as ResourceStatus,
+    running_since: null,
+    stopped_at: null,
+    created_at: ts,
+    updated_at: ts,
+    deleted_at: null,
+  };
+  RESOURCES.unshift(r);
+
+  // 供给步骤：首步 running，其余 pending（与 buildSteps 口径一致）
+  const steps = STEP_KEYS.map((key, i) => ({
+    id: (r.id * 1000 + i + 1) as InternalId,
+    resource_id: r.id,
+    seq: i + 1,
+    step_key: key,
+    state: (i === 0 ? 'running' : 'pending') as ProvisioningStep['state'],
+    message: null,
+    started_at: i === 0 ? ts : null,
+    finished_at: null,
+  }));
+  PROVISIONING_STEPS.push(...steps);
+
+  // 事件：下单受理 + 度量快照（§9 契约）
+  RESOURCE_EVENTS.unshift({
+    id: (r.id * 1000 + 1) as InternalId,
+    resource_id: r.id,
+    type: 'order.accepted',
+    level: 'info',
+    title: '下单受理，开始供给',
+    message: `订单 ${order.order_uuid} 已受理，按 ${pool} 节点池调度`,
+    actor_user_id: order.owner_id,
+    occurredAt: ts,
+    measures: [],
+  } as unknown as ResourceEvent);
+
+  PLACEMENTS.unshift(buildPlacement(r));
+
+  if (gpuCount < reqGpu) {
+    RESOURCE_EVENTS.unshift({
+      id: (r.id * 1000 + 2) as InternalId,
+      resource_id: r.id,
+      type: 'spec.downgraded',
+      level: 'warning',
+      title: '规格降级',
+      message: `请求 ${reqGpu} GPU 超出单机上限 ${cap}，按可用容量供给 ${gpuCount} GPU`,
+      actor_user_id: null,
+      occurredAt: ts,
+      measures: [],
+    } as unknown as ResourceEvent);
+  }
+
+  return r;
+}

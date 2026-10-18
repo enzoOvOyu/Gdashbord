@@ -49,8 +49,13 @@ services:
       # node_modules 使用命名卷，避免 Windows 文件系统下的性能/权限问题
       - node_modules:/app/node_modules
     working_dir: /app
-    # 容器内命名卷 node_modules 会遮蔽镜像内置依赖，故启动前在卷内再装一次（幂等、命中缓存极快）
-    command: sh -c "pnpm install && pnpm dev --host 0.0.0.0 --port 5173"
+    # 容器内命名卷 node_modules 会遮蔽镜像内置依赖，故启动前在卷内再装一次（幂等、命中缓存极快）。
+    # 健壮性：宿主代理端口可能变动 ⇒ 先按 .env 的代理安装；失败则尝试直连；
+    # 仍失败则不以失败退出，改用卷内已有 node_modules 启动，避免 Vite 整体不可用。
+    command: |-
+      sh -c 'install_once() { pnpm install --prefer-offline; };
+      install_once || (echo "[entrypoint] 代理不可用，尝试直连安装…" && env -u HTTP_PROXY -u HTTPS_PROXY -u http_proxy -u https_proxy pnpm install --prefer-offline) || echo "[entrypoint] 依赖安装失败：改用卷内已有 node_modules 启动，请修正 .env 代理端口后重建";
+      exec pnpm dev --host 0.0.0.0 --port 5173'
     depends_on:
       - db
     networks:

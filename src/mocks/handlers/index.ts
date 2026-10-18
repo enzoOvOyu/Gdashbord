@@ -3,12 +3,14 @@
 import { http, HttpResponse, delay } from 'msw';
 import type {
   DeploymentOrder,
+  NodePoolCode,
   RegionCode,
   ResourceKind,
 } from '../../types/domain';
 import {
   ORDERS,
   RESOURCES,
+  createResourceFromOrder,
   eventsOf,
   orderOf,
   placementOf,
@@ -37,6 +39,8 @@ import { resourceMetrics, clusterEfficiency } from '../metrics';
 import { deriveCost } from '../lib/derive';
 import { effectiveRatePerGpuHour } from '../fixtures/pricing';
 import { POOL_REGIONS } from '../fixtures/regions-pools';
+import { KIND_META } from '../../lib/ids';
+import { NODE_PLATFORM } from '../fixtures/gpu-specs';
 import type { RangeKey } from '../lib/timeseries';
 import { occupiesQuota } from '../fixtures/users-orgs';
 
@@ -148,17 +152,21 @@ export const handlers = [
     return HttpResponse.json(data, { headers });
   }),
 
+  // 下单：生成工作项订单（§13.1），并异步映射为资源实例（PRD §5.3 跳转详情）
   http.post('/api/deployment-orders', async ({ request }) => {
     await writeDelay();
     const body = (await request.json()) as {
       resource_kind: ResourceKind;
       region: RegionCode;
-      node_pool: string;
+      node_pool: NodePoolCode;
       requested_spec: unknown;
       source_type?: string;
       source_ref_id?: number;
+      name?: string;
     };
     const id = (ORDERS.length + 1) as DeploymentOrder['id'];
+    const pool = body.node_pool as DeploymentOrder['node_pool'];
+    const ts = new Date().toISOString();
     const order: DeploymentOrder = {
       id,
       order_uuid: `ord-${Date.now().toString(16)}`,
@@ -168,20 +176,28 @@ export const handlers = [
       resource_kind: body.resource_kind,
       requested_spec: body.requested_spec as DeploymentOrder['requested_spec'],
       region: body.region,
-      node_pool: body.node_pool as DeploymentOrder['node_pool'],
+      node_pool: pool,
       source_type: (body.source_type ?? 'direct') as DeploymentOrder['source_type'],
       source_ref_id: (body.source_ref_id ?? null) as DeploymentOrder['source_ref_id'],
-      price_snapshot: effectiveRatePerGpuHour(
-        body.node_pool as DeploymentOrder['node_pool'] extends never ? never : 'H100_SXM',
-        body.region,
-      ),
+      // §7.1：按实际所选节点池取价，非硬编码
+      price_snapshot: pool
+        ? effectiveRatePerGpuHour(pool as NodePoolCode, body.region)
+        : null,
       status: 'provisioning',
       failure_reason: null,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      created_at: ts,
+      updated_at: ts,
     };
-    ORDERS.push(order);
-    return HttpResponse.json(order, { status: 201 });
+    ORDERS.unshift(order);
+
+    // 供给：订单 → 资源实例（requested_spec 与 spec_json 允许降级差异，§12.9）
+    const name = (body.name ?? '').trim() || `${KIND_META[body.resource_kind].label}-${id}`;
+    const resource = createResourceFromOrder(order, name);
+
+    return HttpResponse.json(
+      { ...order, resource_uuid: resource.resource_uuid },
+      { status: 201 },
+    );
   }),
 
   // ─────────── 供给侧（集群） ───────────
@@ -195,6 +211,8 @@ export const handlers = [
       unit_price_us: effectiveRatePerGpuHour(p.code, 'us'),
       unit_price_sg: effectiveRatePerGpuHour(p.code, 'sg'),
       unit_price_th: effectiveRatePerGpuHour(p.code, 'th'),
+      // 平台规格（向导展示机型 CPU / 本地 NVMe / 网络所需）
+      platform: NODE_PLATFORM[p.code],
       supply: region ? poolSupply(region, p.code) : undefined,
     }));
     return HttpResponse.json(pools);
