@@ -1,0 +1,205 @@
+/* 控制台骨架（PRD §3 / DESIGN §5.10/§5.16/§5.17） */
+
+.shell {
+  display: flex;
+  min-height: 100vh;
+  background: var(--rs-bg);
+}
+
+/* ── Sidebar（宽 248，折叠 64） ── */
+.sidebar {
+  width: 248px;
+  flex: none;
+  background: var(--rs-surface);
+  border-right: 1px solid var(--rs-border);
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+}
+.sidebarCollapsed { width: 64px; }
+.brand {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  gap: var(--rs-s2);
+  padding: 0 var(--rs-s4);
+  border-bottom: 1px solid var(--rs-border);
+  font-weight: 700;
+  font-size: var(--rs-fs-md);
+  color: var(--rs-text);
+  text-decoration: none;
+}
+.brandMark {
+  width: 26px; height: 26px; border-radius: 50%;
+  background: var(--rs-brand-gradient);
+  display: grid; place-items: center;
+  color: var(--rs-text-inverse); font-size: 14px;
+  flex: none;
+}
+.nav { padding: var(--rs-s3) var(--rs-s2); display: flex; flex-direction: column; gap: 2px; }
+.navGroup { margin-top: var(--rs-s3); }
+.navGroupTitle {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--rs-text-muted);
+  padding: var(--rs-s2) var(--rs-s3);
+  font-weight: 600;
+}
+.navItem {
+  display: flex; align-items: center; gap: var(--rs-s2);
+  padding: 7px var(--rs-s3);
+  border-radius: var(--rs-r-md);
+  color: var(--rs-text-secondary);
+  text-decoration: none;
+  font-size: var(--rs-fs-base);
+  border-left: 3px solid transparent;
+}
+.navItem:hover { background: var(--rs-surface-2); color: var(--rs-text); }
+.navItemActive {
+  background: var(--rs-brand-soft);
+  color: var(--rs-brand-strong);
+  border-left-color: var(--rs-brand);
+  font-weight: 500;
+}
+.navItemIcon { width: 20px; text-align: center; flex: none; }
+.navSub { padding-left: var(--rs-s5); font-size: var(--rs-fs-sm); }
+
+/* ── 主区 ── */
+.main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+/* ── Topbar（56px） ── */
+.topbar {
+  height: 56px;
+  flex: none;
+  display: flex; align-items: center; gap: var(--rs-s4);
+  padding: 0 var(--rs-s5);
+  background: var(--rs-surface);
+  border-bottom: 1px solid var(--rs-border);
+  position: sticky; top: 0; z-index: 20;
+}
+.topbarLeft { display: flex; align-items: center; gap: var(--rs-s3); min-width: 0; }
+.topbarRight { margin-left: auto; display: flex; align-items: center; gap: var(--rs-s2); }
+.searchBox {
+  display: flex; align-items: center; gap: var(--rs-s2);
+  height: 34px; padding: 0 var(--rs-s3);
+  background: var(--rs-bg);
+  border: 1px solid var(--rs-border);
+  border-radius: var(--rs-r-md);
+  color: var(--rs-text-muted);
+  font-size: var(--rs-fs-sm);
+  min-width: 240px;
+  cursor: pointer;
+}
+.kbd {
+  margin-left: auto;
+  font-family: var(--rs-font-mono);
+  font-size: 11px;
+  border: 1px solid var(--rs-border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  background: var(--rs-surface-2);
+}
+.crumbs { font-size: var(--rs-fs-sm); color: var(--rs-text-muted); white-space: nowrap; }
+.iconBtn {
+  height: 34px; min-width: 34px; padding: 0 var(--rs-s2);
+  display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+  border-radius: var(--rs-r-md);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--rs-text-secondary);
+  cursor: pointer;
+  font-size: var(--rs-fs-sm);
+  font-family: inherit;
+  position: relative;
+}
+.iconBtn:hover { background: var(--rs-surface-2); color: var(--rs-text); }
+.badgeCount {
+  position: absolute; top: -2px; right: -2px;
+  min-width: 16px; height: 16px; border-radius: 999px;
+  background: var(--rs-danger); color: #fff;
+  font-size: 10px; display: grid; place-items: center; padding: 0 4px;
+}
+.accountBtn {
+  display: flex; align-items: center; gap: var(--rs-s2);
+  height: 34px; padding: 0 var(--rs-s2) 0 var(--rs-s3);
+  border-radius: var(--rs-r-md);
+  border: 1px solid var(--rs-border);
+  background: var(--rs-bg);
+  cursor: pointer;
+  font-size: var(--rs-fs-sm);
+  color: var(--rs-text);
+  font-family: inherit;
+}
+.avatar {
+  width: 24px; height: 24px; border-radius: 50%;
+  background: var(--rs-brand-gradient); color: var(--rs-text-inverse);
+  display: grid; place-items: center; font-size: 11px; font-weight: 600;
+}
+.menu {
+  position: absolute; right: 0; top: 40px;
+  min-width: 260px;
+  background: var(--rs-bg);
+  border: 1px solid var(--rs-border);
+  border-radius: var(--rs-r-md);
+  box-shadow: var(--rs-shadow-md);
+  padding: var(--rs-s2);
+  z-index: 60;
+}
+.menuItem {
+  display: flex; justify-content: space-between; gap: var(--rs-s3);
+  padding: var(--rs-s2) var(--rs-s3);
+  border-radius: var(--rs-r-sm);
+  font-size: var(--rs-fs-sm);
+  color: var(--rs-text-secondary);
+}
+.menuItem + .menuItem { margin-top: 2px; }
+.menuLabel { text-align: left; padding: var(--rs-s2) var(--rs-s3); font-size: 11px; color: var(--rs-text-muted); text-transform: uppercase; }
+
+/* ── StatusBar（40px，surface-2 底） ── */
+.statusbar {
+  height: 40px;
+  flex: none;
+  display: flex; align-items: center; gap: var(--rs-s4);
+  padding: 0 var(--rs-s5);
+  background: var(--rs-surface-2);
+  border-bottom: 1px solid var(--rs-border);
+  font-size: var(--rs-fs-sm);
+  overflow-x: auto;
+  white-space: nowrap;
+}
+.statusItem {
+  display: inline-flex; align-items: center; gap: 6px;
+  color: var(--rs-text-secondary);
+}
+.statusItemClickable { cursor: pointer; text-decoration: none; }
+.statusItemClickable:hover { color: var(--rs-brand-strong); }
+.pulse {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--rs-success);
+  animation: pulse 1.8s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.8); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pulse { animation: none; }
+}
+
+/* ── 内容区 ── */
+.content { padding: var(--rs-s6); max-width: 1440px; width: 100%; }
+.pageTitle { font-size: var(--rs-fs-2xl); font-weight: 600; margin: 0 0 var(--rs-s2); }
+.pageDesc { color: var(--rs-text-secondary); margin: 0 0 var(--rs-s5); font-size: var(--rs-fs-base); }
+
+/* ── 响应式（DESIGN §4：<1280 侧栏转抽屉） ── */
+@media (max-width: 1279px) {
+  .sidebar { position: fixed; left: 0; top: 0; z-index: 50; transform: translateX(-100%); transition: transform 0.2s; }
+  .sidebarOpen { transform: translateX(0); box-shadow: var(--rs-shadow-lg); }
+  .searchBox { min-width: 0; }
+  .searchBox .kbd { display: none; }
+  .content { padding: var(--rs-s4); }
+}

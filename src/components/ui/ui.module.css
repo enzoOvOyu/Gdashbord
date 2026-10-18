@@ -1,0 +1,172 @@
+/* UI 原语样式（DESIGN-SYSTEM §5；组件不硬编码色值，统一 var(--rs-*) —— ARCH §10） */
+
+/* ── §5.1 Button ── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--rs-s2);
+  border: 1px solid transparent;
+  border-radius: var(--rs-r-md);
+  font-family: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btnSm { height: 28px; padding: 0 var(--rs-s3); font-size: var(--rs-fs-sm); }
+.btnMd { height: 34px; padding: 0 var(--rs-s4); font-size: var(--rs-fs-base); }
+.btnLg { height: 40px; padding: 0 var(--rs-s5); font-size: var(--rs-fs-md); }
+
+.btnPrimary {
+  background: var(--rs-brand-gradient);
+  color: var(--rs-text-inverse);
+}
+.btnPrimary:hover:not(:disabled) { filter: brightness(1.06); }
+.btnSecondary {
+  background: var(--rs-bg);
+  border-color: var(--rs-border);
+  color: var(--rs-text);
+}
+.btnSecondary:hover:not(:disabled) { background: var(--rs-surface-2); }
+.btnGhost { background: transparent; color: var(--rs-text-secondary); }
+.btnGhost:hover:not(:disabled) { background: var(--rs-surface-2); color: var(--rs-text); }
+.btnDanger { background: var(--rs-danger); color: #fff; }
+.btnDanger:hover:not(:disabled) { filter: brightness(1.08); }
+
+/* ── §5.2 Card / Panel ── */
+.card {
+  background: var(--rs-bg);
+  border: 1px solid var(--rs-border);
+  border-radius: var(--rs-r-lg);
+  box-shadow: var(--rs-shadow-sm);
+}
+.cardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--rs-s4);
+  padding: var(--rs-s4) var(--rs-s5);
+  border-bottom: 1px solid var(--rs-border);
+}
+.cardTitle { font-size: var(--rs-fs-md); font-weight: 600; }
+.cardActions { display: flex; align-items: center; gap: var(--rs-s2); }
+.cardBody { padding: var(--rs-s5); }
+.cardBodyTight { padding: var(--rs-s4); }
+
+/* ── §5.3 Stat Tile ── */
+.stat {
+  background: var(--rs-bg);
+  border: 1px solid var(--rs-border);
+  border-radius: var(--rs-r-lg);
+  padding: var(--rs-s5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--rs-s2);
+}
+.statValue {
+  font-size: var(--rs-fs-3xl);
+  font-weight: 700;
+  line-height: 38px;
+  font-variant-numeric: tabular-nums;
+}
+.statLabel { font-size: var(--rs-fs-sm); color: var(--rs-text-secondary); }
+.statTrend { font-size: var(--rs-fs-xs); display: inline-flex; align-items: center; gap: 4px; }
+.trendUp { color: var(--rs-success); }
+.trendDown { color: var(--rs-danger); }
+.trendFlat { color: var(--rs-text-muted); }
+
+/* ── §5.4 Table ── */
+.tableWrap { width: 100%; overflow-x: auto; }
+.table { width: 100%; border-collapse: collapse; font-size: var(--rs-fs-base); }
+.table th {
+  text-align: left;
+  font-size: var(--rs-fs-sm);
+  font-weight: 600;
+  color: var(--rs-text-secondary);
+  padding: var(--rs-s3) var(--rs-s4);
+  border-bottom: 1px solid var(--rs-border);
+  white-space: nowrap;
+}
+.table td {
+  padding: var(--rs-s3) var(--rs-s4);
+  border-bottom: 1px solid var(--rs-border);
+  height: 44px;
+}
+.table tbody tr:hover { background: var(--rs-surface); }
+.zebra tbody tr:nth-child(odd) { background: var(--rs-surface-2); }
+.mono { font-family: var(--rs-font-mono); font-variant-numeric: tabular-nums; }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* ── §5.5 Tabs / Segmented ── */
+.tabs { display: flex; gap: var(--rs-s1); border-bottom: 1px solid var(--rs-border); }
+.tab {
+  padding: var(--rs-s3) var(--rs-s4);
+  font-size: var(--rs-fs-base);
+  color: var(--rs-text-secondary);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  font-family: inherit;
+}
+.tab:hover { color: var(--rs-text); }
+.tabActive { color: var(--rs-brand); border-bottom-color: var(--rs-brand); font-weight: 500; }
+
+/* ── §5.6 Badge / StatusDot ── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px var(--rs-s2);
+  border-radius: var(--rs-r-sm);
+  font-size: var(--rs-fs-xs);
+  font-weight: 500;
+  border: 1px solid transparent;
+}
+.dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.badgeNeutral { background: var(--rs-surface-2); color: var(--rs-text-secondary); border-color: var(--rs-border); }
+
+/* ── §5.7 Input ── */
+.input, .select {
+  height: 34px;
+  padding: 0 var(--rs-s3);
+  border: 1px solid var(--rs-border);
+  border-radius: var(--rs-r-md);
+  background: var(--rs-bg);
+  color: var(--rs-text);
+  font-family: inherit;
+  font-size: var(--rs-fs-base);
+}
+.input:focus, .select:focus {
+  outline: none;
+  border-color: var(--rs-brand);
+  box-shadow: 0 0 0 3px var(--rs-brand-soft);
+}
+
+/* ── 空态（§5.4） ── */
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--rs-s3);
+  padding: var(--rs-s8) var(--rs-s4);
+  color: var(--rs-text-muted);
+  text-align: center;
+}
+.emptyIcon { font-size: 40px; }
+
+/* ── 通用 ── */
+.row { display: flex; align-items: center; gap: var(--rs-s2); }
+.col { display: flex; flex-direction: column; }
+.grid { display: grid; gap: var(--rs-s4); }
+.muted { color: var(--rs-text-muted); }
+.secondary { color: var(--rs-text-secondary); }
+.mt2 { margin-top: var(--rs-s2); }
+.mt4 { margin-top: var(--rs-s4); }
+.mb4 { margin-bottom: var(--rs-s4); }
+.grow { flex: 1; }
