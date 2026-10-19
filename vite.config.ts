@@ -48,5 +48,32 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: true,
+    rollupOptions: {
+      output: {
+        /**
+         * vendor 分包（README「已知缺口」v0.8 已处理）：
+         * 把 react / 图表 / UI 原语 / 数据层从入口 chunk 拆出，
+         * 入口 chunk 只留应用代码，且各 vendor 可独立缓存。
+         */
+        manualChunks(id: string): string | undefined {
+          if (!id.includes('node_modules')) return undefined;
+          if (
+            id.includes('recharts') || id.includes('d3-') || id.includes('react-smooth') ||
+            id.includes('internmap') || id.includes('victory-')
+          ) {
+            return 'charts';
+          }
+          if (id.includes('@radix-ui') || id.includes('/cmdk/')) return 'ui';
+          if (id.includes('@tanstack/')) return 'query';
+          if (
+            id.includes('/react-dom/') || id.includes('/react/') ||
+            id.includes('/scheduler/') || id.includes('/react-router')
+          ) {
+            return 'react';
+          }
+          return undefined;
+        },
+      },
+    },
   },
 });

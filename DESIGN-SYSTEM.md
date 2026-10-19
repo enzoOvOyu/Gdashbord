@@ -1,11 +1,13 @@
 # DESIGN-SYSTEM — RunSun GPU Cloud 控制台 UI 规范
 
 > 文档类型：UI 设计规范（Token + 组件 + 可视化）
-> 版本：**v0.3 · 草稿（v0.6 产品评审第二轮修订）**
+> 版本：**v0.4 · v0.8 全局命令面板**
 > 品牌来源：runsuncloud.com（RunSun — "The GPU Cloud"，sun/gold 暖色太阳识别；线上 CSS 资源不可达，本规范以该太阳/金色识别为基准，**正式落地前请以官方品牌指南校准**）
 > 关联文档：`PRD.md`、`ARCHITECTURE.md`、`MOCK-DATA.md`、`REVIEW.md`
 >
 > **v0.3 变更要点**：①**§5.12 DeployWizard 重写为四类独立 5 步 + 阿里云式三栏布局**，新增 **§5.12.1 CostSummaryCard** 费用明细卡；②**§5.14 TopologyGraph → TopologyView**，改为仅内嵌 vGPU 详情 Tab（无独立页）；③新增 **§5.19 EntityDrawer / RowExpander**（页面展开三档）；④新增 **§5.20 四类详情页区块布局**（各自 Tabs 顺序，禁止共用模板）；⑤新增 **§5.21 ConfirmDeleteDialog**（键入 display_id 确认）；⑥§5.11 补充 **MachineCard（整机卡）**与"裸金属禁用选卡措辞"；⑦§2.7 Token 消费点补齐新组件。
+>
+> **v0.4 变更要点（对应 PRD v0.8）**：①**§5.16 Topbar** 中左搜索框由装饰性 `div` 升级为**真实 `<button>`**（⌘K 命令面板唯一图形入口），并补 `<1280` 收为图标按钮的键位提示降级规则；②新增 **§5.25 CommandPalette（⌘K 全局命令面板）**——布局、四组内容、键盘模型、空态、可访问性与 Token 消费；③§5.24 补 `cmd.*` 字典段；④§11 交付物对照补命令面板与测试/CI 行。
 
 ---
 
@@ -99,7 +101,9 @@
 | `--rs-surface-2`               | §2.1 | §5.17 StatusBar 底色、Table 斑马纹、**§5.19 C 档行内展开面板底** |
 | `--rs-danger`                  | §2.3 | §5.1 Button Danger、**§5.21 ConfirmDeleteDialog 标题与删除按钮** |
 | `--rs-warning`                 | §2.3 | §5.3 趋势微标、**§5.12.1 抢占式风险提示**           |
-| `--rs-shadow-lg`               | §4   | §5.8 Drawer、**§5.19 EntityDrawer**      |
+| `--rs-shadow-lg`               | §4   | §5.8 Drawer、**§5.19 EntityDrawer**、**§5.25 CommandPalette 浮层** |
+| `--rs-overlay`                 | §2.1 | §5.8 Modal/Drawer 遮罩、**§5.25 CommandPalette 遮罩** |
+| `--rs-focus-ring`              | §2.1 | §10 全部可聚焦控件、**§5.16 搜索按钮**、**§5.25 面板输入与选中项** |
 | `--rs-s1…s8` / `--rs-r-*` / `--rs-shadow-*` | §4 | `components/ui/*` 与 `layouts`（由 §4 栅格统一消费） |
 
 ---
@@ -213,6 +217,7 @@
 | **键盘** | 分组标题行可 Tab 聚焦，Enter/Space 切换；焦点环 `--rs-focus-ring`。 |
 | **角色过滤** | `canSeeNav` / `canSeeOpsItem` 过滤后为空的分组**不渲染**；收起状态与角色解耦。 |
 | **状态消费** | `stores/nav`（Zustand + persist middleware）；Sidebar 组件读 `collapsedGroups` 与当前 `location.pathname` 派生 `effectiveExpanded`。 |
+| **模型共享（v0.8）** | 分组定义、图标与 RBAC 过滤统一由 **`app/layouts/navModel.ts`** 导出；Sidebar 与 §5.25 命令面板**共用同一份**，禁止第二套过滤。分组标签必须 **getter 化**、结构必须**渲染期计算**，否则语言切换后文案不更新（ARCH §5）。 |
 
 ### 5.11 ResourceCard（GPU 选购卡，RunPod 风格）
 
@@ -286,7 +291,8 @@
 
 - 高度 56px，与侧边栏同色/同描边，下边框分隔；左→右两区。
 - 品牌区（左，**冻结常驻**）：Logo + 产品名，点击回总览；**不随滚动/路由隐藏**。
-- 中左：全局搜索（⌘K，可按 `display_id` 或 `resource_uuid` 检索）+ 面包屑。
+- 中左：**全局搜索入口（v0.8 已落地为真实控件）**——渲染为**可聚焦的 `<button>`**（`type="button"`、`aria-haspopup="dialog"`），点击即唤起 ⌘K 命令面板（§5.25）；框内为 `Search` 图标 14px + 占位文案 + 右侧 `⌘K` 键位提示（`--rs-text-muted`）。**禁止再做成点击无反应的装饰 `div`**；hover 出 `--rs-surface-2` 底，焦点环同 §10。紧随其后接**面包屑**。
+  - `<1280` 收为**纯图标按钮**（保留 `aria-label` 与 `title`），键位提示隐藏；移动端同样保留图标入口。
 - 右区：'+ 新建资源'（下拉 4 类）、通知中心（未读徽标+事件流）、帮助、主题切换、**语言切换（中 / EN Segmented，§5.24）**、账号菜单（用户 / 组织 / 套餐 / 角色（5 种）/ **项目（仅快速切换；管理在运营&运维·项目页，PRD §3.5.1）** / IAM）。
 - **区域选择器已从 Topbar 移除**（PRD §3.3）：避免"切换无反应"的假控件；区域切换改为资源列表页常驻「区域下拉 + 项目筛选」与运营&运维各页区域筛选。
 - 响应式：≥1280 完整；<1280 搜索收图标；移动端仅 Logo+账号+汉堡抽屉。
@@ -356,10 +362,10 @@
 
 | 类型          | Tabs 顺序（区块按此排列，不得混用模板）                                                      |
 | ----------- | -------------------------------------------------------------------------- |
-| **GPU 云服务器** | `概览 | 监控 | 控制台 | 配置与存储 | 事件 | 计费`                                          |
-| **GPU 裸金属**  | `概览 | 硬件监控 | 带外管理 | 网络与存储 | 固件与驱动 | 事件 | 计费`                             |
-| **vGPU**     | `概览 | 控制面 | 节点池 | 工作负载 | 网络与存储 | 拓扑 | 事件 | 计费`                          |
-| **推理服务**     | `实例管理 | 监控 | 服务治理 | 日志 | 配置 | 事件 | 计费`                                   |
+| **GPU 云服务器** | `概览 / 监控 / 控制台 / 配置与存储 / 事件 / 计费`                                          |
+| **GPU 裸金属**  | `概览 / 硬件监控 / 带外管理 / 网络与存储 / 固件与驱动 / 事件 / 计费`                             |
+| **vGPU**     | `概览 / 控制面 / 节点池 / 工作负载 / 网络与存储 / 拓扑 / 事件 / 计费`                          |
+| **推理服务**     | `实例管理 / 监控 / 服务治理 / 日志 / 配置 / 事件 / 计费`                                   |
 
 - **头部摘要行所有字段必须有库表来源**（PRD §4.3.0 / MOCK-DATA §6.8），禁止装饰性文字。
 - **每类都必须有「计费」Tab**（PRD §7.8 四段结构）。
@@ -448,6 +454,50 @@
   - **枚举与实体显示名**（资源类型 / 区域 / 节点池 / 状态 / 策略模型 / 触发指标）集中在字典 `common.*` 段，与 ARCH §12.6 枚举一一对应，组件不得自行翻译；
   - **fixture 数据值**（项目名 / 资源名 / 标签 / 事件原因）以中文为源，英译经字典 `data.*` 段输出（MOCK-DATA G10）；
   - 数字与日期格式走 `Intl`（随 locale），**币种恒 USD 不做汇率换算**（PRD §7.1）；图表轴标签同样走字典。
+  - **`cmd.*` 字典段（v0.8）**：命令面板专属文案——`cmd.placeholder` / `cmd.group.resource|create|nav|action` / `cmd.empty` / `cmd.emptyHint` / `cmd.openHint` / `cmd.switchLanguage` / `cmd.switchTheme` / `cmd.searching`，中英齐备。
+
+---
+
+### 5.25 CommandPalette（⌘K 全局命令面板，v0.8 新增）
+
+> 参照 Vercel / Linear / AWS Console 的命令面板心智：**键盘优先的全局导航与操作中枢**。组件 `components/command/CommandPalette.tsx` + `palette.css`（cmdk 原语 + 本项目 Token）。完整产品规范见 PRD §3.6。
+
+**结构与尺寸**
+
+| 元素 | 规范 |
+| --- | --- |
+| 容器 | 居中浮层，`width: min(640px, 92vw)`；`--rs-surface-1` 底 + `--rs-border` 描边；`--rs-r-lg` 圆角；`--rs-shadow-lg`；`position: fixed` + 遮罩 `--rs-overlay` |
+| 位置 | 距视口顶部 `12vh`（Vercel 式偏上，视觉焦点更近搜索框）；`z-index` 高于 Drawer |
+| 输入行 | 高度 48px，`Search` 图标 18px + 无边框输入框（`--rs-fs-md`）；右侧 `Esc` 键位提示；下边框分隔 |
+| 列表区 | `max-height: min(420px, 60vh)` 可滚动；组标题 12px 大写 muted + `--rs-s3` 上下间距；条目行高 40px |
+| 条目 | 左：图标 16px（`--rs-text-muted`）+ 主文案；右：副信息（如资源 `display_id` / 状态徽标 / 路由路径）；选中态 = `--rs-surface-2` 底 + 左侧 2px `--rs-brand` 条 |
+| 底栏 | 40px，`--rs-surface-2` 底；左：`↑↓ 选择 · ↵ 打开 · esc 关闭`；右：`RunSun` 标识 |
+
+**四组内容（顺序固定，见 PRD §3.6）**
+
+1. **资源**（输入后置顶，服务端 `q` 过滤，防抖 200ms，≤8 条）→ 跳详情；
+2. **新建资源**（四类，图标与 DESIGN §2.6 类型分类色一致）→ 跳 `/deployment/<kind>`；
+3. **导航**（RBAC 过滤，**与侧边栏共用 `app/layouts/navModel.ts`**）→ 跳路由；
+4. **快捷操作**：切换语言（中 ⇄ EN）、切换主题（亮 ⇄ 暗）→ 就地执行。
+
+**交互与状态**
+
+| 场景 | 规范 |
+| --- | --- |
+| 唤起 | `⌘K` / `Ctrl+K`（全局监听，输入态亦生效）；点击 Topbar 搜索框；再按一次关闭 |
+| 关闭 | `Esc` / 点击遮罩 / 选中条目后（**立即关闭再跳转，路由切换无残留**） |
+| 键盘 | `↑`/`↓` 循环移动（cmdk 默认 `loop`）、`Enter` 执行、`Home`/`End` 跳首尾；焦点全程锁在面板内 |
+| 加载态 | 资源搜索进行中显示 `cmd.searching`（骨架行或"搜索中…"），**禁用空白** |
+| 空态 | 无匹配时展示图标 + `cmd.empty` + `cmd.emptyHint`；搜索态额外给出"新建资源"引导按钮 |
+| 重置 | 每次打开清空关键词与选中项，避免上次状态泄漏 |
+
+**可访问性（同 §10，强制）**
+
+- `role="dialog"` + `aria-modal="true"` + `aria-label`（`cmd.placeholder`）；打开时焦点移入输入框，关闭后**焦点归还**触发元素（Topbar 搜索按钮）。
+- 条目 `role="option"` + `aria-selected`；列表 `role="listbox"`；组容器 `role="group"` + `aria-label`。
+- 遮罩点击关闭；焦点陷阱；`prefers-reduced-motion` 时禁用浮层缩放动画（仅保留 opacity）。
+
+**Token 消费**：`--rs-surface-1/2`、`--rs-border`、`--rs-text`（主）/ `--rs-text-muted`（副）/ `--rs-brand`（选中）/ `--rs-overlay`、`--rs-r-lg`、`--rs-shadow-lg`、`--rs-fs-sm/md`、`--rs-s2–s4`、`--rs-focus-ring`。新增 Token 需同步 §2.7。
 
 ---
 
@@ -540,6 +590,7 @@
 - [ ] 文本对比度 AA。
 - [ ] 文案 i18n 不硬编码；**金额统一 USD，按 locale 格式化（千分位、两位小数），不做汇率换算**（PRD §7.1）。
 - [ ] 动效尊重 `prefers-reduced-motion`。
+- [ ] **命令面板（v0.8）**：`⌘K`/`Ctrl+K` 与点击搜索框**两种入口等价**；`role="dialog"` + `aria-modal` + 列表 `role="listbox"` / 条目 `role="option"` + `aria-selected`；**关闭后焦点归还触发元素**；遮罩可点击关闭；`↑↓`/`Enter`/`Esc` 全程可用（§5.25）。
 
 ---
 
@@ -557,7 +608,9 @@
 | 货币格式化     | `src/lib/money`（USD + locale，唯一入口）                                                |
 | 主题切换      | `stores/theme` → `data-theme` 属性                                                   |
 | 侧边导航      | `src/app/layouts/Sidebar.tsx` + `stores/nav`（§5.10.1 分组展开/收起；总览直达项）                |
-| 语言切换（v0.7） | `LanguageSwitcher`（§5.24）+ `src/i18n/`（字典 + `stores/locale`）                     |
 | 弹性伸缩（v0.7） | `ScalingPolicyCard` + 工作台·弹性伸缩页（§5.22）；向导内 Switch（§5.12 注）                 |
 | 项目页（v0.7）  | `ProjectCard` + 运营&运维·项目页/详情（§5.23）                                          |
+| 语言切换（v0.7） | `LanguageSwitcher`（§5.24）+ `src/i18n/`（字典 + `stores/locale`）+ `cmd.*` 字典段      |
+| **命令面板（v0.8）** | `components/command/CommandPalette.tsx` + `palette.css`（§5.25）；导航模型 `app/layouts/navModel.ts`（与 §5.10 Sidebar 同源） |
+| **测试与 CI（v0.8）** | `vitest.config.ts` + `src/**/*.test.ts` + `src/test/architecture.test.ts` + `.github/workflows/ci.yml`（ARCH §15 / §11.1） |
 | UI→数据对照   | ARCHITECTURE §13.2（本文档所有数据型组件按该表取数）                                               |

@@ -1,7 +1,8 @@
 // Topbar 顶部全局条（PRD §3.1 / DESIGN-SYSTEM §5.16；高度 56px，左→右三区）
 // v0.6：移除全局常驻区域选择器（改为按页上下文，§3.3）；品牌区冻结常驻。
+// v0.8：搜索框接入全局命令面板（⌘K）；路由变化时自动收起下拉（与命令面板共存）。
 import { t } from '../../i18n';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -16,6 +17,7 @@ import { KIND_META, KIND_LIST, KIND_ICON } from '../../lib/ids';
 import type { Project } from '../../types/domain';
 import { ROLE_LABEL, ROLE_LIST } from '../../lib/rbac';
 import { formatUsd } from '../../lib/money';
+import { CommandPalette } from '../../components/command/CommandPalette';
 
 interface MeData {
   user: { display_name: string; email: string; role: string };
@@ -43,6 +45,8 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
   const setProject = useAuthStore((st) => st.setProject);
   const [openMenu, setOpenMenu] = useState(false);
   const [openNew, setOpenNew] = useState(false);
+  // v0.8：全局命令面板（⌘K / Ctrl+K）
+  const [openCmd, setOpenCmd] = useState(false);
   const crumbs = useBreadcrumb();
 
   const { data: me } = useQuery<MeData>({
@@ -50,6 +54,13 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
     queryFn: () => api.get<MeData>(EP.me),
     staleTime: Infinity,
   });
+
+  // 路由变化即收起全部下拉（Topbar 不随路由卸载，否则菜单会跨页面残留）
+  const { pathname } = useLocation();
+  useEffect(() => {
+    setOpenMenu(false);
+    setOpenNew(false);
+  }, [pathname]);
 
   const org = me?.org;
   const plan = me?.plan;
@@ -70,11 +81,17 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
           </span>
           <span className={s.topBrandName}>RunSun</span>
         </Link>
-        <div className={s.searchBox} role="button" tabIndex={0} title={t('tb.search')}>
-          <Search size={14} />
+        {/* v0.8：搜索框即命令面板入口（⌘K）；内容 = 资源搜索 + 导航 + 新建 + 快捷操作 */}
+        <button
+          type="button"
+          className={s.searchBox}
+          onClick={() => setOpenCmd(true)}
+          title={t('tb.search')}
+        >
+          <Search size={14} aria-hidden />
           <span>{t('tb.searchPlaceholder')}</span>
           <span className={s.kbd}>⌘K</span>
-        </div>
+        </button>
         <span className={s.crumbs}>{crumbs}</span>
       </div>
 
@@ -197,6 +214,9 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
           )}
         </div>
       </div>
+
+      {/* v0.8 命令面板常驻挂载（⌘K 监听不随弹层卸载而失效） */}
+      <CommandPalette open={openCmd} onOpenChange={setOpenCmd} />
     </header>
   );
 }

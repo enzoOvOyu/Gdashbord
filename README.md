@@ -6,7 +6,7 @@
 > 当前范围：**仅前端展示 + Mock 层**。真实后端未实现，全部接口由 MSW 拦截 `/api/*`；
 > PostgreSQL 由 Docker 提供，仅作为数据底座与 DDL 验证载体，详见 `ARCHITECTURE.md §12`。
 
-> ## ✅ 文档 vs 代码 状态（2026-10-19：v0.6 + v0.7 规范已全部落地）
+> ## ✅ 文档 vs 代码 状态（2026-10-19：v0.6 + v0.7 + v0.8 规范已全部落地）
 >
 > 设计文档（PRD v0.6 / v0.7、ARCHITECTURE、DESIGN-SYSTEM、MOCK-DATA v1.1 / v1.2）的全部要求**均已在代码中实现**。
 > 上表为 v0.6 核对记录，**v0.7 功能增强轮的落地情况见下方「v0.7 落地清单」**。
@@ -37,7 +37,17 @@
 > | 7 | **§3.5.1 项目页迁入运营&运维**：竞品卡片网格 + 六 Tab 整页详情 + 409 `PROJECT_HAS_RESOURCES` | ✅ `features/ops/ProjectsPage.tsx` / `ProjectDetailPage.tsx` |
 > | 8 | **§3.1 i18n 中英双语**：Topbar 语言切换器 + `localStorage`（`rs.locale`）+ `<html lang>` 同步；UI 零硬编码中文，fixture 值经 `dt()` 出英译 | ✅ `src/i18n/`（1458 键，中英严格对齐）+ `stores/locale.ts` |
 >
-> **已知待办（非缺陷）**：`cmdk` 命令面板（⌘K）未实现，故「切换语言」快捷操作暂不提供；真实 IAM 成员归属由后端下发，Mock 阶段取组织内 IAM 用户的稳定子集。
+> ### 🚀 v0.8 落地清单（2026-10-19）
+>
+> | # | v0.8 事项 | 代码状态 |
+> |---|-----------|----------|
+> | 1 | **⌘K 全局命令面板**（cmdk 1.1.1，此前已装未用）：Topbar 搜索框 / `⌘K`·`Ctrl+K` 唤起；四组内容 = 资源搜索（`/api/resources?q=` 服务端过滤，最多 8 条跳详情）+ 页面导航（与 Sidebar 同源 `navModel`，RBAC 过滤）+ 四类新建向导 + 快捷操作（语言 / 主题） | ✅ `components/command/CommandPalette.tsx` + `palette.css` + `app/layouts/navModel.ts` |
+> | 2 | **测试体系**：Vitest 3（`vitest.config.ts`，`pnpm test`）；65 例覆盖 money / ids / date / derive 派生公式 / i18n 中英契约 / scaling 种子契约（方向自洽、末值=实际规格、warm≤10s、人工干预与库存回退） | ✅ `src/**/*.test.ts`（7 文件 65 例全绿） |
+> | 3 | **CI**：GitHub Actions（push / PR 到 main）：install → typecheck → test → build | ✅ `.github/workflows/ci.yml` |
+> | 4 | **构建优化**：`manualChunks` 拆 vendor（react / charts / ui / query）；MSW 改动态导入（Mock 关闭时不打包 fixtures）；入口 chunk **1012 kB → 201 kB**（gzip 333 → 70），无 >500 kB 警告 | ✅ `vite.config.ts` + `app/providers.tsx` |
+> | 5 | **测试揪出的真实缺陷已修**：`sb.runningTotal` 中文文案误写为 `{data.running_total}`（插值不生效，状态栏会显示原始占位符） | ✅ `i18n/locales/zh-CN.ts` |
+>
+> **已知待办（非缺陷）**：真实 IAM 成员归属由后端下发，Mock 阶段取组织内 IAM 用户的稳定子集。
 
 ## 技术栈（ARCH §1）
 
@@ -46,6 +56,7 @@
 - UI 原语：Radix UI + CSS Modules（消费设计 Token）；图表：Recharts
 - 表单：**React Hook Form + Zod**（部署向导分步校验，ARCH §2）
 - Mock：**MSW** 拦截 `/api/*`，开关 `VITE_ENABLE_MOCK`
+- 测试：**Vitest 3**（65 例：lib / derive / i18n 契约 / scaling 契约 / 架构边界）；CI：GitHub Actions
 - 数据库底座：**PostgreSQL 15**；容器编排：**Docker Compose**
 
 ## 开发进度
@@ -110,39 +121,42 @@
 ### ⏳ 已知缺口与待办
 
 1. **无真实后端**：`VITE_ENABLE_MOCK=false` 后 `/api/*` 无实现；PostgreSQL 仅跑 DDL，未被应用访问。
-2. **UI 层仍直接引用 Mock fixtures**（如 `pricing`、`gpu-specs`、`thresholds`、`XID_TABLE`、`models`）用于读取常量与参考数据。
-   严格按 ARCH §11「Mock 关闭时派生责任移交后端」的要求，应改为经 `/api/catalog/*` 等接口下发。已记录待重构，暂与既有页面保持一致。
+2. **UI 层对 Mock fixtures 的有限引用已收敛为白名单**（ARCH §11）：`src/test/architecture.test.ts` 把 `features/`、`components/`、`stores/`、`app/` 中引用 `mocks/` 的 18 个文件及理由钉死，新增引用必须登记理由，防止悄悄扩散。涉及取价常量（`fixtures/pricing`）、模型目录（`fixtures/models`）、硬件规格（`fixtures/gpu-specs`）、指标语义（`fixtures/thresholds`）等——严格按 §11「Mock 关闭时派生责任移交后端」，这些应改为经 `/api/catalog/*` 下发，属后续重构项（改后会牵动向导同步取价路径，故本轮只做边界治理，未做数据源迁移）。
 3. `tsconfig` 关闭了 `noUncheckedIndexedAccess`（超出 strict 要求，与确定性 fixture 的数组索引冲突）；`strict` / `noUnusedLocals` / `noUnusedParameters` 均保留。
-4. 未铺 CI、单测与 E2E；i18n（react-i18next）已装依赖但未接翻译文案。
-5. 生产构建主 chunk 约 789 kB（gzip 256 kB）：概览页与共享 chunk 偏大，后续可按路由进一步做 `manualChunks` 拆分（当前已启用路由级懒加载）。
+4. ~~未铺 CI、单测~~ —— **v0.8 已补齐**：Vitest 65 例 + `.github/workflows/ci.yml`（typecheck / test / build）。E2E（Playwright）仍未铺。
+5. ~~生产构建主 chunk 约 789 kB~~ —— **v0.8 已优化**：入口 chunk 201 kB（gzip 70 kB），vendor 拆为 react / charts / ui / query 四个可缓存 chunk，无 >500 kB 警告。
 
 ## 目录结构（ARCH §3）
 
 ```
 src/
 ├─ app/
-│  ├─ providers.tsx        # QueryClient + MSW 初始化（受 VITE_ENABLE_MOCK 控制）
+│  ├─ providers.tsx        # QueryClient + MSW 动态初始化（受 VITE_ENABLE_MOCK 控制）
 │  ├─ router.tsx           # 全导航路由 + 路由级代码分割
-│  └─ layouts/             # ConsoleLayout / Sidebar / Topbar / StatusBar
+│  └─ layouts/             # ConsoleLayout / Sidebar / Topbar / StatusBar / navModel（导航模型）
 ├─ components/
 │  ├─ ui/                  # Button / Card / Badge / StatTile / Table / Tabs / Input /
 │  │                       #   Drawer / ConfirmDialog / KeyValue / MetricCard / PageHeader /
 │  │                       #   Segmented / Toast / Field / RegionSelect（CSS Modules + Token）
+│  ├─ command/             # CommandPalette（⌘K 命令面板，cmdk）+ palette.css
 │  ├─ state-machine/       # LifecycleBadge（6 态）/ StateMachineBadge（5 态）
 │  └─ charts/MetricChart   # 固定量程 + 阈值虚线 + null 断点
 ├─ features/               # overview / deployment（四类独立向导）/ resources（四类列表
-│                          #   + detail 四类独立详情）/ ops（运营&运维七页）/ development
-│                          #   / data / assets
+│                          #   + detail 四类独立详情）/ ops（运营&运维七页）/ workbench
+│                          #   / data / assets / shared（BillingTab / MetricsPanel）
 ├─ lib/                    # api-client / rbac / ids / money / date（基础工具）
 ├─ mocks/
 │  ├─ handlers/            # MSW 拦截器（业务实体 /api/*）
 │  ├─ fixtures/            # gpu-specs / pricing / regions-pools / models / images /
-│  │                       #   projects / billing / logs / workloads / nodes / …
+│  │                       #   projects / billing / logs / workloads / nodes / scaling / …
 │  ├─ lib/                 # rng / derive / timeseries / consistency / env
 │  └─ metrics.ts           # 时序指标（独立 /api/metrics/*）
-├─ stores/auth.ts          # auth / region / theme
+├─ stores/                 # auth / nav（侧栏折叠态）/ locale / theme
 ├─ styles/theme.css        # 设计 Token（亮/暗，DESIGN-SYSTEM §2/§4）
+├─ test/                   # setup.ts（localStorage 存根）+ architecture.test.ts（架构边界）
 └─ types/domain.ts         # 与 §12 DDL 同构的领域类型
+vitest.config.ts           # 测试配置（与 vite.config 分离）
+.github/workflows/ci.yml   # CI：typecheck + test + build
 docker/
 ├─ frontend/Dockerfile     # 前端开发容器（Node22 + pnpm + Vite6）
 └─ postgres/init/          # 01-schema.sql（§12 全量 DDL）+ 02-seed.sql（种子）
@@ -156,6 +170,8 @@ pnpm install
 pnpm exec msw init public/ --save   # 生成 public/mockServiceWorker.js
 pnpm dev        # http://localhost:5173
 pnpm build      # tsc -b && vite build
+pnpm test       # Vitest 单测（65 例：lib / derive / i18n / scaling / 架构边界）
+pnpm typecheck  # tsc -b --noEmit
 ```
 
 ## Docker 开发环境
@@ -186,7 +202,7 @@ docker compose up -d   # 前端容器 frontend + 数据库 db + 管理 UI admine
 - 端口变动后同步修改 `.env` 中这两个值，再 `docker compose up -d frontend` 生效。
 - **已内置降级策略**：容器 entrypoint 先按代理安装 → 失败则尝试直连 → 仍失败则改用卷内已有 `node_modules` 启动，避免 Vite 完全不可用（日志会打印提示）。
 - 说明：Docker daemon 自身的镜像拉取代理（`http.docker.internal:3128`）由 Docker Desktop 自动注入，与容器内出网代理是两回事。
-- **文件监听（HMR）**：Docker Desktop（Windows）的 bind mount 不向容器传播 inotify 事件，`vite.config.ts` 的 `server.watch` 已开启 `usePolling`（1s 轮询）保证容器内改代码后热更新生效。若修改 `vite.config.ts` 本身，需 `docker compose restart frontend` 才会加载新配置。
+- **文件监听（HMR）**：Docker Desktop（Windows）的 bind mount 不向容器传播 inotify 事件。`vite.config.ts` 的 `server.watch` **已禁用 `usePolling`**（轮询会对 `/app` 全量 stat，项目根曾残留 231MB `.pnpm-store` 时把 gRPC-FUSE 打满返回 EIO，Vite 反复崩溃）。现状：容器内 HMR 不生效，**修改源码后需 `docker compose up -d --force-recreate frontend`** 重建前端容器，浏览器刷新后才会拿到新代码。
 
 ## 环境变量（ARCH §12.7，构建期注入，仅 `VITE_*` 进前端产物）
 

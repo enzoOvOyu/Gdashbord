@@ -1,10 +1,12 @@
 # ARCHITECTURE — RunSun GPU Cloud 控制台（前端架构）
 
 > 文档类型：架构说明（前端为主；后端为蓝图，不在本次实现）
-> 版本：**v0.3 · 草稿（v0.6 产品评审第二轮修订）**
+> 版本：**v0.4 · v0.8 全局命令面板 + 质量体系**
 > 关联文档：`PRD.md`（需求）、`DESIGN-SYSTEM.md`（UI 规范）、`MOCK-DATA.md`（数据约束）、`REVIEW.md`（评审报告）
 >
 > **v0.3 变更要点**：①§3 目录结构清除悬空项（删 `cluster`/`model-library`/`operations`，改 `ops`），四类资源详情各自独立目录；②§4.1 路由补齐 `/ops/*` 三类整页详情 + API 契约清单；③§4.2 角色表同步删除权限与去"监控"；④§7 组件分层按新导航重组（新增 `MachineCard`/`EntityDrawer`/`ConfirmDeleteDialog`/`TopologyView` 内嵌化）；⑤§12.7 修正 `VITE_FEATURE_TOPOLOGY` 消费位置（不再指向已删路径）；⑥新增 **§12.10.3 DDL 级约束清单 C1–C14**；⑦新增 **§12.11 接口契约**（删除 / 项目 / 区域感知 / 四类详情返回体）；⑧§13.2 UI→表对照扩充详情页与计费/项目/删除行。
+>
+> **v0.4 变更要点（对应 PRD v0.8）**：①**§2 新增测试栈 Vitest**，cmdk 由"预留"改为已落地；②**§3 目录结构**新增 `app/layouts/navModel.ts`（导航模型单一来源）、`components/command/`（命令面板）、`src/test/`（测试与 setup）、`vitest.config.ts`、`.github/workflows/ci.yml`；③**§5 明确导航树共享约束**：Sidebar 与命令面板必须消费同一份 `navModel`，禁止两套 RBAC 过滤；④**§11 构建与部署**补齐 CI 三段门禁、`manualChunks` 分包策略与 **MSW 按需动态导入**（入口 chunk 1012 kB → 197 kB）；⑤新增 **§15 测试与质量保障体系**（测试分层、五类断言口径、架构守护四条、CI 工作流）。
 
 ---
 
@@ -35,7 +37,8 @@
 | 图表   | Recharts（常规）+ visx（拓扑/机架定制）         | 定制能力与效率平衡                           |
 | 表单   | React Hook Form + Zod               | 部署向导分步校验；Zod 同时约束 `spec_json`（§12.9） |
 | 国际化  | **自研轻量 i18n（v0.7 落地）**：`src/i18n/` 字典（zh-CN 为源 + en-US 译）+ `useI18n()`/`t()`，locale 走 Zustand store 并持久化 `localStorage` | 零新增依赖，与现有 stores 模式一致；文案键即前后端契约；fixture 数据值经字典出英译（MOCK-DATA G10） |
-| 命令面板 | cmdk                                | ⌘K 快捷操作                             |
+| 命令面板 | **cmdk（v0.8 已落地）**              | `components/command/CommandPalette.tsx`：⌘K/Ctrl+K 唤起，资源搜索 / 新建 / 导航 / 快捷操作四组（PRD §3.6、DESIGN §5.25） |
+| 测试   | **Vitest 3（v0.8 新增）**           | 零配置兼容 Vite 的 TS/别名/ESM；跑 `src/**/*.test.ts`，含**架构守护**测试（§15） |
 | 实时数据 | Mock WebSocket（或轮询）                 | 利用率、goodput、节点状态流（端点由 §12.7 配置）     |
 
 ---
@@ -46,8 +49,12 @@
 src/
 ├─ app/
 │  ├─ router.tsx              # 路由表（含 RBAC 守卫；/development/* → /workbench/* 重定向）
-│  ├─ layouts/                # 控制台骨架（Sidebar + Topbar + StatusBar + Outlet）
+│  ├─ layouts/
+│  │  ├─ navModel.ts          # ★ 导航模型单一来源（v0.8）：分组/子项定义 + RBAC 过滤，
+│  │  │                       #   Sidebar 与 ⌘K 命令面板共用，禁止第二套过滤逻辑（§5）
+│  │  └─ …                    # 控制台骨架（Sidebar + Topbar + StatusBar + Outlet）
 │  └─ providers.tsx           # Query / i18n / Theme / MSW 初始化（受 VITE_ENABLE_MOCK 控制）
+│                             #   ★ MSW 走动态 import，mock 代码不进生产主包（§11）
 ├─ features/                  # 按业务域切分（与 PRD §2 导航一一对应）
 │  ├─ overview/
 │  ├─ deployment/             # 创建入口：server / baremetal / vgpu / inference 向导
@@ -63,6 +70,7 @@ src/
 │  ├─ data/
 │  └─ assets/
 ├─ components/
+│  ├─ command/                # ★ v0.8：CommandPalette.tsx + palette.css（⌘K 命令面板，PRD §3.6）
 │  ├─ ui/                     # Button/Card/Table/Tabs/Badge/Modal/Tooltip/
 │  │                          #   EntityDrawer（PRD §3.4 展开）、RowExpander（C 档行内展开）、
 │  │                          #   ConfirmDeleteDialog（键入 display_id 确认）、
@@ -75,11 +83,20 @@ src/
 │  ├─ handlers/               # 各域接口拦截
 │  ├─ fixtures/               # 种子数据（与 §12 DDL 同构）
 │  └─ schema/                 # Zod/TS 类型化契约（含 ResourceId/DisplayId 品牌类型）
-├─ lib/                       # api-client / date / money / rbac / ids
+├─ lib/                       # api-client / date / money / rbac / ids（*.test.ts 就近同置）
 ├─ i18n/                      # 国际化（v0.7）：字典 zh-CN（源）/ en-US + locale store + t()/useI18n()
+│                             #   i18n.test.ts：中英键集合与占位符一致性（§15）
+├─ test/                      # ★ v0.8：setup.ts（测试环境引导）+ architecture.test.ts（架构守护）
 ├─ types/                     # 全局领域类型
 ├─ tokens/                    # 设计 Token（亮/暗）
 └─ styles/                    # 全局样式、reset、主题变量注入
+```
+
+**仓库根（v0.8 新增）**
+
+```
+vitest.config.ts              # 测试配置（environment: node，含 @/ 别名与 setupFiles）
+.github/workflows/ci.yml      # CI：typecheck → test → build（Node 22 + pnpm）
 ```
 
 ---
@@ -168,6 +185,10 @@ GET    /api/nodes?region&state&pool
   - `theme`：light/dark → `data-theme`。
   - `locale`（v0.7）：`zh-CN | en-US`，Topbar 语言切换器写入，持久化 `localStorage`（key `rs.locale`），同步 `<html lang>`；默认取 `VITE_I18N_DEFAULT_LOCALE`（§12.7）。
   - `nav`（v0.7）：侧边栏分组收起态（分组 id 数组），持久化 `localStorage`（key `rs.nav.collapsed`）；含激活路由的分组在渲染期强制展开（PRD §2.1）。
+- **导航模型单一来源（v0.8，强制）**：`app/layouts/navModel.ts` 导出分组定义、可见项过滤与 RBAC 判定，**Sidebar 与 ⌘K 命令面板必须消费同一份**。约束：
+  - 分组标签一律 **getter 化**（`() => t('nav.xxx')`），禁止模块级常量捕获 `t()` 结果，否则语言切换后侧边栏文案不更新；
+  - 分组结构在**渲染期计算**（`buildGroups()`），避免模块加载期固化；
+  - 角色过滤后的空分组不渲染；命令面板不得另写一套过滤（PRD §3.6 第 5 条）。
 - **服务端状态（TanStack Query）**：key 含 `region` + `routeKey` + `project`，多维度缓存隔离；**区域/项目切换必须触发真实重取，禁止"切换无反应"**。
 - **资源生命周期**：`provisioning → running | stopped | error → terminating → deleted_at`（PRD §5.4），与计量严格挂钩（PRD §7.4）；**删除走 `DELETE /api/resources/:uuid`，后端置 `deleted_at` 软删并释放配额（§12.10）**。
 - **节点状态机**：见 §9，UI 仅渲染派生态。
@@ -276,8 +297,47 @@ transitions:
 ## 11. 构建与部署（前端）
 
 - `vite build` 产出静态资源；对象存储 + CDN 托管（SPA 回退 index.html）。
-- CI：lint → typecheck → build → 预览；本地 `vite dev` 可运行完整原型（含 MSW）。
+- 本地 `vite dev` 可运行完整原型（含 MSW）；`vite preview` 验证生产产物。
 - **环境变量注入时机**：构建期注入 `VITE_*`，运行期只读（见 §12.7）。
+
+### 11.1 CI 流水线（v0.8，强制）
+
+`.github/workflows/ci.yml`，**推送 `main` 与所有 PR** 触发；Node 22 + pnpm（corepack），依赖走 `pnpm install --frozen-lockfile`。
+
+| 阶段 | 命令 | 失败即红 |
+| --- | --- | --- |
+| 1 · 类型 | `pnpm typecheck`（`tsc -b --force --noEmit`） | ✅ |
+| 2 · 测试 | `pnpm test`（`vitest run`） | ✅ |
+| 3 · 构建 | `pnpm build` | ✅ |
+
+- `tsc` 有**增量缓存**，CI 必须带 `--force`，否则可能空输出误判通过。
+- E2E（Playwright）**不在范围内**（PRD §11）。
+
+### 11.2 产物分包与体积预算（v0.8）
+
+- **`build.rollupOptions.output.manualChunks`** 按依赖族拆包：`react`（react/react-dom）、`router`（react-router）、`query`（@tanstack/react-query）、`charts`（recharts/d3 系）、`ui`（lucide-react/cmdk/radix）、`mocks`（MSW 与 mock 代码）。
+- **MSW 必须按需动态导入**：`app/providers.tsx` 在 `VITE_ENABLE_MOCK=true` 时才 `await import('../mocks/browser')`。
+  - 收益一：`VITE_ENABLE_MOCK=false` 的**生产构建不再打包 mock 与 fixture 种子**；
+  - 收益二：入口 chunk 由 **1012 kB → 197 kB**（gzip 显著下降），首屏不再被 Mock 数据拖累。
+- **体积预算**（PRD §10.1）：入口 chunk ≤ 250 kB（gzip ≤ 90 kB）；超出需在 PR 说明。
+- **实测分包（v0.8 落地值，`dist/assets`）**：
+
+  | chunk | 体积 | 说明 |
+  | --- | --- | --- |
+  | `browser-*.js`（MSW） | 365 kB | **动态导入**，`VITE_ENABLE_MOCK=false` 时不加载 |
+  | `charts-*.js` | 363 kB | recharts/d3 系，仅图表页按需 |
+  | `react-*.js` | 311 kB | react + react-dom |
+  | **`index-*.js`（入口）** | **197 kB** | ✅ 满足预算 |
+  | `ui-*.js` | 50 kB | lucide-react / cmdk / radix |
+  | `query-*.js` | 40 kB | @tanstack/react-query |
+  | 其余路由 chunk | 各 10–70 kB | 路由级懒加载 |
+- `sourcemap: true` 保留，便于线上定位；`dist/` 不入库。
+
+### 11.3 Docker 开发环境的监听策略（运维约定）
+
+- `vite.config.ts` 的 `server.watch` **禁用 `usePolling`**：Docker Desktop 的 bind mount 会放大轮询开销，曾因仓库根残留大量缓存文件导致 gRPC-FUSE 返回 `EIO`、Vite 反复崩溃；现为 inotify 事件驱动、无常驻负载。
+- **已知代价**：bind mount **不向容器传播宿主文件事件**，容器内 HMR 不生效。改源码后需 `docker compose up -d --force-recreate frontend`，再硬刷新浏览器（Ctrl+Shift+R）。
+- 容器运行时 `pnpm install` 需出网，代理端口由宿主动态分配；**漂移时同步 `.env` 的 `COMPOSE_HTTP_PROXY` / `COMPOSE_HTTPS_PROXY`**，否则容器卡死在依赖安装。
 
 ---
 
@@ -1188,3 +1248,52 @@ plans/orgs/users/projects                      身份与计费主体
 - 所有外部跳转与用户内容做防注入/转义（React 默认转义 + 富文本白名单）。
 - RBAC 仅用于体验优化，**真实鉴权与授权以后端为准**。
 - `VITE_*` 仅含非敏感配置；任何私有凭证不得进入前端构建产物。
+- **命令面板不绕过 RBAC**：⌘K 的导航组复用 `navModel` 的过滤结果（§5），面板不构成越权入口。
+
+---
+
+## 15. 测试与质量保障体系（v0.8 新增，强制）
+
+> **动机**：v0.7 之前项目零单测、零 CI。计价公式、派生引擎、i18n 一致性与架构边界全靠肉眼，回归风险极高。本轮把这些"隐性约定"固化为**可执行断言**。
+
+### 15.1 测试栈与命令
+
+| 项 | 值 |
+| --- | --- |
+| 框架 | **Vitest 3**（复用 Vite 的 TS / 别名 / ESM 解析，零额外配置） |
+| 环境 | `environment: 'node'`（当前只测纯逻辑与种子契约，不涉及 DOM；后续如需组件测试再引入 jsdom + Testing Library） |
+| 配置 | `vitest.config.ts`（`setupFiles: src/test/setup.ts`，`include: src/**/*.test.ts`） |
+| 命令 | `pnpm test`（`vitest run`）/ `pnpm test:watch` |
+| 落位 | **就近同置**：`src/lib/money.test.ts`、`src/mocks/fixtures/scaling.test.ts`…；跨文件守护放 `src/test/` |
+
+### 15.2 测试分层与断言口径
+
+| 层 | 文件 | 断言要点 |
+| --- | --- | --- |
+| **基础工具** | `lib/money.test.ts`、`lib/ids.test.ts`、`lib/date.test.ts` | USD 格式化与千分位、精度边界（0 / 负 / 大数）；`display_id` 前缀与资源类型一一对应；相对时间与 `formatDuration` 跨月/超 24h |
+| **派生引擎** | `mocks/lib/derive.test.ts` | 训练吞吐 `6N`（无重计算）与 `8N`（重计算）比值 0.75；节点数线性放大；decode 带宽上界随 TP 线性、bf16 为 fp8 的一半；**`stopped` 态不产生算力费用**（PRD §7.4）；存储月费独立计 |
+| **种子契约** | `mocks/fixtures/scaling.test.ts` | 11 策略 / 118 事件：方向数值自洽（扩后 > 扩前、缩后 < 缩前且不越界）、快照带度量、耗时按形态分档、末值 = 资源实际规格、含人工干预与库存回退样本 |
+| **i18n 契约** | `i18n/i18n.test.ts` | **中英键集合严格相等**；同一键的 `{v0}`…占位符数量与名称一致；无空串、无非标准占位符（如 `{data.x}`） |
+| **架构守护** | `test/architecture.test.ts` | 见 §15.3 |
+
+### 15.3 架构守护（防止约定悄悄腐化）
+
+以源码文本扫描为断言，全线静态、无运行时开销：
+
+1. **UI 层禁止直连 Mock fixtures**：`src/features/**`、`src/components/**`、`src/app/**` 对 `mocks/fixtures` 的 import 数必须为 **0**。
+   依据 §12.8 边界声明——`VITE_ENABLE_MOCK=false` 时派生责任移交后端，UI 层不得依赖种子常量。常量与参考数据一律走 `/api/*` 下发。
+2. **无半成品标记**：`src` 内无 `TODO` / `FIXME` / `XXX`。
+3. **不压制类型错误**：无 `@ts-ignore` / `@ts-expect-error`。
+4. **无静默豁免**：无 `eslint-disable` / `stylelint-disable`。
+
+> 说明：第 2–4 条允许在测试自身文件与 `.test.ts` 中出现被检测关键字（否则测试无法写），扫描时排除 `*.test.ts`。
+
+### 15.4 CI 门禁
+
+见 §11.1：`typecheck → test → build` 三段串行，任一失败即红。本地提交前建议按同序执行一遍。
+
+### 15.5 已由测试捕获并修复的真实缺陷（留存价值）
+
+- `sb.runningTotal` 英文版丢失 `{v0}` 占位符 → 补齐，并由 i18n 契约测试守护（PRD §13.4.2）。
+- 伸缩事件反向生成时出现"扩容后规模反而变小"的越界样本 → 生成器中翻转方向并 clamp 到 `[min, max]`，末值强制等于资源实际规格。
+- 生产包静态打入 MSW 与全部 fixture → 改动态导入 + `manualChunks`（§11.2）。
