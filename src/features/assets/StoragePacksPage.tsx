@@ -1,4 +1,5 @@
 // 存储包 Storage Packs（PRD §4.8 资产）：容量包及其消耗进度
+import { t } from '../../i18n';
 import { useQuery } from '@tanstack/react-query';
 import { Card, Table, StatTile, Badge } from '../../components/ui';
 import type { Column } from '../../components/ui';
@@ -20,12 +21,12 @@ export default function StoragePacksPage() {
   const totalRemaining = packs.reduce((a, p) => a + p.remaining_gb, 0);
 
   const columns: Array<Column<StoragePack>> = [
-    { key: 'size', header: '容量', numeric: true, render: (r) => formatGb(r.size_gb) },
-    { key: 'used', header: '已用', numeric: true, render: (r) => formatGb(usedGb(r)) },
-    { key: 'remaining', header: '剩余', numeric: true, render: (r) => formatGb(r.remaining_gb) },
+    { key: 'size', header: t('common.capacity'), numeric: true, render: (r) => formatGb(r.size_gb) },
+    { key: 'used', header: t('common.used'), numeric: true, render: (r) => formatGb(usedGb(r)) },
+    { key: 'remaining', header: t('common.remaining'), numeric: true, render: (r) => formatGb(r.remaining_gb) },
     {
       key: 'progress',
-      header: '消耗进度',
+      header: t('asset.consumption'),
       render: (r) => {
         const pct = r.size_gb > 0 ? (usedGb(r) / r.size_gb) * 100 : 0;
         return (
@@ -57,7 +58,7 @@ export default function StoragePacksPage() {
     },
     {
       key: 'valid',
-      header: '有效期',
+      header: t('common.validity'),
       render: (r) => (
         <span className="secondary">
           {formatRelative(r.valid_from)} ~ {formatRelative(r.valid_to)}
@@ -75,14 +76,14 @@ export default function StoragePacksPage() {
           gap: 'var(--rs-s4)',
         }}
       >
-        <StatTile label="存储包数量" value={packs.length} />
-        <StatTile label="总容量" value={formatGb(totalSize)} />
-        <StatTile label="剩余容量" value={formatGb(totalRemaining)} />
+        <StatTile label={t('asset.packCount')} value={packs.length} />
+        <StatTile label={t('asset.totalCapacity')} value={formatGb(totalSize)} />
+        <StatTile label={t('asset.remainingCapacity')} value={formatGb(totalRemaining)} />
       </div>
 
       <Card
-        title="存储包"
-        actions={isLoading ? <Badge tone="info">加载中…</Badge> : <Badge tone="muted">{packs.length} 项</Badge>}
+        title={t('asset.packTitle')}
+        actions={isLoading ? <Badge tone="info">{t('common.loading')}</Badge> : <Badge tone="muted">{t('common.countItems', { v0: packs.length })}</Badge>}
       >
         <Table columns={columns} rows={packs} rowKey={(r) => String(r.id)} zebra />
       </Card>

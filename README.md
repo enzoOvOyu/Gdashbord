@@ -6,9 +6,10 @@
 > 当前范围：**仅前端展示 + Mock 层**。真实后端未实现，全部接口由 MSW 拦截 `/api/*`；
 > PostgreSQL 由 Docker 提供，仅作为数据底座与 DDL 验证载体，详见 `ARCHITECTURE.md §12`。
 
-> ## ✅ 文档 vs 代码 状态（2026-10-19 v0.6 规范已全部落地）
+> ## ✅ 文档 vs 代码 状态（2026-10-19：v0.6 + v0.7 规范已全部落地）
 >
-> 设计文档（PRD v0.6 / ARCHITECTURE / DESIGN-SYSTEM / MOCK-DATA v1.1）的全部要求**均已在代码中实现**，本清单为核对记录：
+> 设计文档（PRD v0.6 / v0.7、ARCHITECTURE、DESIGN-SYSTEM、MOCK-DATA v1.1 / v1.2）的全部要求**均已在代码中实现**。
+> 上表为 v0.6 核对记录，**v0.7 功能增强轮的落地情况见下方「v0.7 落地清单」**。
 >
 > | # | v0.6 规范 | 代码状态 |
 > |---|-----------|----------|
@@ -22,6 +23,21 @@
 > | 8 | 删除为真实调用 `DELETE /api/resources/:uuid` + 键入 `display_id` 确认 | ✅ 软删（置 `deleted_at`、释放配额、停止计量、保留用量与流水历史） |
 > | 9 | 区域切换后 Mock 数据真实重算（G9 + 区域×池矩阵） | ✅ 资源/节点/节点池/事件/日志/成本/配额接口均按 `?region=` 过滤聚合 |
 > | 10 | ARCH §12.10.3 C1–C14 约束 + §8.3 断言扩充 | ✅ `lib/consistency.ts` 运行时断言 + 计费单位语义（`per_machine_hour`/`per_cluster_hour`） |
+
+> ### 🚀 v0.7 落地清单（2026-10-19）
+>
+> | # | v0.7 规范 | 代码状态 |
+> |---|-----------|----------|
+> | 1 | **§2.1 侧边导航**：总览为直达项（无子菜单）；其余分组点击组标题展开/收起（chevron + ≤200ms + `prefers-reduced-motion` 禁用）；收起态持久化 `rs.nav.collapsed`；激活组强制展开 | ✅ `app/layouts/Sidebar.tsx` + `stores/nav.ts` |
+> | 2 | 「开发（辅助）」→ **工作台 Workbench**，路由 `/workbench/*`（旧 `/development/*` 重定向）；新增**弹性伸缩**页 | ✅ `features/workbench/*`（Notebooks / Images / Apps / ScalingPage） |
+> | 3 | **§4.2.6 两类弹性策略模型**（节点池伸缩 / 服务副本伸缩，不共用表单）在四类向导落地，默认关闭 | ✅ `deployment/shared/ScalingForm.tsx` + `schemas.ts`（`nodePoolScalingSchema` / `replicaScalingSchema`） |
+> | 4 | 费用明细卡**保底（min）/ 峰值（max）双档**月度预估；下单配额预检按 max 档 | ✅ `shared/pricing.ts`（`ScalingBands`）+ `handlers`（`scaleFactor`） |
+> | 5 | 下单即生成 `scaling_policies` 行；资源详情「弹性」Tab 只读，写入口唯一在工作台 | ✅ `fixtures/scaling.ts` + `resources/detail/ScalingTab.tsx` |
+> | 6 | **§4.5.1 Notebook 三类挂靠**（云服务器 / 裸金属 / vGPU）+ 详情页一键创建（`?resource=<uuid>`） | ✅ `features/workbench/NotebooksPage.tsx` + `DetailShell` 反向联动入口 |
+> | 7 | **§3.5.1 项目页迁入运营&运维**：竞品卡片网格 + 六 Tab 整页详情 + 409 `PROJECT_HAS_RESOURCES` | ✅ `features/ops/ProjectsPage.tsx` / `ProjectDetailPage.tsx` |
+> | 8 | **§3.1 i18n 中英双语**：Topbar 语言切换器 + `localStorage`（`rs.locale`）+ `<html lang>` 同步；UI 零硬编码中文，fixture 值经 `dt()` 出英译 | ✅ `src/i18n/`（1458 键，中英严格对齐）+ `stores/locale.ts` |
+>
+> **已知待办（非缺陷）**：`cmdk` 命令面板（⌘K）未实现，故「切换语言」快捷操作暂不提供；真实 IAM 成员归属由后端下发，Mock 阶段取组织内 IAM 用户的稳定子集。
 
 ## 技术栈（ARCH §1）
 
@@ -149,9 +165,9 @@ cp .env.example .env   # 按需修改；默认即可
 docker compose up -d   # 前端容器 frontend + 数据库 db + 管理 UI adminer
 ```
 
-- 前端：**http://localhost:5173**
-- PostgreSQL：**localhost:5432**（库/用户/口令见 `.env`，默认 `runsun/runsun/runsun`）
-- Adminer（数据库管理）：**http://localhost:8081**
+- 前端：**http://127.0.0.1:5173**（请显式用 IPv4 地址；compose 已按 `127.0.0.1:5173:5173` 仅发布 IPv4，避免 Docker Desktop 的 IPv6 中继卡死导致 `localhost` 解析到 `::1` 后 60s 超时）
+- PostgreSQL：**127.0.0.1:5432**（库/用户/口令见 `.env`，默认 `runsun/runsun/runsun`）
+- Adminer（数据库管理）：**http://127.0.0.1:8081**
 - 数据落盘：`./docker/postgres/data`（已 gitignore，销毁用 `docker compose down -v`）
 - 初始化：`docker/postgres/init/*.sql` 在首次启动时被挂载到 `/docker-entrypoint-initdb.d` 自动执行
 

@@ -1,5 +1,6 @@
 // 镜像商城（PRD §4.5：官方/社区镜像卡片；v0.6 模型卡片并入本页，作为推理服务模型来源）
 // 开发（辅助）模块：只分发镜像与模型卡片，不当作资源陈列；产物须经"创建/购买"转化为四类之一（§6.3）。
+import { t, dt } from '../../i18n';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import {
@@ -47,10 +48,10 @@ interface ModelRow {
 
 const MODALITY_LABEL: Record<string, string> = {
   llm: 'LLM',
-  multimodal: '多模态',
-  diffusion: '文生图',
-  embedding: '向量',
-  rerank: '重排序',
+  get multimodal() { return t('model.multimodal'); },
+  get diffusion() { return t('model.text2img'); },
+  get embedding() { return t('model.embedding'); },
+  get rerank() { return t('model.rerank'); },
 };
 
 export default function ImagesPage() {
@@ -66,13 +67,13 @@ export default function ImagesPage() {
   return (
     <div>
       <PageHeader
-        title="镜像商城"
-        desc="开发（辅助）模块：容器镜像 + 模型卡片。模型卡片只作为推理服务的选型来源，不单独陈列为一类资源。"
+        title={t('dev.imagesTitle')}
+        desc={t('dev.imagesDesc')}
         actions={
           <RegionSelect
             value="jp"
             onChange={() => undefined}
-            disabledReason="镜像与模型为全局分发，不按区域切分"
+            disabledReason={t('dev.imagesGlobal')}
           />
         }
       />
@@ -84,7 +85,7 @@ export default function ImagesPage() {
             title={
               <div className={s.row}>
                 <span>{im.name}</span>
-                {im.is_official && <Badge color="var(--rs-gold)" icon={<span>★</span>}>官方</Badge>}
+                {im.is_official && <Badge color="var(--rs-gold)" icon={<span>★</span>}>{t('dev.official')}</Badge>}
               </div>
             }
             actions={<Badge tone="neutral">{im.framework}</Badge>}
@@ -94,7 +95,7 @@ export default function ImagesPage() {
                 {im.registry}:{im.tag}
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span className={s.secondary}>CUDA / 体积</span>
+                <span className={s.secondary}>{t('dev.cudaSize')}</span>
                 <strong>
                   cuda {im.cuda_version} · {formatGb(im.size_gb)}
                 </strong>
@@ -102,12 +103,12 @@ export default function ImagesPage() {
               <div className={s.row} style={{ marginTop: 4 }}>
                 <Link to="/deployment/server">
                   <Button variant="primary" size="sm">
-                    用于 GPU 云服务器
+                    {t('dev.forServer')}
                   </Button>
                 </Link>
                 <Link to="/deployment/baremetal">
                   <Button variant="ghost" size="sm">
-                    用于裸金属
+                    {t('dev.forBaremetal')}
                   </Button>
                 </Link>
               </div>
@@ -117,10 +118,10 @@ export default function ImagesPage() {
       </div>
 
       <div className={s.sectionTitle} style={{ margin: '24px 0 12px' }}>
-        模型卡片（并入镜像商城，原「模型库」菜单已删除）
+        {t('dev.modelCards')}
       </div>
       {models.length === 0 ? (
-        <EmptyState icon="🧠" title="暂无模型卡片" />
+        <EmptyState icon="🧠" title={t('dev.noModelCards')} />
       ) : (
         <div className={s.grid} style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))' }}>
           {models.map((m) => (
@@ -128,41 +129,40 @@ export default function ImagesPage() {
               key={m.slug}
               title={
                 <div className={s.row}>
-                  <span>{m.name}</span>
-                  {m.favorite && <Badge color="var(--rs-gold)" icon={<span>★</span>}>常用</Badge>}
+                  <span>{dt(m.name)}</span>
+                  {m.favorite && <Badge color="var(--rs-gold)" icon={<span>★</span>}>{t('dev.popular')}</Badge>}
                 </div>
               }
               actions={<Badge tone="neutral">{MODALITY_LABEL[m.modality] ?? m.modality}</Badge>}
             >
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13 }}>
                 <div className={s.muted} style={{ fontSize: 12 }}>
-                  {m.description}
+                  {dt(m.description)}
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span className={s.secondary}>参数量 / 精度</span>
+                  <span className={s.secondary}>{t('dev.paramsPrecision')}</span>
                   <strong>
                     {m.paramsBillion}B · {m.precision.toUpperCase()}
                   </strong>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span className={s.secondary}>权重体积（派生）</span>
+                  <span className={s.secondary}>{t('dev.weightSize')}</span>
                   <strong>{formatGb(m.weights_gb)}</strong>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span className={s.secondary}>推荐机型 / 最小 TP</span>
+                  <span className={s.secondary}>{t('dev.recommendedTp')}</span>
                   <strong>
-                    {m.recommendedPools.map((p) => NODE_POOL_LABEL[p]).join('、')} · {m.minTp} 卡
-                  </strong>
+                    {m.recommendedPools.map((p) => NODE_POOL_LABEL[p]).join(t('common.listSep'))} · {t('dev.gpuCount', { v0: m.minTp })}</strong>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span className={s.secondary}>上下文 / 许可</span>
+                  <span className={s.secondary}>{t('dev.contextLicense')}</span>
                   <strong>
                     {m.contextTokens > 0 ? `${m.contextTokens} tokens` : '—'} · {m.license}
                   </strong>
                 </div>
                 <Link to={`/deployment/inference?model=${m.slug}`} style={{ marginTop: 4 }}>
                   <Button variant="primary" size="sm">
-                    用于推理服务
+                    {t('dev.forInference')}
                   </Button>
                 </Link>
               </div>

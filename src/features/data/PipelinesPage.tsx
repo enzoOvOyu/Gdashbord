@@ -1,4 +1,5 @@
 // 数据预处理 Pipelines（PRD §4.6）：DAG 作业编排，节点数由 dag_json 派生
+import { t } from '../../i18n';
 import { useQuery } from '@tanstack/react-query';
 import { Card, Table, StatTile, Badge } from '../../components/ui';
 import type { Column } from '../../components/ui';
@@ -27,22 +28,22 @@ export default function PipelinesPage() {
   const totalNodes = pipelines.reduce((a, p) => a + dagStats(p).nodes, 0);
 
   const columns: Array<Column<Pipeline>> = [
-    { key: 'name', header: '流水线', render: (r) => <strong style={{ color: 'var(--rs-text)' }}>{r.name}</strong> },
+    { key: 'name', header: t('dp.pipelineTitle'), render: (r) => <strong style={{ color: 'var(--rs-text)' }}>{r.name}</strong> },
     {
       key: 'nodes',
-      header: 'DAG 节点',
+      header: t('dp.dagNodes'),
       numeric: true,
       render: (r) => dagStats(r).nodes,
     },
-    { key: 'edges', header: '依赖边', numeric: true, render: (r) => dagStats(r).edges },
+    { key: 'edges', header: t('dp.dagEdges'), numeric: true, render: (r) => dagStats(r).edges },
     {
       key: 'created',
-      header: '创建于',
+      header: t('common.createdAt'),
       render: (r) => <span className={s.secondary}>{formatRelative(r.created_at)}</span>,
     },
     {
       key: 'ops',
-      header: '操作算子',
+      header: t('dp.operators'),
       render: (r) => {
         const dag = r.dag_json as DagShape;
         const ops = (dag.nodes ?? []).map((n) => n.op ?? n.id).slice(0, 4);
@@ -68,13 +69,13 @@ export default function PipelinesPage() {
           gap: 'var(--rs-s4)',
         }}
       >
-        <StatTile label="流水线总数" value={pipelines.length} />
-        <StatTile label="DAG 节点合计" value={totalNodes} hint="由 dag_json 派生" />
+        <StatTile label={t('dp.pipelineCount')} value={pipelines.length} />
+        <StatTile label={t('dp.dagNodeTotal')} value={totalNodes} hint={t('dp.dagDerived')} />
       </div>
 
       <Card
-        title="数据预处理"
-        actions={isLoading ? <Badge tone="info">加载中…</Badge> : <Badge tone="muted">{pipelines.length} 条流水线</Badge>}
+        title={t('dp.pipelineNav')}
+        actions={isLoading ? <Badge tone="info">{t('common.loading')}</Badge> : <Badge tone="muted">{t('dp.pipelineCountValue', { v0: pipelines.length })}</Badge>}
       >
         <Table columns={columns} rows={pipelines} rowKey={(r) => String(r.id)} zebra />
       </Card>

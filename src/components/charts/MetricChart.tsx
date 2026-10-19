@@ -1,6 +1,7 @@
 // 图表外框与指标图（DESIGN-SYSTEM §5.15 ChartFrame / §7 数据可视化规范）
 // 量程固定（利用率 0–100%）；阈值线虚线 + 标签（阈值由 thresholds 下发，组件不硬编码）；
 // 无数据渲染断点而非 0 线（connectNulls=false）。
+import { t, dt } from '../../i18n';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import type { MetricSeries } from '../../mocks/metrics';
 import { semanticOf } from '../../mocks/fixtures/thresholds';
@@ -41,7 +42,7 @@ export function MetricChart({ series, height = 180, showThreshold = true }: Metr
         }}
       >
         <span style={{ fontSize: 'var(--rs-fs-sm)', color: 'var(--rs-text-secondary)' }}>
-          {series.label}
+          {dt(series.label)}
         </span>
         <span
           style={{
@@ -53,8 +54,7 @@ export function MetricChart({ series, height = 180, showThreshold = true }: Metr
         >
           {series.current === null ? (
             <span style={{ color: 'var(--rs-text-muted)', fontSize: 'var(--rs-fs-sm)' }}>
-              – 无数据
-            </span>
+              {t('chart.emptySeries')}</span>
           ) : (
             <>
               {formatNumber(series.current, series.unit === '%' ? 1 : 0)} {series.unit}
@@ -67,8 +67,7 @@ export function MetricChart({ series, height = 180, showThreshold = true }: Metr
                     fontWeight: 400,
                   }}
                 >
-                  阈值 {series.threshold.warning ?? series.threshold.critical}
-                  {series.threshold.unit}
+                  {t('chart.thresholdValue', { v0: series.threshold.warning ?? series.threshold.critical, v1: series.threshold.unit })}
                 </span>
               )}
             </>
@@ -108,8 +107,8 @@ export function MetricChart({ series, height = 180, showThreshold = true }: Metr
             formatter={(v) => {
               const val = typeof v === 'number' ? v : null;
               return val === null
-                ? ['采集中 / 无数据', series.label]
-                : [`${formatNumber(val, 1)} ${series.unit}`, series.label];
+                ? [t('chart.noData'), series.label]
+                : [`${formatNumber(val, 1)} ${dt(series.unit)}`, dt(series.label)];
             }}
           />
           {showThreshold && thresholdValue !== undefined && (
@@ -118,7 +117,7 @@ export function MetricChart({ series, height = 180, showThreshold = true }: Metr
               stroke={color}
               strokeDasharray="4 4"
               label={{
-                value: `阈值 ${thresholdValue}`,
+                value: t('chart.thresholdShort', { v0: thresholdValue }),
                 position: 'insideTopRight',
                 fontSize: 10,
                 fill: 'var(--rs-text-muted)',

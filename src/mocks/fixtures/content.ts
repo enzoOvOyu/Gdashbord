@@ -7,7 +7,6 @@ import type {
   Dataset,
   Invoice,
   InternalId,
-  NotebookItem,
   NotificationItem,
   Pipeline,
   Reservation,
@@ -58,13 +57,8 @@ export const PIPELINES: Pipeline[] = [
   },
 ];
 
-// ─────────── 开发模块 ───────────
-export const NOTEBOOKS: NotebookItem[] = [
-  { id: 1 as InternalId, resource_id: 2 as InternalId, type: 'jupyter', status: 'running', url_path: '/notebook/1/lab', created_at: iso(3 * 86400_000) },
-  { id: 2 as InternalId, resource_id: 1 as InternalId, type: 'vscode', status: 'running', url_path: '/notebook/2/vscode', created_at: iso(2 * 86400_000) },
-  { id: 3 as InternalId, resource_id: 2 as InternalId, type: 'jupyter', status: 'stopped', url_path: '/notebook/3/lab', created_at: iso(8 * 86400_000) },
-];
-
+// ─────────── 工作台模块 ───────────
+// Notebook / IDE 已迁出到 fixtures/notebooks.ts（v0.7 三类挂靠，PRD §4.5.1）
 export const APP_TEMPLATES: AppTemplate[] = [
   { id: 1 as InternalId, slug: 'comfyui', name: 'ComfyUI 文生图', category: 'diffusion', default_image_id: 7 as InternalId, form_schema: { fields: [{ name: 'model', type: 'select', options: ['sdxl-1.0'] }] } },
   { id: 2 as InternalId, slug: 'vllm-openai', name: 'vLLM OpenAI 兼容服务', category: 'chatbot', default_image_id: 3 as InternalId, form_schema: { fields: [{ name: 'model', type: 'model' }, { name: 'port', type: 'number', default: 8000 }] } },

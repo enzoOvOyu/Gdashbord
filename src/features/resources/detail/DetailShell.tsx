@@ -1,7 +1,8 @@
 // 详情页外壳（PRD §4.3.0：四类共用外层，内层各自独立）
+import { t, dt } from '../../../i18n';
 import { useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Trash2, Play, Square } from 'lucide-react';
+import { ArrowLeft, Trash2, Play, Square, Code2 } from 'lucide-react';
 import {
   ui as s,
   Card,
@@ -24,17 +25,23 @@ import {
 } from '../../shared/api';
 
 const UNIT_SUFFIX: Record<string, string> = {
-  per_gpu_hour: '/GPU·时',
-  per_machine_hour: '/台·时',
-  per_cluster_hour: '/集群·时',
-  per_gb_hour: '/GB·时',
-  per_instance_hour: '/实例·时',
+  get per_gpu_hour() { return t('unit.perGpuHour'); },
+  get per_machine_hour() { return t('unit.perMachineHour'); },
+  get per_cluster_hour() { return t('unit.perClusterHour'); },
+  get per_gb_hour() { return t('unit.perGbHour'); },
+  get per_instance_hour() { return t('unit.perInstanceHour'); },
 };
 
 export interface ShellTab {
   key: string;
   label: string;
 }
+
+/**
+ * 可挂靠 Notebook / IDE 的形态（PRD §4.5.1）：
+ * GPU 云服务器 / GPU 裸金属 / vGPU 集群三类；推理服务无 SSH 面，不挂开发环境。
+ */
+const NOTEBOOK_ATTACHABLE: ReadonlyArray<string> = ['gpu_vm', 'gpu_baremetal', 'vgpu'];
 
 export function DetailShell({
   detail,
@@ -63,20 +70,20 @@ export function DetailShell({
   const doDelete = async (): Promise<void> => {
     try {
       await del.mutateAsync(detail.resource_uuid as string);
-      toast.success(`已删除 ${detail.display_id as string}（软删：配额已释放、计量已停止）`);
+      toast.success(t('ds.deleted', { v0: detail.display_id as string }));
       setConfirming(false);
       navigate(`/resources/${routeKey}`);
     } catch {
-      toast.error('删除失败，请重试');
+      toast.error(t('ds.deleteFailed'));
     }
   };
 
   const doLifecycle = async (action: 'start' | 'stop'): Promise<void> => {
     try {
       await lifecycle.mutateAsync({ uuid: detail.resource_uuid as string, action });
-      toast.success(action === 'start' ? '已启动' : '已停止（算力停计，仅计存储）');
+      toast.success(action === 'start' ? t('ds.started') : t('ds.stopped'));
     } catch {
-      toast.error('操作失败，请重试');
+      toast.error(t('ds.actionFailed'));
     }
   };
 
@@ -93,15 +100,13 @@ export function DetailShell({
             <span className={s.mono}>{detail.display_id as string}</span>
             {' · '}
             {REGION_META[detail.region].label} {REGION_META[detail.region].iso} ·{' '}
-            {NODE_POOL_LABEL[detail.node_pool]} · {meta.label} · 项目 {detail.project_name} ·{' '}
+            {NODE_POOL_LABEL[detail.node_pool]} · {t('detail.metaProject', { v0: meta.label, v1: dt(detail.project_name) })} ·{' '}
             {formatUsdRate(detail.cost.unit_price)}
-            {UNIT_SUFFIX[detail.cost.unit]} · {formatUsd(detail.cost.per_hour)}/时 ·{' '}
-            {detail.running_since
-              ? `已运行 ${runningDuration(detail.running_since).text}`
-              : '未运行'}
+            {UNIT_SUFFIX[detail.cost.unit]} · {t('detail.perHourSuffix', { v0: formatUsd(detail.cost.per_hour) })}{detail.running_since
+              ? t('detail.runningSince', { v0: runningDuration(detail.running_since).text })
+              : t('detail.notRunning')}
             {' · '}
-            创建于 {formatDateTime(detail.created_at)}
-          </p>
+            {t('detail.createdAt', { v0: formatDateTime(detail.created_at) })}</p>
         </div>
         <div className={s.pageHeadActions}>
           <Button
@@ -110,16 +115,29 @@ export function DetailShell({
             icon={<ArrowLeft size={14} />}
             onClick={() => navigate(`/resources/${routeKey}`)}
           >
-            返回列表
+            {t('common.backToList')}
           </Button>
+          {/* v0.7 反向联动：资源 → 工作台（?resource=<uuid> 预填宿主，PRD §4.5.1） */}
+          {NOTEBOOK_ATTACHABLE.includes(detail.kind) && !detail.deleted_at && (
+            <Button
+              size="sm"
+              variant="secondary"
+              icon={<Code2 size={14} />}
+              onClick={() =>
+                navigate(`/workbench/notebooks?resource=${encodeURIComponent(detail.resource_uuid as string)}`)
+              }
+            >
+              {t('ds.createNotebook')}
+            </Button>
+          )}
           {!readOnly && detail.status === 'running' && (
             <Button size="sm" variant="secondary" icon={<Square size={14} />} onClick={() => void doLifecycle('stop')}>
-              停止
+              {t('common.stop')}
             </Button>
           )}
           {!readOnly && detail.status === 'stopped' && (
             <Button size="sm" variant="secondary" icon={<Play size={14} />} onClick={() => void doLifecycle('start')}>
-              启动
+              {t('fx.stepBoot')}
             </Button>
           )}
           {canDelete && (
@@ -129,7 +147,7 @@ export function DetailShell({
               icon={<Trash2 size={14} />}
               onClick={() => setConfirming(true)}
             >
-              删除
+              {t('common.delete')}
             </Button>
           )}
         </div>
@@ -149,20 +167,16 @@ export function DetailShell({
 
       <ConfirmDialog
         open={confirming}
-        title={`删除 ${meta.label}`}
+        title={t('ds.deleteKind', { v0: meta.label })}
         confirmText={detail.display_id as string}
-        confirmLabel="确认删除"
+        confirmLabel={t('common.confirmDelete')}
         pending={del.isPending}
         description={
           <span>
-            即将删除 <b>{detail.name}</b>（{detail.display_id as string}）。
+            {t('ds.aboutToDelete')} <b>{detail.name}</b>{t('common.idInParens', { v0: detail.display_id as string })}<br />
+            {t('ds.softDelete')} <code>deleted_at</code>{t('ds.quotaReleased')}<b>{t('ds.usageKept')}</b>{t('ds.forReconciliation')}
             <br />
-            真实软删：进入 terminating 并标记 <code>deleted_at</code>，配额立即释放、计量立即停止；
-            <b>已发生的用量与扣费流水保留</b>用于对账。
-            <br />
-            当前时单价 {formatUsd(detail.cost.per_hour)}/时（
-            {formatUsdRate(detail.cost.unit_price)}
-            {UNIT_SUFFIX[detail.cost.unit]} × {detail.cost.quantity}）。
+            {t('ds.currentRate', { v0: formatUsd(detail.cost.per_hour), v1: formatUsdRate(detail.cost.unit_price), v2: UNIT_SUFFIX[detail.cost.unit], v3: detail.cost.quantity })}
           </span>
         }
         onCancel={() => setConfirming(false)}
@@ -191,9 +205,8 @@ export function ProvisioningNotice({
         marginBottom: 16,
       }}
     >
-      <b>{kindLabel}供给中</b>：{done}/{steps.length} 个子步骤已完成。
-      <div className={s.muted} style={{ fontSize: 12 }}>
-        供给完成后自动进入 Running 并开始计量；若失败将置为 Error 并给出具体原因。
+      <b>{t('ds.provisioning', { v0: kindLabel })}</b>{t('ds.substepColon', { v0: done })}/{t('ds.substepsDone', { v0: steps.length })}<div className={s.muted} style={{ fontSize: 12 }}>
+        {t('ds.provisionHint')}
       </div>
     </div>
   );

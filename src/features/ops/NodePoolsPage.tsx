@@ -1,5 +1,6 @@
 // 运营&运维 · 节点池（§4.4.1 A 档：行 → Drawer → 整页 /ops/pools/:code）
 // 容量一律按 region 真实聚合：可用 GPU = 该区域该池（总 GPU − 已分配），不同区域数值必须不同（G9）。
+import { t, dt } from '../../i18n';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowUpRight, SlidersHorizontal } from 'lucide-react';
@@ -31,18 +32,18 @@ import {
 type DrawerTab = 'overview' | 'supply' | 'pricing';
 
 const PRICE_BANDS = [
-  { value: 'all', label: '全部单价' },
-  { value: 'b1', label: '< $2 / GPU·时' },
+  { value: 'all', get label() { return t('pools.allPrices'); } },
+  { value: 'b1', get label() { return t('pools.under2'); } },
   { value: 'b2', label: '$2 – $4' },
   { value: 'b3', label: '$4 – $8' },
   { value: 'b4', label: '≥ $8' },
 ];
 
 const SORTS = [
-  { value: 'price', label: '单价升序' },
-  { value: 'available', label: '空闲 GPU 降序' },
-  { value: 'rate', label: '分配率升序' },
-  { value: 'vram', label: '单卡显存降序' },
+  { value: 'price', get label() { return t('pools.sortPriceAsc'); } },
+  { value: 'available', get label() { return t('pools.sortFreeDesc'); } },
+  { value: 'rate', get label() { return t('pools.sortAllocAsc'); } },
+  { value: 'vram', get label() { return t('pools.sortMemDesc'); } },
 ];
 
 const inBand = (price: number, band: string): boolean => {
@@ -87,35 +88,35 @@ export default function NodePoolsPage() {
   const columns: Array<Column<NodePoolView>> = [
     {
       key: 'name',
-      header: '机型',
+      header: t('common.machineType'),
       render: (p) => (
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <b>{p.display_name}</b>
-          {!p.available_in_region && <Badge tone="muted">该区域未提供</Badge>}
+          {!p.available_in_region && <Badge tone="muted">{t('pools.notOffered')}</Badge>}
           {p.supply && (p.supply.availableGpu ?? 0) === 0 && p.available_in_region && (
-            <Badge tone="danger">无空闲</Badge>
+            <Badge tone="danger">{t('pools.noFree')}</Badge>
           )}
         </div>
       ),
     },
-    { key: 'gpu', header: 'GPU 型号', render: (p) => p.gpu_model },
-    { key: 'vram', header: '单卡显存', numeric: true, render: (p) => `${p.vram_gb} GB` },
-    { key: 'inter', header: '互连', render: (p) => p.interconnect },
+    { key: 'gpu', header: t('common.gpuModel'), render: (p) => p.gpu_model },
+    { key: 'vram', header: t('common.memPerGpu'), numeric: true, render: (p) => `${p.vram_gb} GB` },
+    { key: 'inter', header: t('pools.interconnect'), render: (p) => p.interconnect },
     {
       key: 'nodes',
-      header: '节点数',
+      header: t('common.nodeCount'),
       numeric: true,
       render: (p) => formatNumber(p.supply?.nodeCount ?? 0),
     },
     {
       key: 'total',
-      header: '总 GPU',
+      header: t('common.totalGpu'),
       numeric: true,
       render: (p) => formatNumber(p.supply?.totalGpu ?? 0),
     },
     {
       key: 'avail',
-      header: '可用 GPU',
+      header: t('common.availableGpu'),
       numeric: true,
       render: (p) => (
         <b style={{ color: (p.supply?.availableGpu ?? 0) > 0 ? undefined : 'var(--rs-danger)' }}>
@@ -125,7 +126,7 @@ export default function NodePoolsPage() {
     },
     {
       key: 'rate',
-      header: '分配率',
+      header: t('common.allocRate'),
       render: (p) => (
         <div style={{ minWidth: 96 }}>
           <Progress value={p.supply?.allocatedGpu ?? 0} max={p.supply?.totalGpu ?? 0} />
@@ -134,9 +135,9 @@ export default function NodePoolsPage() {
     },
     {
       key: 'price',
-      header: '单价',
+      header: t('common.unitPrice'),
       numeric: true,
-      render: (p) => `${formatUsd(p.unit_price)}/GPU·时`,
+      render: (p) => t('common.ratePerGpuHour', { v0: formatUsd(p.unit_price) }),
     },
     {
       key: 'act',
@@ -144,7 +145,7 @@ export default function NodePoolsPage() {
       width: 92,
       render: (p) => (
         <Button size="sm" variant="ghost" onClick={() => setOpen(p)}>
-          查看
+          {t('common.view')}
         </Button>
       ),
     },
@@ -153,37 +154,37 @@ export default function NodePoolsPage() {
   return (
     <div>
       <PageHeader
-        title="节点池"
-        desc={`平台供给侧物理节点池（非用户资源）。当前按 ${REGION_META[region].label} 区域聚合，切换区域后容量与单价必须由接口重算。`}
+        title={t('common.nodePool')}
+        desc={t('pools.pageHint', { v0: REGION_META[region].label })}
         actions={<RegionSelect value={region} onChange={setRegion} />}
       />
 
       <Toolbar>
         <Segmented
           options={[
-            { value: 'card', label: '卡片' },
-            { value: 'list', label: '列表' },
+            { value: 'card', label: t('pools.cardView') },
+            { value: 'list', label: t('pools.listView') },
           ]}
           value={view}
           onChange={setView}
-          ariaLabel="视图"
+          ariaLabel={t('pools.view')}
         />
-        <Select value={band} onChange={(e) => setBand(e.target.value)} aria-label="单价区间">
+        <Select value={band} onChange={(e) => setBand(e.target.value)} aria-label={t('pools.priceRange')}>
           {PRICE_BANDS.map((b) => (
             <option key={b.value} value={b.value}>
               {b.label}
             </option>
           ))}
         </Select>
-        <Select value={gpuModel} onChange={(e) => setGpuModel(e.target.value)} aria-label="GPU 型号">
-          <option value="all">全部 GPU 型号</option>
+        <Select value={gpuModel} onChange={(e) => setGpuModel(e.target.value)} aria-label={t('common.gpuModel')}>
+          <option value="all">{t('pools.allGpuModels')}</option>
           {models.map((m) => (
             <option key={m} value={m}>
               {m}
             </option>
           ))}
         </Select>
-        <Select value={sort} onChange={(e) => setSort(e.target.value)} aria-label="排序">
+        <Select value={sort} onChange={(e) => setSort(e.target.value)} aria-label={t('pools.sort')}>
           {SORTS.map((o) => (
             <option key={o.value} value={o.value}>
               {o.label}
@@ -192,22 +193,22 @@ export default function NodePoolsPage() {
         </Select>
         <label className={s.row} style={{ gap: 6, fontSize: 12 }}>
           <input type="checkbox" checked={onlyIdle} onChange={(e) => setOnlyIdle(e.target.checked)} />
-          仅显示有空闲
+          {t('pools.onlyFree')}
         </label>
         <span className={s.spacer} />
         <span className={s.muted} style={{ fontSize: 12 }}>
-          <SlidersHorizontal size={13} /> 共 {list.length} 个机型 · {REGION_META[region].iso}
+          <SlidersHorizontal size={13} /> {t('pools.countSummary', { v0: list.length, v1: REGION_META[region].iso })}
         </span>
       </Toolbar>
 
       {isLoading ? (
-        <div className={s.muted}>加载中…</div>
+        <div className={s.muted}>{t('common.loading')}</div>
       ) : view === 'card' ? (
         list.length === 0 ? (
           <EmptyState
             icon="📭"
-            title="该筛选条件下没有节点池"
-            hint="调整单价区间或取消「仅显示有空闲」，也可切换到其它区域"
+            title={t('pools.noMatch')}
+            hint={t('pools.noMatchHint')}
           />
         ) : (
           <div
@@ -242,11 +243,11 @@ export default function NodePoolsPage() {
                   <div className={s.row} style={{ justifyContent: 'space-between' }}>
                     <b>{p.display_name}</b>
                     {missing ? (
-                      <Badge tone="muted">该区域未提供</Badge>
+                      <Badge tone="muted">{t('pools.notOffered')}</Badge>
                     ) : avail === 0 ? (
-                      <Badge tone="danger">无空闲</Badge>
+                      <Badge tone="danger">{t('pools.noFree')}</Badge>
                     ) : (
-                      <Badge tone="success">有空闲</Badge>
+                      <Badge tone="success">{t('pools.hasFree')}</Badge>
                     )}
                   </div>
                   <div className={s.muted} style={{ fontSize: 12, marginTop: 2 }}>
@@ -256,28 +257,25 @@ export default function NodePoolsPage() {
                     <Progress
                       value={p.supply?.allocatedGpu ?? 0}
                       max={total}
-                      right={`${formatNumber(avail)} / ${formatNumber(total)} 卡空闲`}
+                      right={t('pools.freeOf', { v0: formatNumber(avail), v1: formatNumber(total) })}
                     />
                   </div>
                   <div
                     className={s.row}
                     style={{ justifyContent: 'space-between', marginTop: 8, fontSize: 13 }}
                   >
-                    <b>{formatUsd(p.unit_price)}/GPU·时</b>
+                    <b>{t('common.ratePerGpuHour', { v0: formatUsd(p.unit_price) })}</b>
                     <span className={s.muted} style={{ fontSize: 11 }}>
-                      市场 {formatUsd(p.market_range[0])}–{formatUsd(p.market_range[1])}
+                      {t('pools.marketValue', { v0: formatUsd(p.market_range[0]), v1: formatUsd(p.market_range[1]) })}
                     </span>
                   </div>
                   {missing && (
                     <div className={s.muted} style={{ fontSize: 11, marginTop: 6 }}>
-                      可用区域：
-                      {p.available_regions.map((r) => REGION_META[r].iso).join(' / ')}
-                    </div>
+                      {t('pools.availableRegions', { v0: p.available_regions.map((r) => REGION_META[r].iso).join(' / ') })}</div>
                   )}
                   {!missing && (
                     <div className={s.muted} style={{ fontSize: 11, marginTop: 6 }}>
-                      {p.supply?.nodeCount ?? 0} 节点 · {p.gpus_per_node} 卡/节点 · 整机{' '}
-                      {formatUsd(p.machine_unit_price)}/台·时
+                      {t('pools.machineSummary', { v0: p.supply?.nodeCount ?? 0, v1: p.gpus_per_node, v2: ' ', v3: formatUsd(p.machine_unit_price) })}
                     </div>
                   )}
                 </div>
@@ -295,8 +293,8 @@ export default function NodePoolsPage() {
           empty={
             <EmptyState
               icon="📭"
-              title="该筛选条件下没有节点池"
-              hint="调整筛选条件或切换区域"
+              title={t('pools.noMatch')}
+              hint={t('common.adjustFilters')}
             />
           }
         />
@@ -310,7 +308,7 @@ export default function NodePoolsPage() {
         badge={
           open ? (
             <Badge tone={open.available_in_region ? 'success' : 'muted'}>
-              {open.available_in_region ? `${REGION_META[region].iso} 可提供` : '该区域未提供'}
+              {open.available_in_region ? t('pools.regionProvides', { v0: REGION_META[region].iso }) : t('pools.regionNotProvided')}
             </Badge>
           ) : null
         }
@@ -322,7 +320,7 @@ export default function NodePoolsPage() {
               if (open) navigate(`/ops/pools/${open.code}`);
             }}
           >
-            查看完整详情
+            {t('common.viewDetail')}
           </Button>
         }
       >
@@ -330,9 +328,9 @@ export default function NodePoolsPage() {
           <div className={s.col} style={{ gap: 12 }}>
             <DrawerTabs<DrawerTab>
               items={[
-                { key: 'overview', label: '概览' },
-                { key: 'supply', label: '供给' },
-                { key: 'pricing', label: '定价' },
+                { key: 'overview', label: t('detail.overview') },
+                { key: 'supply', label: t('nodes.supply') },
+                { key: 'pricing', label: t('pools.pricing') },
               ]}
               value={tab}
               onChange={setTab}
@@ -341,31 +339,30 @@ export default function NodePoolsPage() {
               <>
                 <KeyValue
                   items={[
-                    { label: '机型编码', value: open.code, mono: true },
-                    { label: 'GPU 型号', value: open.gpu_model },
-                    { label: '单卡显存', value: `${open.vram_gb} GB` },
-                    { label: '单节点卡数', value: `${open.gpus_per_node} 卡` },
-                    { label: '互连', value: open.interconnect },
-                    { label: 'CPU', value: open.platform.cpu },
-                    { label: '本地 NVMe', value: open.platform.localNvme },
-                    { label: '网络', value: open.platform.network },
+                    { label: t('pools.modelCode'), value: open.code, mono: true },
+                    { label: t('common.gpuModel'), value: open.gpu_model },
+                    { label: t('common.memPerGpu'), value: `${open.vram_gb} GB` },
+                    { label: t('pools.gpuPerNode'), value: t('common.gpuCountValue', { v0: open.gpus_per_node }) },
+                    { label: t('pools.interconnect'), value: open.interconnect },
+                    { label: 'CPU', value: dt(open.platform.cpu) },
+                    { label: t('pools.localNvme'), value: open.platform.localNvme },
+                    { label: t('common.network'), value: open.platform.network },
                   ]}
                 />
                 <div className={s.muted} style={{ fontSize: 12 }}>
-                  可用区域：{open.available_regions.map((r) => REGION_META[r].label).join(' / ')}
-                </div>
+                  {t('pools.availableRegionsInline', { v0: open.available_regions.map((r) => REGION_META[r].label).join(' / ') })}</div>
               </>
             )}
             {tab === 'supply' && (
               <>
                 <KeyValue
                   items={[
-                    { label: '节点数', value: formatNumber(open.supply?.nodeCount ?? 0) },
-                    { label: '总 GPU', value: formatNumber(open.supply?.totalGpu ?? 0) },
-                    { label: '可用 GPU', value: formatNumber(open.supply?.availableGpu ?? 0) },
-                    { label: '已分配 GPU', value: formatNumber(open.supply?.allocatedGpu ?? 0) },
+                    { label: t('common.nodeCount'), value: formatNumber(open.supply?.nodeCount ?? 0) },
+                    { label: t('common.totalGpu'), value: formatNumber(open.supply?.totalGpu ?? 0) },
+                    { label: t('common.availableGpu'), value: formatNumber(open.supply?.availableGpu ?? 0) },
+                    { label: t('common.allocatedGpu'), value: formatNumber(open.supply?.allocatedGpu ?? 0) },
                     {
-                      label: '分配率',
+                      label: t('common.allocRate'),
                       value: formatPercent(
                         (open.supply && open.supply.totalGpu > 0
                           ? open.supply.allocatedGpu / open.supply.totalGpu
@@ -376,17 +373,15 @@ export default function NodePoolsPage() {
                   ]}
                 />
                 <Progress
-                  label="容量水位"
+                  label={t('nodes.capacityLevel')}
                   value={open.supply?.allocatedGpu ?? 0}
                   max={open.supply?.totalGpu ?? 0}
-                  right={`空闲 ${formatNumber(open.supply?.availableGpu ?? 0)} 卡`}
+                  right={t('pools.freeGpus', { v0: formatNumber(open.supply?.availableGpu ?? 0) })}
                 />
                 {!open.available_in_region && (
                   <div className={`${s.notice} ${s.noticeWarn}`}>
                     <div>
-                      该机型在 {REGION_META[region].label} 未提供，可切换至{' '}
-                      {open.fallback_regions.map((r) => REGION_META[r].label).join(' / ')}。
-                    </div>
+                      {t('pools.modelSwitchHint', { v0: REGION_META[region].label, v1: open.fallback_regions.map((r) => REGION_META[r].label).join(' / ') })}</div>
                   </div>
                 )}
               </>
@@ -395,22 +390,22 @@ export default function NodePoolsPage() {
               <>
                 <KeyValue
                   items={[
-                    { label: 'GPU·小时', value: `${formatUsd(open.unit_price)} / GPU·时` },
-                    { label: '裸金属台·小时', value: `${formatUsd(open.machine_unit_price)} / 台·时` },
+                    { label: t('unit.gpuHourLong'), value: t('pools.ratePerGpu', { v0: formatUsd(open.unit_price) }) },
+                    { label: t('pools.bmMachineHour'), value: t('pools.ratePerMachine', { v0: formatUsd(open.machine_unit_price) }) },
                     {
-                      label: '市场区间',
+                      label: t('pools.marketRange'),
                       value: `${formatUsd(open.market_range[0])} – ${formatUsd(open.market_range[1])}`,
                     },
                     {
-                      label: '单节点整机价',
-                      value: `${formatUsd(
+                      label: t('pools.machinePriceNode'),
+                      value: t('pools.machineRateValue', { v0: formatUsd(
                         Math.round(open.machine_unit_price * 100) / 100,
-                      )} / 台·时（${open.gpus_per_node} 卡）`,
+                      ), v1: open.gpus_per_node }),
                     },
                   ]}
                 />
                 <div className={s.muted} style={{ fontSize: 12 }}>
-                  价格取自 billing_rates × 区域系数；与部署向导右侧费用明细同源，禁止页面自行硬编码。
+                  {t('pools.priceSource')}
                 </div>
               </>
             )}

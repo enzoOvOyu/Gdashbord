@@ -1,5 +1,6 @@
 // StateMachineBadge — 节点状态机 5 态（DESIGN-SYSTEM §8.1，PRD §9.3）
 // 可访问性：颜色 + 图标 + 文本三者并存（§8.1 表）。
+import { t } from '../../i18n';
 import { Badge, type BadgeTone } from '../ui/Badge';
 
 export type NodeStateKey = 'ready' | 'cordoned' | 'draining' | 'remediation' | 'notready';
@@ -12,11 +13,11 @@ interface Meta {
 }
 
 export const NODE_STATE_META: Record<NodeStateKey, Meta> = {
-  ready: { label: 'Ready', icon: '✓', meaning: '可调度', tone: 'success' },
-  cordoned: { label: 'Cordoned', icon: '⛔', meaning: '禁止新调度', tone: 'warning' },
-  draining: { label: 'Draining', icon: '↻', meaning: '驱逐负载中', tone: 'info' },
-  remediation: { label: 'Remediation', icon: '🛠', meaning: '平台自愈/修复中', tone: 'purple' },
-  notready: { label: 'NotReady', icon: '✕', meaning: '异常/失联', tone: 'danger' },
+  ready: { label: 'Ready', icon: '✓', get meaning() { return t('sm.ready'); }, tone: 'success' },
+  cordoned: { label: 'Cordoned', icon: '⛔', get meaning() { return t('sm.cordoned'); }, tone: 'warning' },
+  draining: { label: 'Draining', icon: '↻', get meaning() { return t('sm.draining'); }, tone: 'info' },
+  remediation: { label: 'Remediation', icon: '🛠', get meaning() { return t('sm.remediation'); }, tone: 'purple' },
+  notready: { label: 'NotReady', icon: '✕', get meaning() { return t('sm.notReady'); }, tone: 'danger' },
 };
 
 export const NODE_STATE_LIST = Object.keys(NODE_STATE_META) as NodeStateKey[];

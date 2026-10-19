@@ -1,4 +1,5 @@
 // 确认对话框（DESIGN-SYSTEM §5.21：危险操作二次确认，支持键入名称确认）
+import { t } from '../../i18n';
 import { useEffect, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { AlertTriangle } from 'lucide-react';
@@ -25,7 +26,7 @@ export function ConfirmDialog({
   title,
   description,
   confirmText,
-  confirmLabel = '确认删除',
+  confirmLabel = t('common.confirmDelete'),
   pending,
   error,
   onCancel,
@@ -69,7 +70,7 @@ export function ConfirmDialog({
           {needType && (
             <div className={s.field} style={{ marginTop: 12 }}>
               <label className={s.fieldLabel}>
-                请输入 <b>{confirmText}</b> 以确认
+                {t('common.typeToConfirm')} <b>{confirmText}</b> {t('common.toConfirm')}
               </label>
               <Input
                 value={typed}
@@ -83,14 +84,14 @@ export function ConfirmDialog({
         </div>
         <div className={s.modalFooter}>
           <Button variant="secondary" onClick={onCancel} disabled={pending}>
-            取消
+            {t('common.cancel')}
           </Button>
           <Button
             variant="danger"
             onClick={onConfirm}
             disabled={!matched || pending}
           >
-            {pending ? '处理中…' : confirmLabel}
+            {pending ? t('common.processing') : confirmLabel}
           </Button>
         </div>
       </div>

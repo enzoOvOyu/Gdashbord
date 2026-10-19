@@ -7,9 +7,12 @@ import { Topbar } from './Topbar';
 import { StatusBar } from './StatusBar';
 import { ToastHost } from '../../components/ui';
 import { VITE_FEATURE_STATUS_BAR } from '../../mocks/lib/env';
+import { useLocaleStore } from '../../stores/locale';
 
 export function ConsoleLayout() {
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // 订阅 locale：切换语言时整树重渲染（locale 不进 Query key，由骨架层驱动）
+  useLocaleStore((st) => st.locale);
   return (
     <div className={s.shell}>
       <Sidebar open={drawerOpen} onClose={() => setDrawerOpen(false)} />

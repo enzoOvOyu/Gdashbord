@@ -1,4 +1,5 @@
 // 数据集（PRD §4.6）：版本化数据集，容量与 Trainium/GPU 资源挂载结合
+import { t } from '../../i18n';
 import { useQuery } from '@tanstack/react-query';
 import { Card, Table, StatTile, Badge } from '../../components/ui';
 import type { Column } from '../../components/ui';
@@ -17,17 +18,17 @@ export default function DatasetsPage() {
   const totalGb = datasets.reduce((a, d) => a + d.size_gb, 0);
 
   const columns: Array<Column<Dataset>> = [
-    { key: 'name', header: '名称', render: (r) => <strong style={{ color: 'var(--rs-text)' }}>{r.name}</strong> },
-    { key: 'version', header: '版本', render: (r) => <span className={s.mono}>{r.version}</span> },
-    { key: 'size', header: '容量', numeric: true, render: (r) => formatGb(r.size_gb) },
+    { key: 'name', header: t('common.name'), render: (r) => <strong style={{ color: 'var(--rs-text)' }}>{r.name}</strong> },
+    { key: 'version', header: t('dp.version'), render: (r) => <span className={s.mono}>{r.version}</span> },
+    { key: 'size', header: t('common.capacity'), numeric: true, render: (r) => formatGb(r.size_gb) },
     {
       key: 'created',
-      header: '创建于',
+      header: t('common.createdAt'),
       render: (r) => <span className={s.secondary}>{formatRelative(r.created_at)}</span>,
     },
     {
       key: 'mount',
-      header: '挂载',
+      header: t('dp.mount'),
       render: () => (
         <span className={s.muted}>/mnt/datasets</span>
       ),
@@ -43,14 +44,14 @@ export default function DatasetsPage() {
           gap: 'var(--rs-s4)',
         }}
       >
-        <StatTile label="数据集总数" value={datasets.length} />
-        <StatTile label="累计容量" value={formatGb(totalGb)} />
-        <StatTile label="最新版本数" value={new Set(datasets.map((d) => d.version)).size} hint="去重版本" />
+        <StatTile label={t('dp.datasetCount')} value={datasets.length} />
+        <StatTile label={t('dp.totalSize')} value={formatGb(totalGb)} />
+        <StatTile label={t('dp.latestVersions')} value={new Set(datasets.map((d) => d.version)).size} hint={t('dp.dedupVersions')} />
       </div>
 
       <Card
-        title="数据集"
-        actions={isLoading ? <Badge tone="info">加载中…</Badge> : <Badge tone="muted">{datasets.length} 项</Badge>}
+        title={t('dp.datasetTitle')}
+        actions={isLoading ? <Badge tone="info">{t('common.loading')}</Badge> : <Badge tone="muted">{t('common.countItems', { v0: datasets.length })}</Badge>}
       >
         <Table columns={columns} rows={datasets} rowKey={(r) => String(r.id)} zebra />
       </Card>

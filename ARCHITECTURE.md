@@ -34,7 +34,7 @@
 | 表格   | TanStack Table                      | 复杂筛选/排序/虚拟滚动（Vast.ai 风格）           |
 | 图表   | Recharts（常规）+ visx（拓扑/机架定制）         | 定制能力与效率平衡                           |
 | 表单   | React Hook Form + Zod               | 部署向导分步校验；Zod 同时约束 `spec_json`（§12.9） |
-| 国际化  | i18next + react-i18next             | zh-CN 默认，预留 en-US                   |
+| 国际化  | **自研轻量 i18n（v0.7 落地）**：`src/i18n/` 字典（zh-CN 为源 + en-US 译）+ `useI18n()`/`t()`，locale 走 Zustand store 并持久化 `localStorage` | 零新增依赖，与现有 stores 模式一致；文案键即前后端契约；fixture 数据值经字典出英译（MOCK-DATA G10） |
 | 命令面板 | cmdk                                | ⌘K 快捷操作                             |
 | 实时数据 | Mock WebSocket（或轮询）                 | 利用率、goodput、节点状态流（端点由 §12.7 配置）     |
 
@@ -45,7 +45,7 @@
 ```
 src/
 ├─ app/
-│  ├─ router.tsx              # 路由表（含 RBAC 守卫）
+│  ├─ router.tsx              # 路由表（含 RBAC 守卫；/development/* → /workbench/* 重定向）
 │  ├─ layouts/                # 控制台骨架（Sidebar + Topbar + StatusBar + Outlet）
 │  └─ providers.tsx           # Query / i18n / Theme / MSW 初始化（受 VITE_ENABLE_MOCK 控制）
 ├─ features/                  # 按业务域切分（与 PRD §2 导航一一对应）
@@ -53,13 +53,13 @@ src/
 │  ├─ deployment/             # 创建入口：server / baremetal / vgpu / inference 向导
 │  ├─ resources/              # 展示菜单：4 类各自独立（PRD §4.3.1–4.3.4，禁止共用模板）
 │  │  ├─ servers/             #   GPU 云服务器：列表 + 详情（概览/监控/控制台/配置/事件/计费）
-│  │  ├─ baremetal/           #   GPU 裸金属：列表 + 详情（含硬件监控/带外/固件）
+│  │  ├─ baremetal/           #   GPU 裸金属：列表 + 详情（含硬件监控/带外/固件/创建 Notebook 联动）
 │  │  ├─ vgpu/                #   vGPU：列表 + 详情（含控制面/节点池/工作负载/拓扑）
 │  │  └─ inference/           #   推理服务：列表 + 详情（含实例管理/监控/服务治理/日志）
 │  │                          #   共享：ResourceListShell（列表骨架 + 区域/项目筛选）
-│  ├─ ops/                    # 运营&运维：节点池 / 节点 / 事件与维护 / 日志 / 成本 / 配额 / 工单
+│  ├─ ops/                    # 运营&运维：项目 / 节点池 / 节点 / 事件与维护 / 日志 / 成本 / 配额 / 工单
 │  │                          #   （原 cluster + operations 合并；无 monitoring、无 topology 独立页）
-│  ├─ development/            # notebook / images（含模型卡片）/ app-templates（工具链，辅助层）
+│  ├─ workbench/              # 工作台（v0.7：原 development 更名）：notebooks / images / apps / scaling
 │  ├─ data/
 │  └─ assets/
 ├─ components/
@@ -70,12 +70,13 @@ src/
 │  ├─ charts/                 # GPU 利用率 / goodput / 成本趋势 / 延迟分位
 │  ├─ state-machine/          # 节点状态机 & 资源生命周期可视化
 │  └─ ops/                    # TopologyView（仅供 vGPU 详情内嵌，非独立页）
-├─ stores/                    # Zustand：auth（含 project）/ region / theme / billing
+├─ stores/                    # Zustand：auth（含 project）/ region / theme / billing / locale / nav
 ├─ mocks/                     # MSW handlers + fixtures + 契约 schema
 │  ├─ handlers/               # 各域接口拦截
 │  ├─ fixtures/               # 种子数据（与 §12 DDL 同构）
 │  └─ schema/                 # Zod/TS 类型化契约（含 ResourceId/DisplayId 品牌类型）
 ├─ lib/                       # api-client / date / money / rbac / ids
+├─ i18n/                      # 国际化（v0.7）：字典 zh-CN（源）/ en-US + locale store + t()/useI18n()
 ├─ types/                     # 全局领域类型
 ├─ tokens/                    # 设计 Token（亮/暗）
 └─ styles/                    # 全局样式、reset、主题变量注入
@@ -87,9 +88,11 @@ src/
 
 ### 4.1 路由表（节选，详情路由参数统一为 `resourceUuid`）
 
-> **v0.6 路由重构**：删除 `/cluster/*`（并入 运营&运维）、删除 `/operations/monitoring`（监控收敛到资源详情）、删除 `/model-library`（并入开发·镜像商城）。区域切换不再靠全局路由参数，而是**资源列表页的区域下拉 + 项目筛选**（PRD §3.3）与运营&运维各页的区域筛选控件（PRD §4.4.1）。
+> **v0.6 路由重构**：删除 `/cluster/*`（并入 运营&运维）、删除 `/operations/monitoring`（监控收敛到资源详情）、删除 `/model-library`（并入工作台·镜像商城）。区域切换不再靠全局路由参数，而是**资源列表页的区域下拉 + 项目筛选**（PRD §3.3）与运营&运维各页的区域筛选控件（PRD §4.4.1）。
 >
 > **v0.6 第二轮**：补充运营&运维的三类**整页详情路由**（PRD §3.4 A 档），并新增 `/projects` 支撑项目真实化（PRD §3.5）。
+>
+> **v0.7 路由修订**：①「开发（辅助）」更名**工作台**，`/development/*` → `/workbench/*`（旧路径永久重定向，外链不失效）；②运营&运维新增**项目页** `/ops/projects`（PRD §3.5.1，自用户菜单迁入的管理主场）；③工作台新增**弹性伸缩页** `/workbench/scaling`（PRD §4.5.2）。
 
 ```
 /overview
@@ -99,8 +102,10 @@ src/
 /resources/baremetal             /resources/baremetal/:resourceUuid
 /resources/vgpu                  /resources/vgpu/:resourceUuid
 /resources/inference             /resources/inference/:resourceUuid
-/development/notebooks           /development/images（含模型卡片）  /development/apps
+/workbench/notebooks             /workbench/images（含模型卡片）  /workbench/apps
+/workbench/scaling               （v0.7 弹性伸缩：策略管理 / 四场景对比 / 伸缩事件）
 /data/datasets                   /data/storage         /data/pipelines
+/ops/projects                    /ops/projects/:projectUuid     （v0.7 项目页，A 档整页详情）
 /ops/pools                       /ops/pools/:poolCode            （A 档整页详情）
 /ops/nodes                       /ops/nodes/:nodeUid             （A 档整页详情）
 /ops/events                      /ops/logs                       （B 档 Drawer 即详情）
@@ -112,10 +117,19 @@ src/
 **API 契约（前端调用面，见 §12.11）**
 
 ```
-GET    /api/projects                     # 项目列表（真实）
-POST   /api/projects                     # 部署向导内联新建项目
+GET    /api/projects                     # 项目列表（真实；运营&运维·项目页 + 账号菜单快速切换 + 向导内联新建共用）
+POST   /api/projects                     # 部署向导内联新建 / 项目页新建（同一接口）
 PATCH  /api/projects/:id
 DELETE /api/projects/:id                 # 有未释放资源时返回 409
+GET    /api/projects/:id/summary         # v0.7：卡片聚合（GPU/运行中/四类计数/本月成本/配额水位/成员）
+GET    /api/workbench/notebooks?region&resource_kind   # v0.7：Notebook/IDE 列表（可按挂靠类型过滤）
+POST   /api/workbench/notebooks          # v0.7：挂靠 gpu_vm / gpu_baremetal / vgpu（PRD §4.5.1）
+DELETE /api/workbench/notebooks/:id
+GET    /api/scaling/policies?region&strategy_model      # v0.7：弹性策略（node_pool / replica 两类）
+POST   /api/scaling/policies             # v0.7：工作台新建策略；向导下单同模型生成
+PATCH  /api/scaling/policies/:id         # v0.7：编辑 / 暂停 / 恢复
+DELETE /api/scaling/policies/:id         # v0.7：409 POLICY_BOUND_RESOURCE_RUNNING
+GET    /api/scaling/events?resource_id&direction&from&to   # v0.7：伸缩事件时间线
 GET    /api/resources?kind&region&project_id&status&q&page&size&sort
 GET    /api/resources/:uuid              # 详情（含 spec_json / placement / 来源）
 DELETE /api/resources/:uuid              # 真实软删（PRD §5.4.1）
@@ -138,7 +152,7 @@ GET    /api/nodes?region&state&pool
 | ---------------- | --------------------------------------------- |
 | `owner`          | 全部（含计费主体、成员管理、删除资源）                           |
 | `admin`          | 除计费主体外的全部 + 用户/配额/工单管理                        |
-| `member`         | 部署中心、资源（创建/启停/扩缩/控制台/**删除本人创建的**）、开发、数据、运营&运维（节点侧只读 + 提工单） |
+| `member`         | 部署中心、资源（创建/启停/扩缩/控制台/**删除本人创建的**）、工作台、数据、运营&运维（节点侧只读 + 提工单） |
 | `billing`        | 资产、成本分析、发票、代金券/预留；资源**只读**（不可删除/启停）           |
 | `viewer`         | 全部页面**只读**                                   |
 
@@ -152,6 +166,8 @@ GET    /api/nodes?region&state&pool
   - `auth`：**用户（uuid/role）+ 当前 org + 当前 project**（对应 §12.1，`project` 来自接口 `projects`，真实可切换，创建资源时必选并写入订单）。
   - `region`：`jp|th|sg|us`，**按页上下文驱动列表过滤与 Query key**（PRD §3.3）；全局 Topbar 不再承载区域控件。
   - `theme`：light/dark → `data-theme`。
+  - `locale`（v0.7）：`zh-CN | en-US`，Topbar 语言切换器写入，持久化 `localStorage`（key `rs.locale`），同步 `<html lang>`；默认取 `VITE_I18N_DEFAULT_LOCALE`（§12.7）。
+  - `nav`（v0.7）：侧边栏分组收起态（分组 id 数组），持久化 `localStorage`（key `rs.nav.collapsed`）；含激活路由的分组在渲染期强制展开（PRD §2.1）。
 - **服务端状态（TanStack Query）**：key 含 `region` + `routeKey` + `project`，多维度缓存隔离；**区域/项目切换必须触发真实重取，禁止"切换无反应"**。
 - **资源生命周期**：`provisioning → running | stopped | error → terminating → deleted_at`（PRD §5.4），与计量严格挂钩（PRD §7.4）；**删除走 `DELETE /api/resources/:uuid`，后端置 `deleted_at` 软删并释放配额（§12.10）**。
 - **节点状态机**：见 §9，UI 仅渲染派生态。
@@ -169,6 +185,7 @@ GET    /api/nodes?region&state&pool
   - `DeploymentOrder / ResourcePlacement / ResourceEvent / ProvisioningStep`：资源映射与工作项。
   - `Invoice / BillingUsage / Transaction / Voucher / Reservation / Quota`：计费。
   - `Model / Image / AppTemplate / Notebook / Dataset / Ticket / Notification`：内容与支撑。
+  - `ScalingPolicy / ScalingEvent`（v0.7）：弹性伸缩策略与伸缩事件（PRD §4.2.6 / §4.5.2，DDL 见 §12.12）。
 - **ID 契约**：`resourceUuid` 与 `display_id` 用 TS **品牌类型**（`type ResourceUuid = string & {__brand}`）区分，禁止混用（PRD §5.5）。
 - **数值真实性约束（强制）**：Mock 数据受 `MOCK-DATA.md` 全文约束，要点：
   - **G1 真实量级**：硬件规格、价格、单位、阈值一律以 `MOCK-DATA.md` §3 / §4 / §6 为唯一口径，禁止自造失真数值。
@@ -693,6 +710,7 @@ CREATE TABLE notebooks (
   org_id      BIGINT      NOT NULL REFERENCES orgs(id),
   user_id     BIGINT      NOT NULL REFERENCES users(id),
   resource_id BIGINT      REFERENCES resources(id) ON DELETE SET NULL,
+  resource_kind resource_kind,                   -- v0.7：挂靠形态 gpu_vm/gpu_baremetal/vgpu（PRD §4.5.1）
   type        VARCHAR(16) NOT NULL DEFAULT 'jupyter',  -- jupyter/vscode
   status      VARCHAR(16) NOT NULL DEFAULT 'running',
   url_path    VARCHAR(255),
@@ -794,6 +812,35 @@ CREATE INDEX idx_notifications_org_user ON notifications(org_id, user_id, read_a
 | `B300`           | B300       |
 | `GB300_NVL72`    | GB300 NVL72 |
 
+**弹性伸缩枚举（v0.7 新增，单一事实来源；PRD §4.2.6）**
+
+| `strategy_model` | 显示名     | 适用 `resource_kind`                |
+| ---------------- | ------- | --------------------------------- |
+| `node_pool`      | 节点池伸缩   | `gpu_vm` / `gpu_baremetal` / `vgpu` |
+| `replica`        | 服务副本伸缩  | `inference`                        |
+
+| `scaling_trigger`  | 显示名         | 适用模型              | 备注                          |
+| --------------- | ----------- | ----------------- | --------------------------- |
+| `queue_depth`   | 队列深度        | `node_pool`       | 云服务器/vGPU 首选；替代失效的 GPU 利用率 |
+| `pending_pods`  | 待调度 Pod 数   | `node_pool`       | vGPU 集群维度                  |
+| `qpm`           | 每分钟查询数 QPM  | `node_pool`/`replica` | 推理主力指标                     |
+| `gpu_allocation_rate` | GPU 分配率   | `node_pool`       | 裸金属维度（集群级）                |
+| `concurrency`   | 并发数         | `replica`         | 推理副本级                      |
+| `ttft_p99`      | 首 Token 延迟 P99 | `replica`      | 推理副本级                      |
+| `kv_cache_usage` | KV Cache 使用率 | `replica`        | 推理副本级                      |
+| `requests_waiting` | 等待请求数      | `replica`        | 推理副本级（PRD §4.2.4 明确列出）       |
+
+| `scaling_status` | 显示名  |                                   |
+| -------------- | ---- | --------------------------------- |
+| `active`       | 生效中  | 正常按策略伸缩                          |
+| `paused`       | 已暂停  | 用户手动暂停；不再触发伸缩                    |
+| `cooldown`     | 冷却中  | stabilization 窗口内，抑制反向动作         |
+
+| `scaling_direction` | 显示名 |
+| ---------------- | --- |
+| `scale_out`      | 扩容 |
+| `scale_in`       | 缩容 |
+
 ```
 路由：/resources/:routeKey                 （列表）
 路由：/resources/:routeKey/:resourceUuid   （详情，参数为 resource_uuid）
@@ -819,6 +866,7 @@ CREATE INDEX idx_notifications_org_user ON notifications(org_id, user_id, read_a
 | `VITE_MOCK_SEED`           | number  | `20261017`                | `mocks/lib/rng.ts`（种子随机）          | 固定种子保证 fixture 可复现（G5） |
 | `VITE_ENABLE_CONSISTENCY_CHECK` | boolean | `true`（仅 dev）      | `mocks/lib/consistency.ts`  | Mock 数据运行时断言开关（§8.3） |
 | `VITE_MOCK_FAULT`          | enum    | 空                         | `mocks/lib/fault-injector.ts`     | ∈ oom/xid48/network/straggler/insufficient/billing；亦可用 `?fault=` 覆盖 |
+| `VITE_I18N_DEFAULT_LOCALE` | enum    | `zh-CN`                   | `i18n/` locale store 初始值（v0.7）   | ∈ zh-CN/en-US；用户切换后以 `localStorage`（`rs.locale`）为准 |
 
 > 所有 `VITE_*` 在**构建期注入**；涉及安全的配置严禁放前端（如数据库口令、内部服务凭证）。
 > `VITE_MOCK_SEED` / `VITE_ENABLE_CONSISTENCY_CHECK` / `VITE_MOCK_FAULT` 仅在 `VITE_ENABLE_MOCK=true` 时生效，Mock 关闭后 `mocks/lib/derive.ts` **不得被调用**（派生责任移交后端）。
@@ -835,11 +883,12 @@ CREATE INDEX idx_notifications_org_user ON notifications(org_id, user_id, read_a
 
 | `kind`           | 必需键                                                                                 | 可选键                                        |
 | ---------------- | ----------------------------------------------------------------------------------- | ------------------------------------------ |
-| `gpu_vm`         | `gpu_model`, `gpu_count`, `vcpu`, `memory_gb`, `storage_gb`, `image_ref`            | `env`, `ports`, `ssh_pubkey`               |
-| `gpu_baremetal`  | `machine_type`, `machine_count`(台), `gpu_model`, `gpu_count`(整机总卡), `passthrough`(bool), `cpu_model`, `local_nvme_gb` | `ipmi_enabled`, `ib_enabled` |
-| `vgpu`           | `k8s_version`, `node_count`, `gpu_count`, `slicing_policy`(MIG profile), `storage_gb` | `network_plugin`, `ingress_enabled`        |
-| `inference`      | `model_ref`, `replicas`, `gpu_count`, `port`, `auth_enabled`                         | `hpa`(min/max/target), `traffic_split`     |
+| `gpu_vm`         | `gpu_model`, `gpu_count`, `vcpu`, `memory_gb`, `storage_gb`, `image_ref`            | `env`, `ports`, `ssh_pubkey`, **`scaling`**(v0.7) |
+| `gpu_baremetal`  | `machine_type`, `machine_count`(台), `gpu_model`, `gpu_count`(整机总卡), `passthrough`(bool), `cpu_model`, `local_nvme_gb` | `ipmi_enabled`, `ib_enabled`, **`scaling`**(v0.7) |
+| `vgpu`           | `k8s_version`, `node_count`, `gpu_count`, `slicing_policy`(MIG profile), `storage_gb` | `network_plugin`, `ingress_enabled`, **`scaling`**(v0.7) |
+| `inference`      | `model_ref`, `replicas`, `gpu_count`, `port`, `auth_enabled`                         | **`scaling`**(v0.7，替代旧 `hpa` 键), `traffic_split` |
 
+- **`scaling` 键契约（v0.7，PRD §4.2.6）**：`{ strategy_model, trigger_metric, target_value?, min_size, max_size, scale_to_zero?, drain_timeout_s, fallback_enabled, cooldown_s }`；`strategy_model ∈ {node_pool, replica}`；`min_size`：裸金属**不允许 0**（warm floor），推理 `scale_to_zero=true` 时允许 `min_size=0`；配额预检按 `max_size` 档校验（超限 `409 QUOTA_EXCEEDED`）。该键在向导开启「弹性伸缩」开关时写入 `requested_spec.scaling`，下单后物化为 `scaling_policies` 行（§12.12），详情页「弹性」Tab 读同一行。
 - `requested_spec`（订单请求）与 `spec_json`（实际供给）**允许不同**，UI 详情展示"实际规格"，差异来自库存/调度降级；两者皆过 Zod。
 
 ---
@@ -925,13 +974,41 @@ Resp 200: { resourceUuid, displayId, status: 'terminating', deletedAt: null,
 ```
 GET    /api/projects                     -> [{ id, name, slug, isDefault, resourceCount }]
 POST   /api/projects  { name, slug? }    -> 201 { id, name, slug, isDefault:false }
-PATCH  /api/projects/:id { name? }
+PATCH  /api/projects/:id { name?, defaultRegion?, labels? }
 DELETE /api/projects/:id                 -> 204 | 409 PROJECT_HAS_RESOURCES { resourceCount }
+GET    /api/projects/:id/summary         # v0.7：项目卡片/详情聚合（PRD §3.5.1）
 ```
 
 - **默认项目**：org 创建时生成 `slug='default'` 的项目，`isDefault=true`，**不可删除**（返回 409）。
 - 删除前必须满足 `resourceCount === 0`（仅统计 `deleted_at IS NULL` 的资源）。
 - 部署向导内新建项目即调用 `POST /api/projects`，成功后入 `deployment_orders.project_id`。
+- **`/summary` 返回契约（v0.7）**：`{ projectUuid, name, slug, defaultRegion, myRole, members:[{userId,name,role}], quotas:[{region,metric,limitValue,usedValue}], resources:{ gpu_vm:running/total, gpu_baremetal:…, vgpu:…, inference:… }, gpuTotal, monthCost, costTrend7d:[{date,amount}] }`；运营&运维·项目页卡片与整页概览 Tab 消费同一接口，账号菜单仅消费列表接口（PRD §3.5）。
+
+#### 12.11.5 工作台与弹性伸缩（v0.7 新增）
+
+```
+# Notebook / IDE（PRD §4.5.1：可挂靠 gpu_vm / gpu_baremetal / vgpu）
+GET    /api/workbench/notebooks?region&resource_kind&status
+POST   /api/workbench/notebooks  { resourceUuid, ide: 'jupyter'|'vscode', imageRef,
+                                   storageGb?, autoShutdownIdleMin? }
+                                 -> 201 { id, resourceUuid, urlPath, status }
+DELETE /api/workbench/notebooks/:id      -> 204   （不删除宿主资源）
+
+# 弹性策略（PRD §4.2.6 / §4.5.2；向导下单与工作台新建同模型）
+GET    /api/scaling/policies?region&strategy_model&status
+POST   /api/scaling/policies  { resourceUuid, strategyModel, triggerMetric, targetValue?,
+                                minSize, maxSize, scaleToZero?, drainTimeoutS,
+                                fallbackEnabled, cooldownS }
+PATCH  /api/scaling/policies/:id { minSize?, maxSize?, triggerMetric?, targetValue?,
+                                   status: 'active'|'paused' }   # 暂停/恢复/编辑
+DELETE /api/scaling/policies/:id   -> 204 | 409 POLICY_BOUND_RESOURCE_RUNNING
+GET    /api/scaling/events?resource_id&direction&from&to   # 时间线（B 档 Drawer）
+```
+
+- **策略唯一性**：一个资源同时最多一条生效策略（`UNIQUE(resource_id) WHERE status='active'`）；换模型（`node_pool` ↔ `replica`）须先解绑再新建。
+- **409 `POLICY_BOUND_RESOURCE_RUNNING`**：资源 `status='running'` 时禁止解绑/换模型，前端引导先停止资源（错误处理同 §12.11.1 六类码模式）。
+- **下单即生成策略**：向导 `requested_spec.scaling` 非空时，订单映射为资源后同事务写 `scaling_policies(status='active')`，资源详情「弹性」Tab与工作台策略列表读同一行（单一写入口在工作台，PRD §4.5.2）。
+- **配额预检按 `max_size`**：`POST /api/deployment-orders` 既有预检（§12.11）增加 scaling 档位——弹到上限不得超配额。
 
 #### 12.11.3 区域感知查询（G9 落地）
 
@@ -965,22 +1042,82 @@ GET /api/resources/:uuid
                      firmware:{ vbios, driverVersion, cudaVersion, compliance } }
   vgpu         -> { spec:{ k8sVersion, controlPlaneTier, nodePools:[{ poolCode, nodeCount,
                            gpuPerNode, slicingPolicy, migProfile?, timeSliceShare?,
-                           autoscale:{ min,max } }] },
+                           scaling?:{ strategyModel:'node_pool', minNodes, maxNodes, triggerMetric } }] },
                      access:{ apiServerEndpoint, kubeconfigUrl, apiServerPublic },
                      storage:{ storageClass, defaultPvcGb } }
   inference    -> { spec:{ modelRef:{ slug,name,paramSize,quantization,license },
                            replicas, gpuPerReplica, engine, port, maxModelLen,
-                           hpa?:{ min,max,metric,target }, canary?{ percent } },
+                           scaling?:{ strategyModel:'replica', minReplicas, maxReplicas,
+                                      triggerMetric, targetValue?, drainTimeoutS, scaleToZero } },
+                           canary?{ percent } },
                      access:{ endpointUrl, authEnabled, apiKeyShownOnce },
                      runtime:{ maxBatchSize, prefixCaching, chunkedPrefill } }
 ```
+
+> **v0.7 字段改名**：vGPU 详情的 `autoscale` 与推理详情的 `hpa` 统一更名为 **`scaling`**（`strategy_model` 区分两类，§12.6 枚举）；旧键在 Mock 与真实后端**不再产出**，前端 Zod schema 同步（PRD §4.2.6）。
 
 - **时序指标不得混入业务接口**：监控数据一律走 `GET /api/metrics/:kind/:uuid`（§12.8）。
 - 计费三表另有三接口（PRD §7.8）：`GET /api/billing/usage`、`/api/billing/transactions`、`/api/billing/rates`。
 - **字段可空性**：上表中 `?` 标记字段为可选，前端一律 `?.` 读取并缺省"—"（PRD §13.3 空指针约束）。
 
-## 13. 实体追溯链路与工作项关联（评审新增）
+### 12.12 弹性伸缩数据模型（v0.7 新增）
 
+> 对应 PRD §4.2.6 / §4.5.2；设计依据《GPU 弹性伸缩策略四场景对比》（工作空间参考文档）。策略是资源的运行时治理配置，**不落时序库**；伸缩过程的指标快照随事件存档（§12.8 边界不变）。
+
+```sql
+CREATE TYPE strategy_model    AS ENUM ('node_pool','replica');
+CREATE TYPE scaling_trigger   AS ENUM ('queue_depth','pending_pods','qpm','gpu_allocation_rate','concurrency','ttft_p99','kv_cache_usage','requests_waiting');
+CREATE TYPE scaling_status    AS ENUM ('active','paused','cooldown');
+CREATE TYPE scaling_direction AS ENUM ('scale_out','scale_in');
+
+-- 弹性伸缩策略（一个资源最多一条生效策略）
+CREATE TABLE scaling_policies (
+  id               BIGSERIAL PRIMARY KEY,
+  policy_uuid      UUID            NOT NULL UNIQUE DEFAULT gen_random_uuid(),
+  org_id           BIGINT          NOT NULL REFERENCES orgs(id),
+  resource_id      BIGINT          NOT NULL REFERENCES resources(id),
+  strategy_model   strategy_model  NOT NULL,
+  trigger_metric   scaling_trigger NOT NULL,
+  target_value     NUMERIC(10,2),                  -- 触发目标值（如 ttft_p99 ≤ 800ms）
+  min_size         INTEGER         NOT NULL CHECK (min_size >= 0),
+  max_size         INTEGER         NOT NULL CHECK (max_size >= min_size),
+  scale_to_zero    BOOLEAN         NOT NULL DEFAULT false,   -- 仅 replica 模型允许 true
+  drain_timeout_s  INTEGER         NOT NULL DEFAULT 300,     -- 优雅下线时长
+  fallback_enabled BOOLEAN         NOT NULL DEFAULT true,    -- 库存不足回退同型邻近池
+  cooldown_s       INTEGER         NOT NULL DEFAULT 600,     -- stabilization 防抖窗口
+  status           scaling_status  NOT NULL DEFAULT 'active',
+  created_at       TIMESTAMPTZ     NOT NULL DEFAULT now(),
+  updated_at       TIMESTAMPTZ     NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX idx_scaling_active ON scaling_policies(resource_id) WHERE status = 'active';
+-- 裸金属铁律：resources.kind='gpu_baremetal' 时 min_size 不允许 0（warm floor），
+-- 由应用层/触发器校验，UI 在向导与工作台双重明示（PRD §4.2.6.2）。
+
+-- 伸缩事件（策略执行审计，携带触发时指标快照）
+CREATE TABLE scaling_events (
+  id               BIGSERIAL PRIMARY KEY,
+  event_uuid       UUID            NOT NULL UNIQUE DEFAULT gen_random_uuid(),
+  policy_id        BIGINT          NOT NULL REFERENCES scaling_policies(id),
+  resource_id      BIGINT          NOT NULL REFERENCES resources(id),
+  direction        scaling_direction NOT NULL,
+  from_size        INTEGER         NOT NULL,
+  to_size          INTEGER         NOT NULL,
+  trigger_snapshot JSONB           NOT NULL,   -- { metric, value, target, windowS }
+  warm_pool_hit    BOOLEAN,                    -- 是否命中 warm pool
+  duration_s       INTEGER,                    -- 本次伸缩实际耗时（形态区分，见下）
+  reason           TEXT,                       -- 失败原因 / 人工干预说明
+  created_at       TIMESTAMPTZ     NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_scaling_events_policy ON scaling_events(policy_id, created_at DESC);
+```
+
+- **Mock 约束（MOCK-DATA §9.4）**：`duration_s` 按形态区分（裸金属 300–1800s、云服务器 60–300s、vGPU 30–120s、推理 warm pool ≤5s / 冷启动 30–720s）；事件必须"带度量"（§9.2）；`trigger_snapshot` 与 `/api/metrics/*` 同窗口数值一致（G9 区域指纹）。
+- **与计费联动（PRD §7.4）**：扩容产生新 `billing_usage` 行（按新 `quantity`），缩容停止计量；缩到 0 的推理服务保留存储计量。
+- **与配额联动（PRD §4.2.6.3）**：下单预检与工作台改 `max_size` 时按 max 档校验 `quotas`，超限 `409 QUOTA_EXCEEDED`。
+
+---
+
+## 13. 实体追溯链路与工作项关联（评审新增）
 > 回答"实体能否关联到具体工作项/任务、链路与字段是否可落地"。
 
 ### 13.1 主链路（单一可追溯闭环）
@@ -1012,7 +1149,10 @@ plans/orgs/users/projects                      身份与计费主体
 | **详情页：副本与端点（推理）**         | `resources.spec_json` + 指标 `/api/metrics/*`             | `replicas`, `hpa`, `endpointUrl`                    |
 | **详情页：计费 Tab（PRD §7.8）**   | `billing_usage` + `billing_transactions` + `billing_rates` | `usage_hour`, `unit`, `quantity`, `amount`, `balance_after` |
 | **Drawer 快速预览（PRD §3.4）**  | 同对应实体的公共段子集                                            | `?drawer=<id>` URL 同步                                |
-| **项目（PRD §3.5）**          | `projects`（+`project_members`）                         | `org_id`, `slug`, `isDefault`                       |
+| **项目（PRD §3.5 / §3.5.1）**          | `projects`（+`project_members`）                         | `org_id`, `slug`, `isDefault`, `default_region`       |
+| **运营&运维·项目页卡片/详情（v0.7）**       | `projects` → 聚合（`resources`/`billing_usage`/`quotas`）     | `project_id`, `billing_period`, `metric`            |
+| **工作台·Notebook / IDE（v0.7）**     | `notebooks` → `resources`                              | `resource_id`, `resource_kind`, `url_path`, `ide`    |
+| **工作台·弹性伸缩 / 详情页弹性 Tab（v0.7）** | `scaling_policies` → `scaling_events`                  | `resource_id`, `strategy_model`, `trigger_metric`, `direction` |
 | **删除（PRD §5.4.1）**        | `resources.deleted_at` + `quotas` + `billing_usage`      | `confirm`, 六类错误码（§12.11.1）                           |
 | 详情页事件时间线                 | `resource_events`                                      | `resource_id`, `created_at DESC`                    |
 | 来源（镜像/模型/模板）             | `images`/`models`/`app_templates`  ← orders            | `orders.source_type` + `source_ref_id`              |

@@ -1,6 +1,7 @@
 // 供给子步骤（PRD §5.3 / MOCK-DATA §5.1：步骤名按资源类型区分）
 import { CheckCircle2, Circle, Loader2, XCircle } from 'lucide-react';
 import { ui as s } from '../../components/ui';
+import { dt } from '../../i18n';
 import type { ProvisioningStep } from '../../types/domain';
 
 const ICON = {
@@ -20,11 +21,11 @@ export function ProvisioningSteps({ steps }: { steps: ProvisioningStep[] }) {
           <span style={{ paddingTop: 2 }}>{ICON[st.state]}</span>
           <span style={{ minWidth: 0 }}>
             <span style={{ color: st.state === 'pending' ? 'var(--rs-text-muted)' : undefined }}>
-              {st.step_key}
+              {dt(st.step_key)}
             </span>
             {st.message && (
               <div className={s.muted} style={{ fontSize: 12 }}>
-                {st.message}
+                {dt(st.message)}
               </div>
             )}
           </span>

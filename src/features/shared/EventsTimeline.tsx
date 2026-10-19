@@ -1,4 +1,6 @@
 // 事件时间线（PRD §4.3 事件 Tab / §4.4.1：每条含 before→after 度量与建议动作）
+// fixture 事件文本以中文为源，展示经 dt() 出英译（MOCK-DATA G10）
+import { t, dt } from '../../i18n';
 import { ui as s, EmptyState, Badge } from '../../components/ui';
 import { formatDateTime, formatUtcTooltip } from '../../lib/date';
 import type { MonitorEvent } from '../../types/domain';
@@ -22,7 +24,7 @@ const metricsText = (m?: Record<string, number | string>): string =>
 
 export function EventsTimeline({ events }: { events: MonitorEvent[] }) {
   if (!events || events.length === 0) {
-    return <EmptyState icon="🕘" title="暂无事件" />;
+    return <EmptyState icon="🕘" title={t('common.noEvents')} />;
   }
   return (
     <div className={s.timeline}>
@@ -38,13 +40,13 @@ export function EventsTimeline({ events }: { events: MonitorEvent[] }) {
           <div className={s.timelineBody}>
             <div className={s.timelineTitle}>
               <Badge tone={LEVEL_TONE[e.level]} icon={<span aria-hidden>{e.code.slice(0, 12)}</span>}>
-                {e.title}
+                {dt(e.title)}
               </Badge>
               <span className={s.timelineTime} title={formatUtcTooltip(e.occurredAt)}>
                 {formatDateTime(e.occurredAt)}
               </span>
             </div>
-            <div className={s.timelineDetail}>{e.detail}</div>
+            <div className={s.timelineDetail}>{dt(e.detail)}</div>
             {(e.metricsBefore || e.metricsAfter) && (
               <div className={s.timelineMetrics}>
                 {e.metricsBefore && <span>before: {metricsText(e.metricsBefore)}</span>}
@@ -53,7 +55,7 @@ export function EventsTimeline({ events }: { events: MonitorEvent[] }) {
             )}
             {e.suggestedAction && (
               <div className={s.timelineMetrics}>
-                <span>建议动作：{e.suggestedAction}</span>
+                <span>{t('events.actionValue', { v0: dt(e.suggestedAction) })}</span>
               </div>
             )}
           </div>

@@ -1,4 +1,5 @@
 // 计费 Tab（PRD §7.8：四段结构 —— 实时费用卡 / 单价构成 / 用量明细 / 扣费流水）
+import { t, dt } from '../../i18n';
 import { useMemo, useState } from 'react';
 import {
   ui as s,
@@ -16,25 +17,25 @@ import type { UsageRow } from '../../types/domain';
 import { regionMultiplierOf } from '../../mocks/fixtures/billing';
 
 const UNIT_LABEL: Record<string, string> = {
-  per_gpu_hour: 'GPU·小时',
-  per_gb_hour: 'GB·小时',
-  per_instance_hour: '实例·小时',
-  per_machine_hour: '台·小时',
-  per_cluster_hour: '集群·小时',
+  get per_gpu_hour() { return t('unit.gpuHourLong'); },
+  get per_gb_hour() { return t('unit.gbHourLong'); },
+  get per_instance_hour() { return t('unit.instanceHourLong'); },
+  get per_machine_hour() { return t('unit.machineHourLong'); },
+  get per_cluster_hour() { return t('unit.clusterHourLong'); },
 };
 
 /** 单位数量名词：裸金属叫「台」，其余叫「GPU」 */
 const QTY_NOUN: Record<string, string> = {
   per_gpu_hour: 'GPU',
   per_gb_hour: 'GB',
-  per_instance_hour: '实例',
-  per_machine_hour: '台',
-  per_cluster_hour: '集群',
+  get per_instance_hour() { return t('unit.instance'); },
+  get per_machine_hour() { return t('unit.machine'); },
+  get per_cluster_hour() { return t('unit.cluster'); },
 };
 
 const AGG: Array<{ value: 'hour' | 'day'; label: string }> = [
-  { value: 'hour', label: '按小时' },
-  { value: 'day', label: '按天' },
+  { value: 'hour', get label() { return t('bt.perHour'); } },
+  { value: 'day', get label() { return t('bt.perDay'); } },
 ];
 
 function aggregate(rows: UsageRow[], by: 'hour' | 'day'): UsageRow[] {
@@ -66,12 +67,12 @@ export function BillingTab({ detail }: { detail: ResourceDetail }) {
   const computeLine =
     detail.kind === 'gpu_baremetal'
       ? {
-          label: '机器（整机）',
+          label: t('price.machine'),
           detail: `${cost.quantity} ${QTY_NOUN[cost.unit]} × ${formatUsdRate(cost.unit_price)}/${UNIT_LABEL[cost.unit]}`,
           hourly: cost.compute_per_hour,
         }
       : {
-          label: `算力（${UNIT_LABEL[cost.unit]}）`,
+          label: t('bt.computeLine', { v0: UNIT_LABEL[cost.unit] }),
           detail: `${cost.quantity} ${QTY_NOUN[cost.unit]} × ${formatUsdRate(cost.unit_price)}/${UNIT_LABEL[cost.unit]}`,
           hourly: cost.compute_per_hour,
         };
@@ -81,8 +82,8 @@ export function BillingTab({ detail }: { detail: ResourceDetail }) {
     ...(cost.control_plane_per_hour > 0
       ? [
           {
-            label: '托管控制面',
-            detail: `1 集群 × ${formatUsdRate(cost.control_plane_per_hour)}/集群·时`,
+            label: t('price.controlPlane'),
+            detail: t('bt.cpLine', { v0: formatUsdRate(cost.control_plane_per_hour) }),
             hourly: cost.control_plane_per_hour,
           },
         ]
@@ -90,8 +91,8 @@ export function BillingTab({ detail }: { detail: ResourceDetail }) {
     ...(cost.storage_per_hour > 0
       ? [
           {
-            label: '块存储',
-            detail: `${formatNumber(detail.storage_gb)} GB × ${formatUsdRate(cost.storage_per_month)}/月 → 折 ${formatUsdRate(cost.storage_per_hour)}/时`,
+            label: t('quotas.blockStorage'),
+            detail: t('bt.storageLine', { v0: formatNumber(detail.storage_gb), v1: formatUsdRate(cost.storage_per_month), v2: formatUsdRate(cost.storage_per_hour) }),
             hourly: cost.storage_per_hour,
           },
         ]
@@ -103,25 +104,25 @@ export function BillingTab({ detail }: { detail: ResourceDetail }) {
       {/* ① 实时费用卡 */}
       <div className={s.grid} style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' }}>
         <StatTile
-          label={`当前费用（${UNIT_LABEL[cost.unit]}）`}
+          label={t('bt.currentCost', { v0: UNIT_LABEL[cost.unit] })}
           value={formatUsd(cost.per_hour)}
           hint={cost.metering_note}
         />
-        <StatTile label="今日花费" value={formatUsd(summary.today)} />
-        <StatTile label="本月花费" value={formatUsd(summary.mtd)} />
-        <StatTile label="本资源累计" value={formatUsd(summary.total)} />
+        <StatTile label={t('cost.today')} value={formatUsd(summary.today)} />
+        <StatTile label={t('cost.mtd')} value={formatUsd(summary.mtd)} />
+        <StatTile label={t('bt.resourceTotal')} value={formatUsd(summary.total)} />
         <StatTile
-          label="预计可运行"
-          value={cost.remaining_hours === null ? '—' : `${formatNumber(cost.remaining_hours, 1)} 小时`}
-          hint="= 账户余额 / 当前时单价"
+          label={t('server.estRuntime')}
+          value={cost.remaining_hours === null ? '—' : t('common.hoursValue', { v0: formatNumber(cost.remaining_hours, 1) })}
+          hint={t('bt.estRuntimeHint')}
         />
         <StatTile
-          label="下单时预估 vs 当前"
-          value={snapshot === null ? '—' : `${formatUsd(snapshot)} /时`}
+          label={t('bt.estimateVsCurrent')}
+          value={snapshot === null ? '—' : t('bt.ratePerHour', { v0: formatUsd(snapshot) })}
           hint={
             snapshot === null
-              ? '该资源无订单快照'
-              : `当前 ${formatUsd(cost.per_hour)}/时 · 区域系数 ×${regionMultiplierOf(detail.region)}`
+              ? t('bt.noSnapshot')
+              : t('bt.rateBreakdown', { v0: formatUsd(cost.per_hour), v1: regionMultiplierOf(detail.region) })
           }
         />
       </div>
@@ -129,7 +130,7 @@ export function BillingTab({ detail }: { detail: ResourceDetail }) {
       {/* ② 单价构成明细 */}
       <Card>
         <div className={s.cardHeader}>
-          <div className={s.cardTitle}>单价构成明细</div>
+          <div className={s.cardTitle}>{t('bt.rateDetail')}</div>
           <div className={s.cardActions}>
             <Badge tone="info">{UNIT_LABEL[cost.unit]}</Badge>
           </div>
@@ -141,19 +142,17 @@ export function BillingTab({ detail }: { detail: ResourceDetail }) {
                 <b>{l.label}</b>
                 <span className={s.muted}> · {l.detail}</span>
               </span>
-              <span>{formatUsd(l.hourly)} /时</span>
+              <span>{t('bt.ratePerHour', { v0: formatUsd(l.hourly) })}</span>
             </div>
           ))}
           <div className={s.priceTotal}>
-            <span>合计（按需）</span>
+            <span>{t('bt.totalPayg')}</span>
             <span>
-              {formatUsd(cost.per_hour)} /时 · {formatUsd(cost.per_month)} /月(730h)
+              {t('bt.rateSummary', { v0: formatUsd(cost.per_hour), v1: formatUsd(cost.per_month) })}
             </span>
           </div>
           <div className={s.muted} style={{ marginTop: 6, fontSize: 12 }}>
-            展示口径：{UNIT_LABEL[cost.unit]}；计费数量 = {formatNumber(cost.quantity)}{' '}
-            {QTY_NOUN[cost.unit]}。{cost.metering_note}。
-          </div>
+            {t('bt.displayBasis', { v0: UNIT_LABEL[cost.unit], v1: formatNumber(cost.quantity), v2: QTY_NOUN[cost.unit], v3: cost.metering_note })}</div>
         </div>
       </Card>
 
@@ -167,8 +166,8 @@ export function BillingTab({ detail }: { detail: ResourceDetail }) {
             marginBottom: 12,
           }}
         >
-          <h2 className={s.sectionTitle}>用量明细</h2>
-          <Segmented options={AGG} value={agg} onChange={setAgg} ariaLabel="聚合粒度" />
+          <h2 className={s.sectionTitle}>{t('bt.usageDetail')}</h2>
+          <Segmented options={AGG} value={agg} onChange={setAgg} ariaLabel={t('bt.granularity')} />
         </div>
         <Table
           rows={rows}
@@ -177,30 +176,30 @@ export function BillingTab({ detail }: { detail: ResourceDetail }) {
           empty={
             <EmptyState
               icon="🧾"
-              title="该资源暂无用量记录"
-              hint="资源处于供给中或尚未开始计量"
+              title={t('bt.noUsage')}
+              hint={t('bt.noUsageHint')}
             />
           }
           columns={[
-            { key: 'ts', header: '时间', render: (r) => formatDateTime(r.usage_hour) },
-            { key: 'unit', header: '计费单位', render: (r) => UNIT_LABEL[r.unit] },
+            { key: 'ts', header: t('common.time'), render: (r) => formatDateTime(r.usage_hour) },
+            { key: 'unit', header: t('cost.billingUnit'), render: (r) => UNIT_LABEL[r.unit] },
             {
               key: 'qty',
-              header: '数量',
+              header: t('bt.quantity'),
               numeric: true,
               mono: true,
               render: (r) => formatNumber(r.quantity, 4),
             },
             {
               key: 'price',
-              header: '单价',
+              header: t('common.unitPrice'),
               numeric: true,
               mono: true,
               render: (r) => formatUsdRate(r.unit_price),
             },
             {
               key: 'amount',
-              header: '金额',
+              header: t('cost.amount'),
               numeric: true,
               mono: true,
               render: (r) => formatUsd(r.amount),
@@ -212,39 +211,39 @@ export function BillingTab({ detail }: { detail: ResourceDetail }) {
       {/* ④ 扣费流水 */}
       <div>
         <h2 className={s.sectionTitle} style={{ marginBottom: 12 }}>
-          扣费流水
+          {t('bt.deductions')}
         </h2>
         <Table
           rows={txns}
           rowKey={(t) => `${t.id}`}
           zebra
-          empty={<EmptyState icon="💳" title="暂无流水" hint="扣费按日汇总产生" />}
+          empty={<EmptyState icon="💳" title={t('bt.noDeductions')} hint={t('bt.deductionsHint')} />}
           columns={[
-            { key: 'ts', header: '交易时间', render: (t) => formatDateTime(t.created_at) },
+            { key: 'ts', header: t('bt.txnTime'), render: (t) => formatDateTime(t.created_at) },
             {
               key: 'type',
-              header: '类型',
-              render: (t) => (
-                <Badge tone={t.type === 'charge' ? 'warning' : 'success'}>
-                  {t.type === 'charge' ? '扣费' : t.type === 'credit' ? '充值' : t.type}
+              header: t('common.type'),
+              render: (row) => (
+                <Badge tone={row.type === 'charge' ? 'warning' : 'success'}>
+                  {row.type === 'charge' ? t('bt.charge') : row.type === 'credit' ? t('bt.credit') : row.type}
                 </Badge>
               ),
             },
             {
               key: 'amount',
-              header: '金额',
+              header: t('cost.amount'),
               numeric: true,
               mono: true,
               render: (t) => formatUsd(t.amount),
             },
             {
               key: 'after',
-              header: '余额（after）',
+              header: t('bt.balanceAfter'),
               numeric: true,
               mono: true,
               render: (t) => formatUsd(t.balance_after),
             },
-            { key: 'summary', header: '摘要', render: (t) => t.summary },
+            { key: 'summary', header: t('common.summary'), render: (row) => dt(row.summary) },
           ]}
         />
       </div>

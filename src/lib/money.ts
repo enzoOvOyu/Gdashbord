@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 // 货币格式化唯一入口（DESIGN-SYSTEM §11 / PRD §7.1 / MOCK-DATA G3）
 // USD 为唯一计价币种；按 locale 千分位格式化；**不做汇率换算**；金额一律 round(2)。
 // G3 精度：单价 $/GPU·h 2 位；金额 $ 2 位。禁止伪精度（如 $3.4900001）。
@@ -41,7 +42,7 @@ export function formatUsdRate(rate: number): string {
 }
 /** $3.49 / GPU·时 */
 export function formatPricePerGpuHour(rate: number): string {
-  return `${USD.format(round2(rate))} / GPU·时`;
+  return t('pools.ratePerGpu', { v0: USD.format(round2(rate)) });
 }
 
 /** 百分比（1 位小数，G3） */

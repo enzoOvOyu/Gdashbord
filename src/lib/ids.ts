@@ -1,5 +1,6 @@
 // 单一事实来源：资源类型 ↔ 路由 ↔ 标识 ↔ 色彩 ↔ 图标（PRD §5.2.1 / ARCH §12.6 / DESIGN §2.6）
 // 任何页面/组件引用类型都必须取本表同一份常量，禁止第二套命名。
+import { t } from '../i18n';
 import { Boxes, Cpu, Server, Zap, type LucideIcon } from 'lucide-react';
 import type {
   DisplayId,
@@ -33,11 +34,15 @@ export interface KindMeta {
   icon: string;
 }
 
+// 注意：label 用 getter 惰性求值——模块级 t() 在加载时只算一次，切换语言后不更新；
+// getter 每次访问重新调用 t()，配合 ConsoleLayout 订阅 locale store 实现即时刷新（DESIGN §5.24）。
 export const KIND_META: Record<ResourceKind, KindMeta> = {
   gpu_vm: {
     kind: 'gpu_vm',
     routeKey: 'servers',
-    label: 'GPU 云服务器',
+    get label() {
+      return t('kind.server');
+    },
     prefix: 'srv-',
     colorVar: 'var(--rs-type-server)',
     icon: '🖥',
@@ -45,7 +50,9 @@ export const KIND_META: Record<ResourceKind, KindMeta> = {
   gpu_baremetal: {
     kind: 'gpu_baremetal',
     routeKey: 'baremetal',
-    label: 'GPU 裸金属',
+    get label() {
+      return t('kind.baremetal');
+    },
     prefix: 'bm-',
     colorVar: 'var(--rs-type-baremetal)',
     icon: '🔩',
@@ -61,7 +68,9 @@ export const KIND_META: Record<ResourceKind, KindMeta> = {
   inference: {
     kind: 'inference',
     routeKey: 'inference',
-    label: '推理服务',
+    get label() {
+      return t('kind.inference');
+    },
     prefix: 'inf-',
     colorVar: 'var(--rs-type-inference)',
     icon: '⚡',
@@ -81,19 +90,44 @@ export const kindOfRouteKey = (routeKey: string): ResourceKind | undefined =>
   KIND_LIST.find((k) => KIND_META[k].routeKey === routeKey);
 
 // ─────────── 区域（PRD §9.2 / ARCH §12.6） ───────────
+// label getter 化：语言切换后即时更新（见 KIND_META 注释）
 export const REGION_META: Record<RegionCode, { label: string; iso: string }> = {
-  jp: { label: '日本', iso: 'JP' },
-  th: { label: '泰国', iso: 'TH' },
-  sg: { label: '新加坡', iso: 'SG' },
-  us: { label: '美国', iso: 'US' },
+  jp: {
+    iso: 'JP',
+    get label() {
+      return t('region.jp');
+    },
+  },
+  th: {
+    iso: 'TH',
+    get label() {
+      return t('region.th');
+    },
+  },
+  sg: {
+    iso: 'SG',
+    get label() {
+      return t('region.sg');
+    },
+  },
+  us: {
+    iso: 'US',
+    get label() {
+      return t('region.us');
+    },
+  },
 };
 export const REGION_LIST: RegionCode[] = ['jp', 'th', 'sg', 'us'];
 
 // ─────────── 节点池显示名（PRD §9.1 / ARCH §12.6） ───────────
+// getter 化：fixtures/handlers 消费本表时同样拿到当前语言（数据操作用途除外，
+// 如标签后缀剥离走中文源，须用 NODE_POOL_LABEL 前先确认语言，或直接用池码）
 export const NODE_POOL_LABEL: Record<NodePoolCode, string> = {
   H100_SXM: 'H100 SXM',
   H200_NVL: 'H200 NVL',
-  B200_NVL72: 'B200 NVL72（GB200 机柜）',
+  get B200_NVL72() {
+    return t('spec.b200nvl72');
+  },
   B300: 'B300',
   GB300_NVL72: 'GB300 NVL72',
 };

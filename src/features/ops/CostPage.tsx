@@ -1,5 +1,6 @@
 // 运营&运维 · 成本分析（§4.4.1 C 档：分组行内展开下钻）
 // 每个金额都能由 billing_usage 的 quantity × unit_price 复算，禁止另设「展示用金额」。
+import { t } from '../../i18n';
 import { useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import {
@@ -30,18 +31,18 @@ import {
 import { TrendLine } from './shared';
 
 const DIMENSIONS = [
-  { value: 'project', label: '按项目' },
-  { value: 'resource', label: '按资源' },
-  { value: 'region', label: '按区域' },
-  { value: 'kind', label: '按类型' },
+  { value: 'project', get label() { return t('cost.byProject'); } },
+  { value: 'resource', get label() { return t('cost.byResource'); } },
+  { value: 'region', get label() { return t('cost.byRegion'); } },
+  { value: 'kind', get label() { return t('cost.byType'); } },
 ];
 
 const UNIT_LABEL: Record<string, string> = {
-  per_gpu_hour: 'GPU·时',
-  per_gb_hour: 'GB·时',
-  per_machine_hour: '台·时',
-  per_cluster_hour: '集群·时',
-  per_instance_hour: '实例·时',
+  get per_gpu_hour() { return t('unit.gpuHour'); },
+  get per_gb_hour() { return t('unit.gbHour'); },
+  get per_machine_hour() { return t('unit.machineHour'); },
+  get per_cluster_hour() { return t('unit.clusterHour'); },
+  get per_instance_hour() { return t('unit.instanceHour'); },
 };
 
 export default function CostPage() {
@@ -65,13 +66,13 @@ export default function CostPage() {
   });
 
   const usageColumns: Array<Column<UsageSliceRow>> = [
-    { key: 'hour', header: '计费小时', mono: true, render: (r) => formatDateTime(r.usage_hour) },
-    { key: 'res', header: '资源', render: (r) => r.resource_name },
-    { key: 'proj', header: '项目', render: (r) => r.project_name },
-    { key: 'unit', header: '计费单位', render: (r) => UNIT_LABEL[r.unit] ?? r.unit },
-    { key: 'q', header: '用量', numeric: true, render: (r) => formatNumber(r.quantity, 2) },
-    { key: 'price', header: '单价', numeric: true, render: (r) => formatUsd(r.unit_price) },
-    { key: 'amt', header: '金额', numeric: true, render: (r) => formatUsd(r.amount) },
+    { key: 'hour', header: t('cost.billedHours'), mono: true, render: (r) => formatDateTime(r.usage_hour) },
+    { key: 'res', header: t('common.resource'), render: (r) => r.resource_name },
+    { key: 'proj', header: t('common.project'), render: (r) => r.project_name },
+    { key: 'unit', header: t('cost.billingUnit'), render: (r) => UNIT_LABEL[r.unit] ?? r.unit },
+    { key: 'q', header: t('cost.usage'), numeric: true, render: (r) => formatNumber(r.quantity, 2) },
+    { key: 'price', header: t('common.unitPrice'), numeric: true, render: (r) => formatUsd(r.unit_price) },
+    { key: 'amt', header: t('cost.amount'), numeric: true, render: (r) => formatUsd(r.amount) },
   ];
 
   const budget = bar?.budget ?? 0;
@@ -81,8 +82,8 @@ export default function CostPage() {
   return (
     <div>
       <PageHeader
-        title="成本分析"
-        desc={`当前 ${REGION_META[region].label} 区域口径；切换区域后按 billing_usage 重新聚合。所有金额 = Σ(quantity × unit_price)。`}
+        title={t('nav.cost')}
+        desc={t('cost.regionHint', { v0: REGION_META[region].label })}
         actions={<RegionSelect value={region} onChange={setRegion} />}
       />
 
@@ -91,14 +92,14 @@ export default function CostPage() {
           options={DIMENSIONS}
           value={dimension}
           onChange={setDimension}
-          ariaLabel="下钻维度"
+          ariaLabel={t('cost.drilldown')}
         />
         <Select
           value={projectId}
           onChange={(e) => setProjectId(e.target.value)}
-          aria-label="项目筛选"
+          aria-label={t('cost.projectFilter')}
         >
-          <option value="all">全部项目</option>
+          <option value="all">{t('common.allProjects')}</option>
           {(projects as Array<{ id: number; name: string }>).map((p) => (
             <option key={p.id} value={String(p.id)}>
               {p.name}
@@ -106,7 +107,7 @@ export default function CostPage() {
           ))}
         </Select>
         <span className={s.spacer} />
-        {cost && <span className={s.muted} style={{ fontSize: 12 }}>账期 {cost.billing_period}</span>}
+        {cost && <span className={s.muted} style={{ fontSize: 12 }}>{t('cost.period', { v0: cost.billing_period })}</span>}
       </Toolbar>
 
       <div
@@ -117,51 +118,51 @@ export default function CostPage() {
           marginBottom: 12,
         }}
       >
-        <Card title="本月花费">
+        <Card title={t('cost.mtd')}>
           <div style={{ fontSize: 24, fontWeight: 700 }}>{formatUsd(mtd)}</div>
-          <div className={s.muted} style={{ fontSize: 12 }}>账期内累计（按当前区域口径）</div>
+          <div className={s.muted} style={{ fontSize: 12 }}>{t('cost.mtdHint')}</div>
           {budget > 0 && (
             <div style={{ marginTop: 8 }}>
               <Progress
-                label="预算"
+                label={t('cost.budget')}
                 value={mtd}
                 max={budget}
                 right={`${formatUsd(mtd)} / ${formatUsd(budget)}`}
               />
               {overBudget && (
                 <div style={{ marginTop: 4 }}>
-                  <Badge tone="danger">已超预算 {formatUsd(mtd - budget)}</Badge>
+                  <Badge tone="danger">{t('cost.overBudget', { v0: formatUsd(mtd - budget) })}</Badge>
                 </div>
               )}
             </div>
           )}
         </Card>
-        <Card title="今日花费">
+        <Card title={t('cost.today')}>
           <div style={{ fontSize: 24, fontWeight: 700 }}>{formatUsd(cost?.today ?? 0)}</div>
-          <div className={s.muted} style={{ fontSize: 12 }}>自然日 00:00 起累计</div>
+          <div className={s.muted} style={{ fontSize: 12 }}>{t('cost.todayHint')}</div>
         </Card>
-        <Card title="趋势（近 48 小时）">
+        <Card title={t('cost.trend48')}>
           {cost ? (
             <TrendLine points={cost.trend} width={520} height={96} />
           ) : (
-            <div className={s.muted}>加载中…</div>
+            <div className={s.muted}>{t('common.loading')}</div>
           )}
           <div className={s.muted} style={{ fontSize: 11 }}>
-            形态含启停/扩容/折扣，非完美线性（G7）
+            {t('cost.trendHint')}
           </div>
         </Card>
       </div>
 
       {isLoading ? (
-        <div className={s.muted}>加载中…</div>
+        <div className={s.muted}>{t('common.loading')}</div>
       ) : (cost?.slices ?? []).length === 0 ? (
         <EmptyState
           icon="💸"
-          title="该区域/项目下暂无用量"
-          hint="切换到已有资源的区域或取消项目筛选"
+          title={t('cost.noUsage')}
+          hint={t('cost.noUsageHint')}
         />
       ) : (
-        <Card title={`${DIMENSIONS.find((d) => d.value === dimension)?.label}下钻（点击行展开逐小时用量）`}>
+        <Card title={t('cost.drilldownHint', { v0: DIMENSIONS.find((d) => d.value === dimension)?.label })}>
           <div style={{ border: '1px solid var(--rs-border)', borderRadius: 8 }}>
             {(cost?.slices ?? []).map((sl) => {
               const isOpen = expanded === sl.key;
@@ -194,23 +195,22 @@ export default function CostPage() {
                       {formatPercent(sl.share * 100, 1)}
                     </span>
                     <span style={{ textAlign: 'right', color: 'var(--rs-text-muted)' }}>
-                      {formatNumber(sl.gpu_hours, 1)} GPU·时
+                      {t('cost.gpuHours', { v0: formatNumber(sl.gpu_hours, 1) })}
                     </span>
                     <span style={{ textAlign: 'right', color: 'var(--rs-text-muted)' }}>
-                      {sl.resources.length} 资源
+                      {t('cost.resourceCount', { v0: sl.resources.length })}
                     </span>
                   </button>
                   {isOpen && (
                     <div style={{ padding: '0 12px 12px', background: 'var(--rs-surface)' }}>
                       {slice.isLoading ? (
                         <div className={s.muted} style={{ fontSize: 12 }}>
-                          加载用量明细…
+                          {t('cost.loadingUsage')}
                         </div>
                       ) : (
                         <>
                           <div className={s.muted} style={{ fontSize: 12, marginBottom: 6 }}>
-                            共 {slice.data?.count ?? 0} 条用量行 · 合计{' '}
-                            {formatUsd(slice.data?.total ?? 0)}（由 quantity × unit_price 逐行累加）
+                            {t('cost.usageSummary', { v0: slice.data?.count ?? 0, v1: ' ', v2: formatUsd(slice.data?.total ?? 0) })}
                           </div>
                           <Table
                             columns={usageColumns}
@@ -219,11 +219,10 @@ export default function CostPage() {
                           />
                           {sl.resources.length > 0 && (
                             <div className={s.muted} style={{ fontSize: 12, marginTop: 8 }}>
-                              Top 资源：
-                              {sl.resources
+                              {t('cost.topResources')}{sl.resources
                                 .slice(0, 5)
-                                .map((r) => `${r.name}（${formatUsd(r.amount)}）`)
-                                .join('、')}
+                                .map((r) => t('common.idParenPair', { v0: r.name, v1: formatUsd(r.amount) }))
+                                .join(t('common.listSep'))}
                             </div>
                           )}
                         </>

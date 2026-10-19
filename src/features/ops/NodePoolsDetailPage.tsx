@@ -1,4 +1,5 @@
 // 运营&运维 · 节点池详情（§4.4.1 A 档整页；由 /ops/pools 抽屉进入）
+import { t, dt } from '../../i18n';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Plus } from 'lucide-react';
 import {
@@ -31,31 +32,31 @@ export default function NodePoolsDetailPage() {
   const poolNodes = nodes.filter((n) => n.pool_code === code);
 
   const columns: Array<Column<NodeView>> = [
-    { key: 'uid', header: '节点', mono: true, render: (n) => n.node_uid },
-    { key: 'rack', header: '机架位', mono: true, render: (n) => n.rack_id ?? '—' },
-    { key: 'sw', header: '交换机组', mono: true, render: (n) => n.switch_group ?? '—' },
+    { key: 'uid', header: t('nav.nodes'), mono: true, render: (n) => n.node_uid },
+    { key: 'rack', header: t('common.rack'), mono: true, render: (n) => n.rack_id ?? '—' },
+    { key: 'sw', header: t('common.switchGroup'), mono: true, render: (n) => n.switch_group ?? '—' },
     {
       key: 'state',
-      header: '状态',
+      header: t('common.status'),
       render: (n) => (
         <span className={s.row} style={{ gap: 6 }}>
           <Badge tone={NODE_STATE_META[n.state]?.tone ?? 'neutral'}>
             {NODE_STATE_META[n.state]?.label.split('（')[0] ?? n.state}
           </Badge>
-          {n.straggler && <Badge tone="warning">慢节点</Badge>}
+          {n.straggler && <Badge tone="warning">{t('nodes.slowNode')}</Badge>}
         </span>
       ),
     },
-    { key: 'gpu', header: 'GPU', numeric: true, render: (n) => `${n.gpu_count} 卡` },
-    { key: 'hosted', header: '承载资源', numeric: true, render: (n) => n.hosted_resources },
-    { key: 'updated', header: '更新于', render: (n) => formatRelative(n.updated_at) },
+    { key: 'gpu', header: 'GPU', numeric: true, render: (n) => t('common.gpuCountValue', { v0: n.gpu_count }) },
+    { key: 'hosted', header: t('pools.bearingResources'), numeric: true, render: (n) => n.hosted_resources },
+    { key: 'updated', header: t('common.updatedAt'), render: (n) => formatRelative(n.updated_at) },
     {
       key: 'act',
       header: '',
       width: 88,
       render: (n) => (
         <Button size="sm" variant="ghost" onClick={() => navigate(`/ops/nodes/${n.node_uid}`)}>
-          详情
+          {t('common.details')}
         </Button>
       ),
     },
@@ -63,20 +64,20 @@ export default function NodePoolsDetailPage() {
 
   if (isLoading) {
     return (
-      <Card title="加载中…">
-        <div className={s.muted}>正在读取节点池容量</div>
+      <Card title={t('common.loading')}>
+        <div className={s.muted}>{t('pools.loading')}</div>
       </Card>
     );
   }
 
   if (!pool) {
     return (
-      <Card title="节点池不存在">
+      <Card title={t('pools.notFound')}>
         <EmptyState
           icon="🔍"
-          title={`未找到机型 ${code ?? '—'}`}
-          hint={`该机型可能未在 ${REGION_META[region].label} 区域提供`}
-          action={<Button onClick={() => navigate('/ops/pools')}>返回节点池列表</Button>}
+          title={t('pools.modelNotFound', { v0: code ?? '—' })}
+          hint={t('pools.modelNotInRegion', { v0: REGION_META[region].label })}
+          action={<Button onClick={() => navigate('/ops/pools')}>{t('common.backToPools')}</Button>}
         />
       </Card>
     );
@@ -94,7 +95,7 @@ export default function NodePoolsDetailPage() {
             {pool.display_name}
           </span>
         }
-        desc={`${pool.gpu_model} · ${pool.interconnect} · 当前 ${REGION_META[region].label} 区域容量口径`}
+        desc={t('pools.regionScope', { v0: pool.gpu_model, v1: pool.interconnect, v2: REGION_META[region].label })}
         actions={<RegionSelect value={region} onChange={setRegion} />}
       />
 
@@ -106,45 +107,45 @@ export default function NodePoolsDetailPage() {
           marginBottom: 12,
         }}
       >
-        <Card title="容量">
+        <Card title={t('common.capacity')}>
           <KeyValue
             items={[
-              { label: '节点数', value: formatNumber(pool.supply?.nodeCount ?? 0) },
-              { label: '总 GPU', value: `${formatNumber(total)} 卡` },
-              { label: '可用 GPU', value: `${formatNumber(avail)} 卡` },
-              { label: '已分配 GPU', value: `${formatNumber(pool.supply?.allocatedGpu ?? 0)} 卡` },
+              { label: t('common.nodeCount'), value: formatNumber(pool.supply?.nodeCount ?? 0) },
+              { label: t('common.totalGpu'), value: t('common.gpuCountValue', { v0: formatNumber(total) }) },
+              { label: t('common.availableGpu'), value: t('common.gpuCountValue', { v0: formatNumber(avail) }) },
+              { label: t('common.allocatedGpu'), value: t('common.gpuCountValue', { v0: formatNumber(pool.supply?.allocatedGpu ?? 0) }) },
             ]}
           />
           <div style={{ marginTop: 8 }}>
             <Progress
-              label="分配率"
+              label={t('common.allocRate')}
               value={pool.supply?.allocatedGpu ?? 0}
               max={total}
-              right={`空闲 ${formatNumber(avail)} 卡`}
+              right={t('pools.freeGpus', { v0: formatNumber(avail) })}
             />
           </div>
         </Card>
-        <Card title="规格">
+        <Card title={t('common.spec')}>
           <KeyValue
             items={[
-              { label: '机型编码', value: pool.code, mono: true },
-              { label: 'GPU 型号', value: pool.gpu_model },
-              { label: '单卡显存', value: `${pool.vram_gb} GB` },
-              { label: '单节点卡数', value: `${pool.gpus_per_node} 卡` },
-              { label: '互连', value: pool.interconnect },
-              { label: 'CPU', value: pool.platform.cpu },
-              { label: '本地 NVMe', value: pool.platform.localNvme },
-              { label: '网络', value: pool.platform.network },
+              { label: t('pools.modelCode'), value: pool.code, mono: true },
+              { label: t('common.gpuModel'), value: pool.gpu_model },
+              { label: t('common.memPerGpu'), value: `${pool.vram_gb} GB` },
+              { label: t('pools.gpuPerNode'), value: t('common.gpuCountValue', { v0: pool.gpus_per_node }) },
+              { label: t('pools.interconnect'), value: pool.interconnect },
+              { label: 'CPU', value: dt(pool.platform.cpu) },
+              { label: t('pools.localNvme'), value: pool.platform.localNvme },
+              { label: t('common.network'), value: pool.platform.network },
             ]}
           />
         </Card>
-        <Card title="定价">
+        <Card title={t('pools.pricing')}>
           <KeyValue
             items={[
-              { label: 'GPU·小时', value: `${formatUsd(pool.unit_price)} / GPU·时` },
-              { label: '裸金属', value: `${formatUsd(pool.machine_unit_price)} / 台·时` },
+              { label: t('unit.gpuHourLong'), value: t('pools.ratePerGpu', { v0: formatUsd(pool.unit_price) }) },
+              { label: t('kind.baremetalShort'), value: t('pools.ratePerMachine', { v0: formatUsd(pool.machine_unit_price) }) },
               {
-                label: '市场区间',
+                label: t('pools.marketRange'),
                 value: `${formatUsd(pool.market_range[0])} – ${formatUsd(pool.market_range[1])}`,
               },
             ]}
@@ -155,18 +156,18 @@ export default function NodePoolsDetailPage() {
               icon={<Plus size={14} />}
               onClick={() => navigate('/deployment/gpu_vm')}
             >
-              用该机型创建 GPU 云服务器
+              {t('pools.createServer')}
             </Button>
           </div>
         </Card>
       </div>
 
-      <Card title={`${REGION_META[region].label} 区域节点清单（${poolNodes.length}）`}>
+      <Card title={t('pools.nodeList', { v0: REGION_META[region].label, v1: poolNodes.length })}>
         {poolNodes.length === 0 ? (
           <EmptyState
             icon="🖥️"
-            title="该区域此机型暂无节点"
-            hint="可切换到该机型已上架的区域查看"
+            title={t('pools.noNodesForModel')}
+            hint={t('pools.noNodesHint')}
           />
         ) : (
           <Table
@@ -182,9 +183,7 @@ export default function NodePoolsDetailPage() {
       {!pool.available_in_region && (
         <div className={`${s.notice} ${s.noticeWarn}`} style={{ marginTop: 12 }}>
           <div>
-            该机型在 {REGION_META[region].label} 未提供；可用区域：
-            {pool.available_regions.map((r) => REGION_META[r].label).join(' / ')}。
-          </div>
+            {t('pools.modelNotAvailable', { v0: REGION_META[region].label, v1: pool.available_regions.map((r) => REGION_META[r].label).join(' / ') })}</div>
         </div>
       )}
     </div>

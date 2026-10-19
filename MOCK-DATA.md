@@ -108,6 +108,17 @@
 | 工期/供给时长不符合 §5.5（如裸金属 5 秒供给完成） | 违反公认常识 |
 | 成本随时间严格线性且整除 | 违反 G7 |
 
+### G10 国际化文案约束（v0.7 新增，MUST）
+
+> 呼应 PRD §3.1 / ARCH §2：i18n 中英双语落地后，Mock 层必须保证**两种语言下数据自洽、无硬编码泄漏**。
+
+- **UI 文案零硬编码**：组件内禁止出现中文字面量；导航/表头/按钮/空态/Toast 一律 `t('namespace.key')`（字典 `src/i18n/locales/`，键规范见 DESIGN §5.24）。
+- **枚举显示名单一来源**：资源类型 / 区域 / 节点池 / 状态 / `strategy_model` / `scaling_trigger` 等枚举的显示名只在字典 `common.*` 段定义一份，fixture 与组件共用；**禁止 fixture 内另存一套英文名**。
+- **数据值双语文案**：fixture 中的实体名称（项目名 / 资源名 / 标签 / 事件 reason）以**中文为源**；英译经字典 `data.*` 段按 id 查找输出（如 `t('data.project.1')`），保证 `en-US` 下不出现未翻译中文。
+- **缺键回退**：`en-US` 缺失键回退 `zh-CN` 值并在 dev 环境 `console.warn`；**验收时 en-US 下不得出现控制台 warn**（键覆盖率 100%）。
+- **格式随 locale**：日期/数字走 `Intl`（随 `stores/locale`），**币种恒 USD 不做换算**（PRD §7.1）；图表轴与 tooltip 同样走字典。
+- **切语言不触发重取**：locale 是纯客户端状态，**不得进入 TanStack Query key**（避免切换语言引发接口重取）。
+
 ---
 
 ## 2. 数据来源与引用规则
@@ -542,6 +553,24 @@
 
 > **禁止项**：上表之外不得出现"按调用量计费""令牌单价"等 v1 未启用的计费行（PRD §7.1）。
 
+### 6.9 弹性伸缩指标（v0.7 新增；PRD §4.2.6 / §4.5.2、ARCH §12.12）
+
+> 伸缩策略的触发判定与事件展示所需数值，**必须可由 §6 指标字典复算**，不得另造一套。
+
+| 指标键                   | 适用模型              | 阈值口径（示例）                              | 派生方式                          |
+| --------------------- | ----------------- | -------------------------------------- | ----------------------------- |
+| `queue_depth`         | `node_pool`（云服务器/vGPU） | > 20 持续 2min 触发扩容                     | 离线队列长度（`pending_pods` 同源，vGPU 用 Pod phase） |
+| `gpu_allocation_rate` | `node_pool`（裸金属）   | < 35% 持续 10min 触发缩容                   | 已分配 GPU / 总 GPU（§6.6 节点口径）   |
+| `qpm`                 | 两类                 | > 300 触发扩容 / < 80 持续 5min 缩容          | 推理 §6.5 `requests_per_min`    |
+| `ttft_p99`            | `replica`         | > 800ms 触发扩容                          | 推理 §6.5 首 token 延迟分位        |
+| `kv_cache_usage`      | `replica`         | > 85% 触发扩容                            | 推理 §6.5 KV cache 使用率        |
+| `concurrency`         | `replica`         | > 64 触发扩容                            | 推理 §6.5 running/waiting 之和    |
+
+- **warm pool 命中率**：推理策略事件中 `warm_pool_hit=true` 占比 ≥ 60%（秒级扩容），冷启动事件 `duration_s` 取 30–720s（与 §5.1 供给时长口径一致）。
+- **冷启动耗时（伸缩场景，必须按形态区分）**：裸金属 300–1800s（装机 5–30min）、GPU 云服务器 60–300s、vGPU 30–120s、推理 warm pool ≤5s / 冷启动 30–720s；**UI 必须在裸金属策略卡与向导开关处明示**（PRD §4.2.6.2）。
+- **当前值**：策略卡展示的"当前 N 台/副本"必须与 `resources.spec_json` 的实际规格一致（扩容成功后同步更新，事件 `to_size` 即新值）。
+- **指标与策略阈值一致性**：`trigger_snapshot.value` 必须落在该指标同窗口序列的合理范围内（G8：不得出现 snapshot 与曲线矛盾）。
+
 ---
 
 ## 7. 派生公式引擎（禁止硬编码，ARCH §6 / `mocks/lib/derive.ts`）
@@ -675,6 +704,7 @@ mocks/
 │   ├─ resources.ts             # 4 类资源种子（每类必带 region + project_id）
 │   ├─ orders-steps.ts          # 工作项与 Provisioning 子步骤（ARCH §13）
 │   ├─ usage.ts                 # 逐小时用量种子（§7.7，供 §7.8 三表）
+│   ├─ scaling.ts               # v0.7：弹性策略与伸缩事件种子（PRD §4.2.6 / §4.5.2）
 │   └─ users-orgs.ts            # 租户/角色/配额/余额
 ├─ lib/
 │   ├─ derive.ts                # §7 全部纯函数（可单测）
@@ -799,6 +829,19 @@ interface MonitorEvent {
 - 事件必须**单调递增**且全部早于当前时间；同一 `correlationId` 的事件构成因果链（例如 `HPA_SCALE_UP` 与后续的 `SCALE_COMPLETE`）。
 - Provisioning 阶段的事件**必须**与 `resource_provisioning_steps` 一一对应（ARCH §13），禁止两套时间互相矛盾。
 
+### 9.4 弹性伸缩事件规范（v0.7 新增；`scaling_events`，ARCH §12.12）
+
+> 伸缩事件是工作台·弹性伸缩页时间线与资源详情「弹性」Tab 的数据源；除满足 §9.1/§9.2 通用契约外，还须满足：
+
+| 契约 | 要求 |
+| --- | --- |
+| **方向与数值自洽** | `scale_out` 必有 `to_size > from_size`，`scale_in` 反之；`to_size` 不得超出该策略 `min_size`/`max_size`（缩容后 ≥ min，含裸金属 warm floor ≥ 1） |
+| **触发快照带度量** | `trigger_snapshot = { metric, value, target, windowS }`；`value` 与 §6.9 指标同窗口序列一致（G9：region 参与种子） |
+| **耗时口径** | `duration_s` 按形态区分（§6.9：裸金属 300–1800s / 云服务器 60–300s / vGPU 30–120s / 推理 warm ≤5s、冷启动 30–720s）；`warm_pool_hit=true` 时 `duration_s ≤ 10` |
+| **密度** | 每条生效策略默认 6–15 条事件，覆盖：创建后首次评估 → ≥2 次扩容 → ≥1 次缩容 → ≥1 次 `paused`/`resumed` 人工干预；时间倒序、全部早于当前时间 |
+| **与计费联动可解释** | 扩容事件之后的小时用量行 `quantity` 必须变为 `to_size` 对应值（§7.7）；缩容事件后停止新增算力行 |
+| **异常事件** | 允许 1 条失败事件（`reason` 非空，如"库存不足，回退至 H200_NVL"），体现 `fallback_enabled` 语义；禁止全部成功（违反 G7） |
+
 ---
 
 ## 10. 竞品设计映射（本规范的规则来源）
@@ -858,6 +901,16 @@ interface MonitorEvent {
 - [ ] **§8.3 全部断言通过**：含 v0.6 新增的 C1–C12 与"切区域数据指纹不同"断言；dev 控制台无 G8 红旗。
 - [ ] **推理显存闸门**：创建推理服务时 `weights + kv + 2 ≤ 单副本卡数 × 单卡显存` 校验生效；70B BF16 单卡 80GB 场景被阻断。
 
+**v0.7 功能增强项（弹性伸缩 / 工作台 / 项目页 / i18n）**
+
+- [ ] **弹性策略种子自洽**：`fixtures/scaling.ts` 每条策略满足 §9.4（方向数值自洽 / 快照带度量 / 耗时按形态 / 密度 6–15 条 / 含 1 条失败回退事件）；`strategy_model` 与绑定资源类型匹配（裸金属/vGPU/云服务器 → `node_pool`，推理 → `replica`）。
+- [ ] **两类策略模型不混用**：`node_pool` 策略的 `min_size` 在裸金属上 ≥ 1（warm floor）；`replica` 策略 `scale_to_zero=true` 时才允许 `min_size=0`；一个资源最多一条 `status='active'` 策略。
+- [ ] **伸缩指标可复算**：§6.9 全部指标键的值与 `trigger_snapshot` 可由 §6 指标字典复算；warm pool 命中率 ≥ 60%；裸金属冷启动事件 300–1800s。
+- [ ] **下单预检含伸缩档**：开启弹性的下单按 `max_size` 校验配额，超限返回 `409 QUOTA_EXCEEDED`（与 ARCH §12.11 一致）。
+- [ ] **Notebook 挂靠三类**：`notebooks.resource_kind ∈ {gpu_vm, gpu_baremetal, vgpu}`；每条 notebook 的 `resource_id` 指向同 region 的真实资源；删除 notebook 不删除宿主资源。
+- [ ] **项目页聚合真实**：`/api/projects/:id/summary` 的 GPU/四类计数/本月成本/配额水位可由 fixtures 复算；默认项目 `isDefault=true` 不可删除。
+- [ ] **i18n 覆盖（G10）**：en-US 下无控制台缺键 warn；组件无中文硬编码；枚举显示名只有字典一套；fixture 数据值经 `data.*` 段出英译；切语言不触发接口重取（locale 不入 Query key）。
+
 ---
 
 ## 13. 修订记录
@@ -866,3 +919,4 @@ interface MonitorEvent {
 | --- | --- | --- |
 | v1.0 | 2026-10-17 | 初版。建立 Mock 数据真实值约束、硬件基线、价格与区域系数、四类资源与集群的指标字典、派生公式引擎、有意义事件规范、生成器与验收清单；同步 PRD / ARCHITECTURE / DESIGN-SYSTEM 交叉引用。 |
 | **v1.1** | **2026-10-18** | **第二轮评审修订**：①新增 **§6.8 详情页字段→数据源→派生方式映射表**（四类 + 计费段），落实"引入数据库让 Mock 更真实"；②新增 **§7.7 计费派生**（逐小时用量行/汇总/扣费流水，支撑 PRD §7.8 四段）；③§7.1 按类型区分计费数量，新增 `base_machine_rate`（整机价，禁止 `rate×8`）；④§8.1 fixtures 新增 `pool-regions.ts`/`projects.ts`/`usage.ts`；⑤§8.3 断言扩充至 ARCH §12.10.3 的 C1–C12 与"切区域数据指纹必变"；⑥§10 竞品表补齐**阿里云 / 火山引擎 / Lambda / Nebius**；⑦§6.6 标题按新导航改为「运营&运维·节点基础设施层」；⑧§12 验收清单新增 8 项。 |
+| **v1.2** | **2026-10-19** | **v0.7 功能增强轮（设计先行）**：①新增 **G10 国际化文案约束**（UI 零硬编码 / 枚举显示名单一来源 / fixture 数据值双语文案 / 缺键回退 / locale 不入 Query key）；②新增 **§6.9 弹性伸缩指标**（六类触发指标口径、warm pool 命中率、按形态区分的冷启动耗时）；③§8.1 fixtures 新增 `scaling.ts`；④新增 **§9.4 弹性伸缩事件规范**（方向数值自洽 / 快照带度量 / 与计费联动 / 含失败回退事件）；⑤§12 验收清单新增 v0.7 七项（策略种子 / 两类模型 / 指标复算 / 下单预检 / Notebook 三类挂靠 / 项目聚合 / i18n 覆盖）。 |

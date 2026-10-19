@@ -1,4 +1,5 @@
 // 指标面板（把 /api/metrics/* 的 MetricSeries 渲染为 DESIGN §8.3 指标卡 + 缩略图）
+import { t, dt } from '../../i18n';
 import { ui as s, MetricCard, Segmented, EmptyState } from '../../components/ui';
 import { formatNumber, formatPercent } from '../../lib/money';
 import type { RangeKey } from '../../mocks/lib/timeseries';
@@ -19,18 +20,18 @@ export function RangeTabs({
   value: RangeKey;
   onChange: (r: RangeKey) => void;
 }) {
-  return <Segmented options={RANGE_OPTIONS} value={value} onChange={onChange} ariaLabel="时间范围" />;
+  return <Segmented options={RANGE_OPTIONS} value={value} onChange={onChange} ariaLabel={t('mp.timeRange')} />;
 }
 
 const fmt = (v: number | null): string => (v === null ? '—' : formatNumber(v, 1));
 
 function thresholdText(m: MetricSeries): string {
-  const t = m.threshold;
-  if (!t) return '';
-  const warn = t.warning != null ? `警告 ${t.warning}${t.unit}` : null;
-  const crit = t.critical != null ? `严重 ${t.critical}${t.unit}` : null;
+  const thr = m.threshold;
+  if (!thr) return '';
+  const warn = thr.warning != null ? t('mp.warn', { v0: thr.warning, v1: thr.unit }) : null;
+  const crit = thr.critical != null ? t('mp.crit', { v0: thr.critical, v1: thr.unit }) : null;
   const parts = [warn, crit].filter(Boolean);
-  return parts.length ? `阈值：${parts.join(' / ')}` : `正常区间 ${t.normal[0]}–${t.normal[1]}${t.unit}`;
+  return parts.length ? t('mp.threshold', { v0: parts.join(' / ') }) : t('mp.normalRange', { v0: thr.normal[0], v1: thr.normal[1], v2: thr.unit });
 }
 
 const SEM_COLOR: Record<MetricSemantic, string> = {
@@ -43,7 +44,7 @@ const SEM_COLOR: Record<MetricSemantic, string> = {
 
 export function MetricsGrid({ metrics }: { metrics: MetricSeries[] }) {
   if (!metrics || metrics.length === 0) {
-    return <EmptyState icon="📉" title="暂无指标" hint="资源处于供给中或已停止时不采集指标" />;
+    return <EmptyState icon="📉" title={t('common.noMetrics')} hint={t('mp.noMetricsHint')} />;
   }
   return (
     <div className={s.grid} style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
@@ -52,9 +53,9 @@ export function MetricsGrid({ metrics }: { metrics: MetricSeries[] }) {
         return (
           <MetricCard
             key={m.key}
-            label={m.label}
+            label={dt(m.label)}
             value={fmt(m.current)}
-            unit={m.unit}
+            unit={dt(m.unit)}
             semantic={sem}
             color={SEM_COLOR[sem]}
             thresholdText={thresholdText(m)}
@@ -80,16 +81,16 @@ export function QuantileCards({
         const over = it.threshold != null && it.value != null && it.value > it.threshold;
         return (
           <div className={s.card} key={it.label} style={{ padding: 12 }}>
-            <div className={s.metricLabel}>{it.label}</div>
+            <div className={s.metricLabel}>{dt(it.label)}</div>
             <div
               className={s.metricValue}
               style={{ color: over ? 'var(--rs-warning)' : undefined }}
             >
               {it.value === null ? '—' : formatNumber(it.value, 0)}
-              <span className={s.metricUnit}> {it.unit}</span>
+              <span className={s.metricUnit}> {dt(it.unit)}</span>
             </div>
             {it.threshold != null && (
-              <div className={s.metricFoot}>阈值 ≤ {it.threshold}{it.unit}</div>
+              <div className={s.metricFoot}>{t('inf.thresholdLe', { v0: it.threshold, v1: it.unit })}</div>
             )}
           </div>
         );

@@ -1,4 +1,5 @@
 // 运营&运维 · 节点详情（§4.4.1 A 档整页；由 /ops/nodes 抽屉进入）
+import { t, dt } from '../../i18n';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import {
@@ -23,19 +24,19 @@ export default function NodesDetailPage() {
 
   if (isLoading) {
     return (
-      <Card title="加载中…">
-        <div className={s.muted}>正在读取节点详情</div>
+      <Card title={t('common.loading')}>
+        <div className={s.muted}>{t('nodes.loading')}</div>
       </Card>
     );
   }
   if (!data) {
     return (
-      <Card title="节点不存在">
+      <Card title={t('nodes.notFound')}>
         <EmptyState
           icon="🔍"
-          title={`未找到节点 ${nodeUid ?? '—'}`}
-          hint="请返回节点列表重新选择"
-          action={<Button onClick={() => navigate('/ops/nodes')}>返回节点列表</Button>}
+          title={t('nodes.nodeNotFound', { v0: nodeUid ?? '—' })}
+          hint={t('nodes.reselect')}
+          action={<Button onClick={() => navigate('/ops/nodes')}>{t('common.backToNodes')}</Button>}
         />
       </Card>
     );
@@ -57,7 +58,7 @@ export default function NodesDetailPage() {
             <span style={{ fontFamily: 'var(--rs-font-mono)', fontSize: 18 }}>{n.node_uid}</span>
           </span>
         }
-        desc={`${n.pool_display_name} · ${REGION_META[n.region].label} 区域 · 机架 ${n.rack_id} / 交换机组 ${n.switch_group}`}
+        desc={t('nodes.scopeLine', { v0: n.pool_display_name, v1: REGION_META[n.region].label, v2: n.rack_id, v3: n.switch_group })}
         actions={
           <span className={s.row}>
             <Badge tone={NODE_STATE_META[n.state]?.tone ?? 'neutral'}>
@@ -66,7 +67,7 @@ export default function NodesDetailPage() {
             <RegionSelect
               value={n.region}
               onChange={() => undefined}
-              disabledReason="节点固定归属其所在区域"
+              disabledReason={t('nodes.regionFixed')}
             />
           </span>
         }
@@ -80,47 +81,45 @@ export default function NodesDetailPage() {
           marginBottom: 12,
         }}
       >
-        <Card title="节点信息">
+        <Card title={t('nodes.info')}>
           <KeyValue
             items={[
-              { label: '节点 UID', value: n.node_uid, mono: true },
-              { label: '机型', value: n.pool_display_name },
-              { label: 'GPU', value: `${n.gpu_count} 卡` },
-              { label: '机架位', value: n.rack_id ?? '—', mono: true },
-              { label: '交换机组', value: n.switch_group ?? '—', mono: true },
-              { label: '区域', value: REGION_META[n.region].label },
-              { label: '慢节点', value: n.straggler ? '是（step_time p99/p50 偏高）' : '否' },
-              { label: '承载资源', value: `${n.hosted_resources} 个` },
-              { label: '状态更新时间', value: formatDateTime(n.updated_at) },
+              { label: t('nodes.uid'), value: n.node_uid, mono: true },
+              { label: t('common.machineType'), value: n.pool_display_name },
+              { label: 'GPU', value: t('common.gpuCountValue', { v0: n.gpu_count }) },
+              { label: t('common.rack'), value: n.rack_id ?? '—', mono: true },
+              { label: t('common.switchGroup'), value: n.switch_group ?? '—', mono: true },
+              { label: t('common.region'), value: REGION_META[n.region].label },
+              { label: t('nodes.slowNode'), value: n.straggler ? t('nodes.slowYes') : t('common.no') },
+              { label: t('pools.bearingResources'), value: t('common.countGeneric', { v0: n.hosted_resources }) },
+              { label: t('nodes.statusUpdated'), value: formatDateTime(n.updated_at) },
             ]}
           />
         </Card>
-        <Card title="运维建议">
+        <Card title={t('nodes.opsAdvice')}>
           {n.state === 'ready' ? (
             <div className={s.muted} style={{ fontSize: 13 }}>
-              节点健康，可正常参与调度
-              {n.straggler ? '；但存在慢节点标记，建议观察 step_time p99/p50 比值。' : '。'}
+              {t('nodes.healthyOk')}{n.straggler ? t('nodes.stragglerNote') : t('common.period')}
             </div>
           ) : (
             <div className={`${s.notice} ${s.noticeWarn}`}>
               <div>
-                {NODE_STATE_META[n.state]?.label ?? n.state}：
-                {n.state === 'notready'
-                  ? '节点不可调度，等待自愈完成后重新加入。'
+                {t('common.stateColon', { v0: NODE_STATE_META[n.state]?.label ?? n.state })}{n.state === 'notready'
+                  ? t('nodes.stateNotReady')
                   : n.state === 'remediation'
-                    ? '正在自愈/换卡，完成后自动回到 Ready。'
+                    ? t('nodes.stateRemediation')
                     : n.state === 'draining'
-                      ? '正在驱逐存量实例，驱逐完成后进入 Remediation。'
-                      : '已禁止新调度，等待维护窗口处理。'}
+                      ? t('nodes.stateDraining')
+                      : t('nodes.stateCordoned')}
               </div>
             </div>
           )}
         </Card>
       </div>
 
-      <Card title={`节点事件（${data.events.length}）`}>
+      <Card title={t('nodes.eventsTitle', { v0: data.events.length })}>
         {data.events.length === 0 ? (
-          <EmptyState icon="📄" title="该节点暂无事件" hint="Ready 且无历史告警的节点不产生事件" />
+          <EmptyState icon="📄" title={t('nodes.noEvents')} hint={t('nodes.noEventsHint')} />
         ) : (
           <div className={s.timeline}>
             {data.events.map((e) => (
@@ -141,15 +140,15 @@ export default function NodesDetailPage() {
                 </div>
                 <div className={s.timelineBody}>
                   <div className={s.timelineTitle}>
-                    {e.title}
+                    {dt(e.title)}
                     <Badge tone={e.level === 'error' ? 'danger' : 'warning'}>{e.code}</Badge>
                   </div>
                   <div className={s.timelineTime}>{formatDateTime(e.occurredAt)}</div>
-                  <div className={s.timelineDetail}>{e.detail}</div>
+                  <div className={s.timelineDetail}>{dt(e.detail)}</div>
                   <MetricDiff before={e.metricsBefore} after={e.metricsAfter} />
                   {e.suggestedAction && (
                     <div className={s.muted} style={{ fontSize: 11 }}>
-                      建议动作：{e.suggestedAction}
+                      {t('events.actionValue', { v0: dt(e.suggestedAction) })}
                     </div>
                   )}
                 </div>

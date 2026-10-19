@@ -1,4 +1,5 @@
 // vGPU 详情（PRD §4.3.3：CoreWeave CKS / 火山引擎 VKE 三级视图 —— 控制面 → 节点池 → 工作负载）
+import { t, dt } from '../../../i18n';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -16,6 +17,7 @@ import {
 import { MetricsGrid, RangeTabs } from '../../shared/MetricsPanel';
 import { EventsTimeline } from '../../shared/EventsTimeline';
 import { BillingTab } from '../../shared/BillingTab';
+import { ScalingTab } from './ScalingTab';
 import { useEvents, useMetrics, useNodes, type ResourceDetail } from '../../shared/api';
 import { NODE_POOL_LABEL, REGION_META } from '../../../lib/ids';
 import { formatUsd, formatUsdRate } from '../../../lib/money';
@@ -34,18 +36,20 @@ type TabKey =
   | 'workloads'
   | 'network'
   | 'topology'
+  | 'elastic'
   | 'events'
   | 'billing';
 
 export const VGPU_TABS: Array<{ key: TabKey; label: string }> = [
-  { key: 'overview', label: '概览' },
-  { key: 'control', label: '控制面' },
-  { key: 'pools', label: '节点池' },
-  { key: 'workloads', label: '工作负载' },
-  { key: 'network', label: '网络与存储' },
-  ...(VITE_FEATURE_TOPOLOGY ? [{ key: 'topology' as TabKey, label: '拓扑' }] : []),
-  { key: 'events', label: '事件' },
-  { key: 'billing', label: '计费' },
+  { key: 'overview', get label() { return t('detail.overview'); } },
+  { key: 'control', get label() { return t('deploy.cpStep'); } },
+  { key: 'pools', get label() { return t('common.nodePool'); } },
+  { key: 'workloads', get label() { return t('vgpu.workloads'); } },
+  { key: 'network', get label() { return t('detail.netStorage'); } },
+  ...(VITE_FEATURE_TOPOLOGY ? [{ key: 'topology' as TabKey, get label() { return t('vgpu.topology'); } }] : []),
+  { key: 'elastic', get label() { return t('detail.elastic'); } },
+  { key: 'events', get label() { return t('detail.events'); } },
+  { key: 'billing', get label() { return t('detail.billing'); } },
 ];
 
 interface WorkloadResponse {
@@ -89,44 +93,43 @@ export function VgpuDetail({ detail, tab }: { detail: ResourceDetail; tab: TabKe
     return (
       <div className={s.col} style={{ gap: 16 }}>
         <InfoCard
-          title="集群信息"
+          title={t('vgpu.clusterInfo')}
           items={[
-            { label: '集群名', value: detail.name },
-            { label: 'K8s 版本', value: `v${spec.k8s_version}` },
-            { label: '控制面规格', value: spec.control_plane_tier === 'ha' ? 'HA（3 副本）' : 'Standard（单副本）' },
+            { label: t('vgpu.clusterName'), value: detail.name },
+            { label: t('deploy.k8sVersion'), value: `v${spec.k8s_version}` },
+            { label: t('deploy.cpSpec'), value: spec.control_plane_tier === 'ha' ? t('vgpu.ha3') : t('vgpu.std1') },
             {
-              label: '区域',
+              label: t('common.region'),
               value: `${REGION_META[detail.region].label} ${REGION_META[detail.region].iso}`,
             },
-            { label: '节点池数', value: spec.pools.length },
-            { label: '节点数', value: spec.node_count },
+            { label: t('vgpu.poolCount'), value: spec.pools.length },
+            { label: t('common.nodeCount'), value: spec.node_count },
             { label: 'API Server', value: `https://${detail.resource_uuid as string}.${detail.region}.cks.runsun.cloud:6443`, mono: true },
-            { label: '创建时间', value: formatDateTime(detail.created_at) },
-            { label: '网络插件', value: spec.network_plugin },
-            { label: 'kubeconfig 获取', value: spec.kubeconfig_access === 'download' ? '下载文件' : '托管控制台' },
+            { label: t('common.createdAtFull'), value: formatDateTime(detail.created_at) },
+            { label: t('deploy.cni'), value: spec.network_plugin },
+            { label: t('vgpu.kubeconfig'), value: spec.kubeconfig_access === 'download' ? t('common.download') : t('common.managedConsole') },
           ]}
         />
         <div>
           <div className={s.metricLabel} style={{ marginBottom: 6 }}>
-            GPU 容量 vs 已分配
-          </div>
+            {t('vgpu.capacityVsAllocated')}</div>
           <Progress
             value={allocated}
             max={totalGpu}
-            label={`已分配 ${allocated} / ${totalGpu} 卡`}
+            label={t('vgpu.allocated', { v0: allocated, v1: totalGpu })}
             right={`${((allocated / Math.max(totalGpu, 1)) * 100).toFixed(1)}%`}
           />
         </div>
         <div className={s.grid} style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' }}>
           <StatTile
-            label="控制面费"
-            value={`${formatUsdRate(detail.cost.control_plane_per_hour)} /集群·时`}
-            hint={spec.control_plane_tier === 'ha' ? 'HA 为 Standard 的 3 倍' : 'Standard'}
+            label={t('vgpu.cpFee')}
+            value={t('vgpu.cpRate', { v0: formatUsdRate(detail.cost.control_plane_per_hour) })}
+            hint={spec.control_plane_tier === 'ha' ? t('vgpu.haNote') : 'Standard'}
           />
-          <StatTile label="当前 $/时" value={formatUsd(detail.cost.per_hour)} hint={detail.cost.metering_note} />
-          <StatTile label="本月花费" value={formatUsd(detail.cost_summary.mtd)} />
+          <StatTile label={t('detail.currentHourly')} value={formatUsd(detail.cost.per_hour)} hint={detail.cost.metering_note} />
+          <StatTile label={t('cost.mtd')} value={formatUsd(detail.cost_summary.mtd)} />
           <StatTile
-            label="运行时长"
+            label={t('common.uptime')}
             value={detail.running_since ? runningDuration(detail.running_since).text : '—'}
           />
         </div>
@@ -141,12 +144,12 @@ export function VgpuDetail({ detail, tab }: { detail: ResourceDetail; tab: TabKe
         <RangeTabs value={range} onChange={setRange} />
         <MetricsGrid metrics={metrics} />
         <InfoCard
-          title="组件状态"
+          title={t('vgpu.components')}
           items={[
-            { label: 'API Server', value: `${spec.control_plane_tier === 'ha' ? '3/3' : '1/1'} 就绪` },
-            { label: 'etcd', value: `${spec.control_plane_tier === 'ha' ? '3/3' : '1/1'} 就绪` },
-            { label: 'Scheduler', value: '1/1 就绪' },
-            { label: 'Controller-Manager', value: '1/1 就绪' },
+            { label: 'API Server', value: t('vgpu.readyCount', { v0: spec.control_plane_tier === 'ha' ? '3/3' : '1/1' }) },
+            { label: 'etcd', value: t('vgpu.readyCount', { v0: spec.control_plane_tier === 'ha' ? '3/3' : '1/1' }) },
+            { label: 'Scheduler', value: t('vgpu.ready11') },
+            { label: 'Controller-Manager', value: t('vgpu.ready11') },
           ]}
         />
       </div>
@@ -162,38 +165,38 @@ export function VgpuDetail({ detail, tab }: { detail: ResourceDetail; tab: TabKe
               <div className={s.cardTitle}>{NODE_POOL_LABEL[p.node_pool as keyof typeof NODE_POOL_LABEL]}</div>
               <div className={s.cardActions}>
                 <Badge tone={p.autoscale ? 'info' : 'muted'}>
-                  {p.autoscale ? `Autoscaler ${p.autoscale.min}–${p.autoscale.max}` : '未启用自动扩缩'}
+                  {p.autoscale ? `Autoscaler ${p.autoscale.min}–${p.autoscale.max}` : t('vgpu.autoScaleOff')}
                 </Badge>
               </div>
             </div>
             <div className={s.cardBody}>
               <KeyValue
                 items={[
-                  { label: '节点数', value: p.node_count },
-                  { label: 'GPU 总量', value: p.node_count * gpusPer },
+                  { label: t('common.nodeCount'), value: p.node_count },
+                  { label: t('rlp.gpuTotal'), value: p.node_count * gpusPer },
                   {
-                    label: '切片策略',
+                    label: t('vgpu.slicePolicy'),
                     value:
-                      p.slicing_policy === 'none' ? '整卡直通'
-                      : p.slicing_policy === 'mig' ? `MIG（${p.mig_profile ?? '—'}）`
-                      : p.slicing_policy === 'time_slicing' ? `Time-Slicing（${p.time_slice_share ?? '—'} 共享）`
+                      p.slicing_policy === 'none' ? t('vgpu.fullPassthrough')
+                      : p.slicing_policy === 'mig' ? t('vgpu.migProfile', { v0: p.mig_profile ?? '—' })
+                      : p.slicing_policy === 'time_slicing' ? t('vgpu.timeSlicing', { v0: p.time_slice_share ?? '—' })
                       : 'MPS',
                   },
-                  { label: '机型', value: GPU_SPECS[p.node_pool as keyof typeof GPU_SPECS].productName },
+                  { label: t('common.machineType'), value: dt(GPU_SPECS[p.node_pool as keyof typeof GPU_SPECS].productName) },
                 ]}
               />
               <h3 className={s.sectionTitle} style={{ margin: '16px 0 8px' }}>
-                节点列表
+                {t('vgpu.nodeList')}
               </h3>
               <Table
                 rows={poolNodes.slice(0, 12)}
                 rowKey={(n) => n.node_uid}
-                empty={<EmptyState icon="🖥" title="该区域/节点池暂无节点" />}
+                empty={<EmptyState icon="🖥" title={t('vgpu.noNodes')} />}
                 columns={[
-                  { key: 'uid', header: '节点 UID', mono: true, render: (n) => n.node_uid.slice(0, 12) },
+                  { key: 'uid', header: t('nodes.uid'), mono: true, render: (n) => n.node_uid.slice(0, 12) },
                   {
                     key: 'state',
-                    header: '状态',
+                    header: t('common.status'),
                     render: (n) => (
                       <Badge
                         tone={
@@ -207,14 +210,14 @@ export function VgpuDetail({ detail, tab }: { detail: ResourceDetail; tab: TabKe
                       </Badge>
                     ),
                   },
-                  { key: 'rack', header: '机架位', mono: true, render: (n) => n.rack_id ?? '—' },
-                  { key: 'switch', header: '交换机组', render: (n) => n.switch_group ?? '—' },
+                  { key: 'rack', header: t('common.rack'), mono: true, render: (n) => n.rack_id ?? '—' },
+                  { key: 'switch', header: t('common.switchGroup'), render: (n) => n.switch_group ?? '—' },
                   {
                     key: 'straggler',
                     header: 'Straggler',
-                    render: (n) => (n.straggler ? <Badge tone="warning">慢节点</Badge> : '—'),
+                    render: (n) => (n.straggler ? <Badge tone="warning">{t('nodes.slowNode')}</Badge> : '—'),
                   },
-                  { key: 'hosted', header: '承载资源', numeric: true, render: (n) => n.hosted_resources },
+                  { key: 'hosted', header: t('pools.bearingResources'), numeric: true, render: (n) => n.hosted_resources },
                 ]}
               />
             </div>
@@ -229,8 +232,7 @@ export function VgpuDetail({ detail, tab }: { detail: ResourceDetail; tab: TabKe
       <div className={s.col} style={{ gap: 16 }}>
         <div>
           <h2 className={s.sectionTitle} style={{ marginBottom: 12 }}>
-            Pod 阶段分布
-          </h2>
+            {t('vgpu.podPhases')}</h2>
           <KeyValue
             items={Object.entries(wl?.phaseDistribution ?? {}).map(([k, v]) => ({
               label: k,
@@ -240,17 +242,17 @@ export function VgpuDetail({ detail, tab }: { detail: ResourceDetail; tab: TabKe
         </div>
         <div>
           <h2 className={s.sectionTitle} style={{ marginBottom: 12 }}>
-            调度失败原因 TopN
+            {t('vgpu.schedFailTopN')}
           </h2>
           {(wl?.schedulingFailures ?? []).length === 0 ? (
-            <EmptyState icon="✅" title="无调度失败" />
+            <EmptyState icon="✅" title={t('vgpu.noSchedFail')} />
           ) : (
             <Table
               rows={wl?.schedulingFailures ?? []}
               rowKey={(f) => f.reason}
               columns={[
-                { key: 'reason', header: 'FailedScheduling 原因', render: (f) => f.reason, mono: true },
-                { key: 'count', header: '次数', numeric: true, render: (f) => f.count },
+                { key: 'reason', header: t('vgpu.failedReason'), render: (f) => f.reason, mono: true },
+                { key: 'count', header: t('common.count'), numeric: true, render: (f) => f.count },
               ]}
             />
           )}
@@ -291,12 +293,12 @@ export function VgpuDetail({ detail, tab }: { detail: ResourceDetail; tab: TabKe
                           </Badge>
                         ),
                       },
-                      { key: 'node', header: '所在节点', render: (p) => p.node ?? '—' },
-                      { key: 'restarts', header: '重启次数', numeric: true, render: (p) => p.restarts },
+                      { key: 'node', header: t('inf.node'), render: (p) => p.node ?? '—' },
+                      { key: 'restarts', header: t('inf.restarts'), numeric: true, render: (p) => p.restarts },
                       { key: 'oom', header: 'OOMKilled', numeric: true, render: (p) => p.oomKilled },
                       {
                         key: 'reason',
-                        header: 'Waiting 原因',
+                        header: t('vgpu.waitingReason'),
                         render: (p) =>
                           p.waitingReason ? (
                             <span className={s.mono} style={{ color: 'var(--rs-warning)' }}>
@@ -319,20 +321,20 @@ export function VgpuDetail({ detail, tab }: { detail: ResourceDetail; tab: TabKe
     return (
       <div className={s.col} style={{ gap: 16 }}>
         <InfoCard
-          title="网络"
+          title={t('common.network')}
           items={[
-            { label: 'CNI 插件', value: spec.network_plugin },
-            { label: 'Ingress', value: spec.ingress_enabled ? `已启用（${spec.ingress_class ?? 'nginx'}）` : '未启用' },
-            { label: 'InfiniBand', value: spec.ib_enabled ? '已启用' : '未启用' },
-            { label: 'API Server 公网访问', value: spec.api_server_public ? '已开启' : '仅私网' },
+            { label: t('vgpu.cniPlugin'), value: spec.network_plugin },
+            { label: 'Ingress', value: spec.ingress_enabled ? t('vgpu.enabledValue', { v0: spec.ingress_class ?? 'nginx' }) : t('common.disabled') },
+            { label: 'InfiniBand', value: spec.ib_enabled ? t('common.enabled') : t('common.disabled') },
+            { label: t('deploy.apiPublic'), value: spec.api_server_public ? t('common.opened') : t('vgpu.privateOnly') },
           ]}
         />
         <InfoCard
-          title="存储"
+          title={t('common.storage')}
           items={[
             { label: 'StorageClass', value: spec.storage_class },
-            { label: '默认 PVC', value: spec.default_pvc_gb ? `${spec.default_pvc_gb} GB` : '未预置' },
-            { label: 'PVC 容量', value: `${spec.storage_gb} GB` },
+            { label: t('vgpu.defaultPvc'), value: spec.default_pvc_gb ? `${spec.default_pvc_gb} GB` : t('vgpu.notProvisioned') },
+            { label: t('vgpu.pvcCapacity'), value: `${spec.storage_gb} GB` },
           ]}
         />
         <MetricsGrid metrics={metrics.filter((m) => m.key.includes('cni') || m.key.includes('ingress') || m.key.includes('pvc') || m.key.includes('csi'))} />
@@ -348,6 +350,10 @@ export function VgpuDetail({ detail, tab }: { detail: ResourceDetail; tab: TabKe
     return <EventsTimeline events={events} />;
   }
 
+  if (tab === 'elastic') {
+    return <ScalingTab resourceUuid={detail.resource_uuid as string} />;
+  }
+
   return <BillingTab detail={detail} />;
 }
 
@@ -355,7 +361,7 @@ export function VgpuDetail({ detail, tab }: { detail: ResourceDetail; tab: TabKe
 function TopologyView({ nodes }: { nodes: Array<{ node_uid: string; rack_id: string | null; switch_group: string | null; state: string; straggler: boolean }> }) {
   const [selected, setSelected] = useState<string | null>(null);
   if (nodes.length === 0) {
-    return <EmptyState icon="🕸" title="该区域暂无节点拓扑数据" hint="切换区域或查看其他节点池" />;
+    return <EmptyState icon="🕸" title={t('vgpu.noTopology')} hint={t('vgpu.topologyHint')} />;
   }
   const racks = new Map<string, typeof nodes>();
   for (const n of nodes) {
@@ -367,7 +373,7 @@ function TopologyView({ nodes }: { nodes: Array<{ node_uid: string; rack_id: str
   return (
     <div className={s.col} style={{ gap: 12 }}>
       <div className={s.muted} style={{ fontSize: 12 }}>
-        机架 → 交换机组 → 节点；节点按状态着色，straggler 加警示环。点击节点查看 UID。
+        {t('vgpu.topologyLegend')}
       </div>
       {[...racks.entries()].map(([rack, list]) => (
         <div key={rack} className={s.card} style={{ padding: 12 }}>
@@ -411,7 +417,7 @@ function TopologyView({ nodes }: { nodes: Array<{ node_uid: string; rack_id: str
       {selected && (
         <div className={s.card} style={{ padding: 12 }}>
           <div className={s.mono} style={{ fontSize: 12 }}>
-            选中节点：{selected}
+            {t('vgpu.selectedNode', { v0: selected })}
           </div>
         </div>
       )}

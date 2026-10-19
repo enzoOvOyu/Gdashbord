@@ -1,4 +1,5 @@
 // 新建 GPU 裸金属（PRD §4.2.2：Lambda 整机采购，**按「台」计费**，数量语义 = 台数）
+import { t, dt } from '../../i18n';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -20,6 +21,11 @@ import { WIZARD_STEP_SCHEMAS } from './schemas';
 import { WizardShell } from './shared/WizardShell';
 import { ProjectRegionStep, type ProjectRegionValue } from './shared/ProjectRegionStep';
 import { estimateBareMetal, type DiscountKey } from './shared/pricing';
+import {
+  NodePoolScalingForm,
+  ScalingSwitch,
+  type NodePoolScalingValue,
+} from './shared/ScalingForm';
 import { useCreateOrder, useNodePools, useProjects } from '../shared/api';
 
 interface ImageLite {
@@ -29,7 +35,7 @@ interface ImageLite {
   size_gb: number;
 }
 
-const STEPS = ['项目与区域', '机型选型', '台数与直通策略', '网络与带外', 'OS 与确认'];
+const STEPS = [t('deploy.stepProjectRegion'), t('deploy.stepMachine'), t('deploy.stepQty'), t('deploy.stepNetworkOob'), t('deploy.stepOsConfirm')];
 const MIG_PROFILES = ['1g.24gb', '2g.48gb', '3g.96gb', '4g.96gb'];
 
 export default function BareMetalWizard() {
@@ -50,6 +56,17 @@ export default function BareMetalWizard() {
   const [hostPrefix, setHostPrefix] = useState('bm-node');
   const [sshKey, setSshKey] = useState('ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEnzoDemoKey');
   const [fw, setFw] = useState<'recommended' | 'latest'>('recommended');
+  // v0.7 弹性伸缩开关（裸金属：min 不允许 0，冷启动 5–30min，stabilization 10–30min）
+  const [elasticScaling, setElasticScaling] = useState(false);
+  const [scaling, setScaling] = useState<NodePoolScalingValue>({
+    strategy_model: 'node_pool',
+    trigger_metric: 'gpu_allocation_rate',
+    target_value: 80,
+    min_size: 1,
+    max_size: Math.max(2, machineCount),
+    fallback_enabled: true,
+    cooldown_s: 1200,
+  });
   const [discount, setDiscount] = useState<DiscountKey>('on_demand');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -85,6 +102,8 @@ export default function BareMetalWizard() {
     hostname_prefix: hostPrefix,
     ssh_pubkey: sshKey,
     firmware_baseline: fw,
+    elastic_scaling: elasticScaling,
+    scaling: elasticScaling ? scaling : null,
   };
 
   const validate = (i: number): boolean => {
@@ -115,6 +134,9 @@ export default function BareMetalWizard() {
     machineCount,
     gpusPerNode,
     discount,
+    scaling: elasticScaling
+      ? { current: machineCount, min: scaling.min_size, max: scaling.max_size }
+      : null,
   });
 
   const submit = async (): Promise<void> => {
@@ -144,12 +166,13 @@ export default function BareMetalWizard() {
           firmware_baseline: fw,
           image_ref: imageRef,
           ssh_pubkey: sshKey,
+          scaling: elasticScaling ? scaling : null,
         },
       });
-      toast.success(`订单已受理：${machineCount} 台整机开始供给`);
+      toast.success(t('deploy.bmAccepted', { v0: machineCount }));
       navigate(`/resources/baremetal/${res.resource_uuid}`);
     } catch {
-      toast.error('创建失败，请检查配置');
+      toast.error(t('deploy.createFailed'));
     }
   };
 
@@ -174,15 +197,15 @@ export default function BareMetalWizard() {
           onChange={(p) => setBase((v) => ({ ...v, ...p }))}
           projects={projects}
           errors={errors}
-          nameHint="留空则自动命名为 baremetal-<机型>-01"
+          nameHint={t('deploy.bmNameHint')}
         />
       )}
 
       {step === 1 && (
         <div className={s.col} style={{ gap: 12 }}>
-          <div className={s.metricLabel}>整机采购（一台 = {gpusPerNode} 卡，不可按卡拆分）</div>
+          <div className={s.metricLabel}>{t('bm.wholeMachineNote', { v0: gpusPerNode })}</div>
           {available.length === 0 ? (
-            <EmptyState icon="📭" title="该区域暂无可用机型" hint="请返回第 1 步切换区域" />
+            <EmptyState icon="📭" title={t('pools.noMachines')} hint={t('deploy.backToStep1')} />
           ) : (
             <CardGrid>
               {available.map((p) => (
@@ -190,12 +213,12 @@ export default function BareMetalWizard() {
                   key={p.code}
                   selected={machineType === p.code}
                   onClick={() => setMachineType(p.code)}
-                  title={`${p.display_name} 服务器`}
-                  meta={`${p.gpus_per_node} × ${p.gpu_model} · ${p.platform.cpu}`}
-                  price={`$${p.machine_unit_price.toFixed(2)}/台·时`}
+                  title={t('deploy.bmServerLabel', { v0: p.display_name })}
+                  meta={`${p.gpus_per_node} × ${p.gpu_model} · ${dt(p.platform.cpu)}`}
+                  price={t('price.perMachineHour', { v0: p.machine_unit_price.toFixed(2) })}
                   extra={
                     <span className={s.muted} style={{ fontSize: 11 }}>
-                      {p.platform.localNvme} · {p.platform.network}
+                      {dt(p.platform.localNvme)} · {dt(p.platform.network)}
                     </span>
                   }
                 />
@@ -204,10 +227,9 @@ export default function BareMetalWizard() {
           )}
           {unavailable.length > 0 && (
             <div className={s.muted} style={{ fontSize: 12 }}>
-              该区域不可用：
-              {unavailable
-                .map((p) => `${p.display_name}（仅 ${p.fallback_regions.map((r) => r.toUpperCase()).join('/')}）`)
-                .join('、')}
+              {t('deploy.regionUnavailable')}{unavailable
+                .map((p) => t('deploy.poolOnlyIn', { v0: p.display_name, v1: p.fallback_regions.map((r) => r.toUpperCase()).join('/') }))
+                .join(t('common.listSep'))}
             </div>
           )}
           {errors.machine_type && <div className={s.fieldError}>{errors.machine_type}</div>}
@@ -218,10 +240,10 @@ export default function BareMetalWizard() {
         <div className={s.col} style={{ gap: 16 }}>
           <div className={s.formGrid}>
             <Field
-              label="采购台数"
+              label={t('deploy.bmQty')}
               required
               error={errors.machine_count}
-              hint={`整机总卡数 = ${machineCount} × ${gpusPerNode} = ${machineCount * gpusPerNode} 卡（仅展示，计费按台）`}
+              hint={t('deploy.bmTotalGpu', { v0: machineCount, v1: gpusPerNode, v2: machineCount * gpusPerNode })}
             >
               <Input
                 type="number"
@@ -229,7 +251,7 @@ export default function BareMetalWizard() {
                 onChange={(e) => setMachineCount(Number(e.target.value))}
               />
             </Field>
-            <Field label="RAID 级别" required>
+            <Field label={t('deploy.bmRaid')} required>
               <Select value={raid} onChange={(e) => setRaid(e.target.value as typeof raid)}>
                 <option value="none">none</option>
                 <option value="raid0">RAID 0</option>
@@ -239,13 +261,13 @@ export default function BareMetalWizard() {
             </Field>
           </div>
           <SwitchRow
-            label="整卡直通（passthrough）"
+            label={t('deploy.bmPassthrough')}
             checked={passthrough}
             onChange={(v) => setPassthrough(v)}
-            hint="关闭直通时启用 MIG 切分"
+            hint={t('deploy.bmMigHint')}
           />
           {!passthrough && (
-            <Field label="MIG 切片规格">
+            <Field label={t('deploy.migSpec')}>
               <Select value={mig} onChange={(e) => setMig(e.target.value)}>
                 {MIG_PROFILES.map((m) => (
                   <option key={m} value={m}>
@@ -264,7 +286,7 @@ export default function BareMetalWizard() {
             <Field label="VPC" required error={errors.vpc}>
               <Input value={vpc} onChange={(e) => setVpc(e.target.value)} />
             </Field>
-            <Field label="子网（须与区域一致）" required error={errors.subnet}>
+            <Field label={t('deploy.subnet')} required error={errors.subnet}>
               <Select value={subnet} onChange={(e) => setSubnet(e.target.value)}>
                 <option value="subnet-az1">{base.region}-az1</option>
                 <option value="subnet-az2">{base.region}-az2</option>
@@ -272,16 +294,16 @@ export default function BareMetalWizard() {
             </Field>
           </div>
           <SwitchRow
-            label="启用 InfiniBand（8 × 400 Gb/s NDR）"
+            label={t('deploy.bmIb')}
             checked={ib}
             onChange={setIb}
           />
-          <SwitchRow label="启用带外 IPMI 纳管" checked={ipmi} onChange={setIpmi} />
+          <SwitchRow label={t('deploy.bmIpmi')} checked={ipmi} onChange={setIpmi} />
           {ipmi && (
-            <Field label="BMC 网络">
+            <Field label={t('bm.bmcNetwork')}>
               <Select value={bmcNet} onChange={(e) => setBmcNet(e.target.value as typeof bmcNet)}>
-                <option value="dedicated">独立管理网口</option>
-                <option value="shared">共享业务网口</option>
+                <option value="dedicated">{t('bm.bmcDedicated')}</option>
+                <option value="shared">{t('bm.sharedNic')}</option>
               </Select>
             </Field>
           )}
@@ -292,8 +314,7 @@ export default function BareMetalWizard() {
         <div className={s.col} style={{ gap: 16 }}>
           <div>
             <div className={s.metricLabel} style={{ marginBottom: 8 }}>
-              OS 镜像（仅裸金属可用）
-            </div>
+              {t('bm.osImages')}</div>
             <CardGrid>
               {osImages.slice(0, 6).map((img) => (
                 <PickCard
@@ -308,23 +329,33 @@ export default function BareMetalWizard() {
             {errors.image_ref && <div className={s.fieldError}>{errors.image_ref}</div>}
           </div>
           <div className={s.formGrid}>
-            <Field label="主机名前缀" required error={errors.hostname_prefix}>
+            <Field label={t('deploy.bmHostPrefix')} required error={errors.hostname_prefix}>
               <Input value={hostPrefix} onChange={(e) => setHostPrefix(e.target.value)} />
             </Field>
-            <Field label="固件基线">
+            <Field label={t('deploy.bmFirmware')}>
               <Select value={fw} onChange={(e) => setFw(e.target.value as typeof fw)}>
-                <option value="recommended">推荐基线</option>
-                <option value="latest">最新版本</option>
+                <option value="recommended">{t('common.recommended')}</option>
+                <option value="latest">{t('common.latest')}</option>
               </Select>
             </Field>
           </div>
-          <Field label="SSH 公钥" required error={errors.ssh_pubkey}>
+          <Field label={t('common.sshKey')} required error={errors.ssh_pubkey}>
             <Input value={sshKey} onChange={(e) => setSshKey(e.target.value)} />
           </Field>
           <div className={s.muted} style={{ fontSize: 12 }}>
-            计费口径：机器 {machineCount} 台 × ${price.lines[0]?.hourly ? (price.lines[0].hourly / machineCount).toFixed(2) : '0.00'}/台·时
-            ；整机不支持按卡扩缩。
-          </div>
+            {t('bm.billingNote', { v0: machineCount, v1: price.lines[0]?.hourly ? (price.lines[0].hourly / machineCount).toFixed(2) : '0.00' })}</div>
+
+          {/* v0.7 弹性伸缩（§4.2.2 第 5 步 / §4.2.6）：裸金属明示冷启动 5–30min 与 warm floor */}
+          <ScalingSwitch checked={elasticScaling} onChange={setElasticScaling} />
+          {elasticScaling && (
+            <NodePoolScalingForm
+              value={scaling}
+              onChange={setScaling}
+              bareMetal
+              sizeUnit={t('deploy.unitMachine')}
+            />
+          )}
+          {errors['scaling'] && <div className={s.fieldError}>{errors['scaling']}</div>}
         </div>
       )}
     </WizardShell>

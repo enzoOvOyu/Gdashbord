@@ -1,5 +1,6 @@
 // 运营&运维 · 配额（§4.4.1 C 档：行内展开显示占用明细）
 // used_value 为派生值（由资源占用重算），业务代码不得直写（ARCH §12.8）。
+import { t } from '../../i18n';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronDown, ChevronRight } from 'lucide-react';
@@ -20,10 +21,10 @@ import { REGION_META } from '../../lib/ids';
 import { usePageRegion, useQuotas } from '../shared/api';
 
 const METRIC_LABEL: Record<string, { label: string; unit: string }> = {
-  gpu: { label: 'GPU 卡数', unit: '卡' },
-  vcpu: { label: 'vCPU', unit: '核' },
-  storage_gb: { label: '块存储', unit: 'GB' },
-  public_ip: { label: '公网 IP', unit: '个' },
+  gpu: { get label() { return t('quotas.gpuCards'); }, get unit() { return t('common.cardUnit'); } },
+  vcpu: { label: 'vCPU', get unit() { return t('common.coreUnit'); } },
+  storage_gb: { get label() { return t('quotas.blockStorage'); }, unit: 'GB' },
+  public_ip: { get label() { return t('price.publicIp'); }, get unit() { return t('met.reqUnit'); } },
 };
 
 export default function QuotasPage() {
@@ -33,9 +34,9 @@ export default function QuotasPage() {
   const { data: quotas = [], isLoading } = useQuotas(region);
 
   const holderCols: Array<Column<{ uuid: string; name: string; used: number }>> = [
-    { key: 'name', header: '占用资源', render: (h) => h.name },
-    { key: 'uuid', header: '资源 UUID', mono: true, render: (h) => h.uuid },
-    { key: 'used', header: '占用量', numeric: true, render: (h) => formatNumber(h.used, 2) },
+    { key: 'name', header: t('quotas.holders'), render: (h) => h.name },
+    { key: 'uuid', header: t('quotas.resourceUuid'), mono: true, render: (h) => h.uuid },
+    { key: 'used', header: t('quotas.usedValue'), numeric: true, render: (h) => formatNumber(h.used, 2) },
     {
       key: 'act',
       header: '',
@@ -49,7 +50,7 @@ export default function QuotasPage() {
             if (q) navigate(`/resources/all/${h.uuid}`);
           }}
         >
-          查看
+          {t('common.view')}
         </Button>
       ),
     },
@@ -58,12 +59,12 @@ export default function QuotasPage() {
   return (
     <div>
       <PageHeader
-        title="配额"
-        desc={`${REGION_META[region].label} 区域配额水位，占用量由该区域资源实时派生；切换区域后数据重算（stopped 释放算力、保留存储，PRD §7.3）。`}
+        title={t('nav.quotas')}
+        desc={t('quotas.pageHint', { v0: REGION_META[region].label })}
         actions={
           <span className={s.row}>
             <Button variant="secondary" onClick={() => navigate('/ops/tickets')}>
-              申请提升配额
+              {t('quotas.requestIncrease')}
             </Button>
             <RegionSelect value={region} onChange={setRegion} />
           </span>
@@ -100,7 +101,7 @@ export default function QuotasPage() {
                   </div>
                   {pct >= 90 && (
                     <div style={{ marginTop: 6 }}>
-                      <Badge tone="danger">接近上限，新建资源可能被拒</Badge>
+                      <Badge tone="danger">{t('quotas.nearLimit')}</Badge>
                     </div>
                   )}
                 </Card>
@@ -109,11 +110,11 @@ export default function QuotasPage() {
       </div>
 
       {isLoading ? (
-        <div className={s.muted}>加载中…</div>
+        <div className={s.muted}>{t('common.loading')}</div>
       ) : quotas.length === 0 ? (
-        <EmptyState icon="📊" title="该区域暂无配额记录" hint="切换区域查看" />
+        <EmptyState icon="📊" title={t('quotas.noRecords')} hint={t('quotas.switchRegion')} />
       ) : (
-        <Card title="占用明细（点击行展开，查看被哪些资源占用）">
+        <Card title={t('quotas.holdersHint')}>
           <div style={{ border: '1px solid var(--rs-border)', borderRadius: 8 }}>
             {quotas.map((q) => {
               const key = String(q.id);
@@ -146,14 +147,14 @@ export default function QuotasPage() {
                       {formatNumber(q.used_value, 0)} / {formatNumber(q.limit_value, 0)}
                     </span>
                     <span style={{ textAlign: 'right', color: 'var(--rs-text-muted)' }}>
-                      {q.holders.length} 个占用方
+                      {t('quotas.holderCount', { v0: q.holders.length })}
                     </span>
                   </button>
                   {isOpen && (
                     <div style={{ padding: '0 12px 12px', background: 'var(--rs-surface)' }}>
                       {q.holders.length === 0 ? (
                         <div className={s.muted} style={{ fontSize: 12 }}>
-                          该区域当前无资源占用此项配额
+                          {t('quotas.noHolders')}
                         </div>
                       ) : (
                         <Table
@@ -163,8 +164,7 @@ export default function QuotasPage() {
                         />
                       )}
                       <div className={s.muted} style={{ fontSize: 11, marginTop: 6 }}>
-                        占用口径（§7.3）：gpu/vcpu 仅 provisioning|running 占用；storage_gb 含
-                        stopped；terminating/已删除立即释放。
+                        {t('quotas.scopeHint')}
                       </div>
                     </div>
                   )}

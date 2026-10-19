@@ -1,4 +1,5 @@
 // 运营&运维 · 工单详情（§4.4.1 A 档整页；由 /ops/tickets 抽屉进入）
+import { t, dt } from '../../i18n';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, ExternalLink } from 'lucide-react';
 import {
@@ -24,19 +25,19 @@ export default function TicketsDetailPage() {
 
   if (isLoading) {
     return (
-      <Card title="加载中…">
-        <div className={s.muted}>正在读取工单</div>
+      <Card title={t('common.loading')}>
+        <div className={s.muted}>{t('tickets.loading')}</div>
       </Card>
     );
   }
   if (!data) {
     return (
-      <Card title="工单不存在">
+      <Card title={t('tickets.notFound')}>
         <EmptyState
           icon="🔍"
-          title={`未找到工单 TK-${id ?? '—'}`}
-          hint="请返回工单列表重新选择"
-          action={<Button onClick={() => navigate('/ops/tickets')}>返回工单列表</Button>}
+          title={t('tickets.notFoundValue', { v0: id ?? '—' })}
+          hint={t('tickets.reselect')}
+          action={<Button onClick={() => navigate('/ops/tickets')}>{t('common.backToTickets')}</Button>}
         />
       </Card>
     );
@@ -53,22 +54,22 @@ export default function TicketsDetailPage() {
               icon={<ArrowLeft size={14} />}
               onClick={() => navigate('/ops/tickets')}
             />
-            {data.subject}
+            {dt(data.subject)}
           </span>
         }
-        desc={`TK-${String(data.id)} · 创建于 ${formatDateTime(data.created_at)}`}
+        desc={t('tickets.scopeLine', { v0: String(data.id), v1: formatDateTime(data.created_at) })}
         actions={
           <span className={s.row}>
             <Badge tone={TICKET_STATUS_META[data.status]?.tone ?? 'neutral'}>
               {TICKET_STATUS_META[data.status]?.label ?? data.status}
             </Badge>
             <Badge tone={TICKET_PRIORITY_META[data.priority]?.tone ?? 'neutral'}>
-              优先级 {TICKET_PRIORITY_META[data.priority]?.label ?? data.priority}
+              {t('tickets.priorityValue', { v0: TICKET_PRIORITY_META[data.priority]?.label ?? data.priority })}
             </Badge>
             <RegionSelect
               value={data.region ?? region}
               onChange={() => undefined}
-              disabledReason="工单区域由关联资源决定"
+              disabledReason={t('tickets.regionByResource')}
             />
           </span>
         }
@@ -81,19 +82,19 @@ export default function TicketsDetailPage() {
           gap: 12,
         }}
       >
-        <Card title="工单信息">
+        <Card title={t('tickets.info')}>
           <KeyValue
             items={[
-              { label: '工单号', value: `TK-${String(data.id)}`, mono: true },
-              { label: '状态', value: TICKET_STATUS_META[data.status]?.label ?? data.status },
-              { label: '优先级', value: TICKET_PRIORITY_META[data.priority]?.label ?? data.priority },
+              { label: t('tickets.id'), value: `TK-${String(data.id)}`, mono: true },
+              { label: t('common.status'), value: TICKET_STATUS_META[data.status]?.label ?? data.status },
+              { label: t('tickets.priority'), value: TICKET_PRIORITY_META[data.priority]?.label ?? data.priority },
               {
-                label: '关联资源',
-                value: data.resource_name ?? '未关联',
+                label: t('tickets.linkedResource'),
+                value: data.resource_name ?? t('tickets.unlinked'),
               },
-              { label: '区域', value: data.region ? REGION_META[data.region].label : '不涉及' },
-              { label: '创建时间', value: formatDateTime(data.created_at) },
-              { label: '更新时间', value: formatDateTime(data.updated_at) },
+              { label: t('common.region'), value: data.region ? REGION_META[data.region].label : t('tickets.noRegion') },
+              { label: t('common.createdAtFull'), value: formatDateTime(data.created_at) },
+              { label: t('tickets.updatedAt'), value: formatDateTime(data.updated_at) },
             ]}
           />
           {data.resource_uuid && (
@@ -102,17 +103,17 @@ export default function TicketsDetailPage() {
                 icon={<ExternalLink size={14} />}
                 onClick={() => navigate(`/resources/all/${data.resource_uuid}`)}
               >
-                跳转到关联资源
+                {t('tickets.jumpResource')}
               </Button>
             </div>
           )}
         </Card>
-        <Card title="问题描述">
+        <Card title={t('tickets.description')}>
           <div style={{ fontSize: 13, whiteSpace: 'pre-wrap' }}>
-            {data.description || '（用户未填写描述）'}
+            {data.description ? dt(data.description) : t('tickets.noDescription')}
           </div>
         </Card>
-        <Card title="处理进度">
+        <Card title={t('tickets.progress')}>
           <div className={s.timeline}>
             {(data.timeline ?? []).map((t, i) => (
               <div className={s.timelineItem} key={`${t.at}-${i}`}>

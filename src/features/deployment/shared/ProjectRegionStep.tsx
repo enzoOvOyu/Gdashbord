@@ -1,4 +1,5 @@
 // 公共第 1 步：项目与区域（PRD §4.2.0 / §3.5：项目必选 + 可内联新建）
+import { t } from '../../../i18n';
 import { useState } from 'react';
 import { Plus, FolderPlus } from 'lucide-react';
 import {
@@ -46,7 +47,7 @@ export function ProjectRegionStep({
   const doCreate = async (): Promise<void> => {
     const nm = newName.trim();
     if (nm.length < 2) {
-      toast.error('项目名称至少 2 个字符');
+      toast.error(t('val.projNameMin2'));
       return;
     }
     try {
@@ -56,30 +57,30 @@ export function ProjectRegionStep({
       })) as ProjectLite;
       onChange({ project_id: created.id });
       setNewName('');
-      toast.success(`已创建项目 ${created.name} 并选中`);
+      toast.success(t('deploy.projCreated', { v0: created.name }));
     } catch {
-      toast.error('创建项目失败（可能重名）');
+      toast.error(t('deploy.projCreateFailed'));
     }
   };
 
   return (
     <div className={s.col} style={{ gap: 16 }}>
       <div className={s.formGrid}>
-        <Field label="项目" required error={errors.project_id}>
+        <Field label={t('common.project')} required error={errors.project_id}>
           <Select
             value={String(value.project_id)}
             onChange={(e) => onChange({ project_id: Number(e.target.value) })}
           >
-            <option value={0}>请选择项目</option>
+            <option value={0}>{t('common.pickProject')}</option>
             {projects.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
-                {p.is_default ? '（默认）' : ''}
+                {p.is_default ? t('common.defaultMark') : ''}
               </option>
             ))}
           </Select>
         </Field>
-        <Field label="区域" required error={errors.region}>
+        <Field label={t('common.region')} required error={errors.region}>
           <Select
             value={value.region}
             onChange={(e) => onChange({ region: e.target.value as RegionCode })}
@@ -91,11 +92,11 @@ export function ProjectRegionStep({
             ))}
           </Select>
         </Field>
-        <Field label="资源名称" required error={errors.name} hint={nameHint}>
+        <Field label={t('common.resourceName')} required error={errors.name} hint={nameHint}>
           <Input
             value={value.name}
             onChange={(e) => onChange({ name: e.target.value })}
-            placeholder="如 llm-pretrain-01"
+            placeholder={t('deploy.nameExample')}
           />
         </Field>
       </div>
@@ -110,13 +111,13 @@ export function ProjectRegionStep({
       >
         <div className={s.metricLabel} style={{ marginBottom: 8 }}>
           <FolderPlus size={14} />
-          没有合适的项目？直接新建
+          {t('deploy.projInlineNew')}
         </div>
         <div className={s.row}>
           <Input
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
-            placeholder="新项目名称"
+            placeholder={t('deploy.newProjName')}
             style={{ minWidth: 200 }}
           />
           <Button
@@ -126,18 +127,18 @@ export function ProjectRegionStep({
             disabled={create.isPending}
             onClick={() => void doCreate()}
           >
-            {create.isPending ? '创建中…' : '新建并选中'}
+            {create.isPending ? t('common.creating') : t('common.createAndSelect')}
           </Button>
         </div>
         <div className={s.muted} style={{ fontSize: 11, marginTop: 6 }}>
-          新项目默认区域取当前所选区域；创建后自动选中，成本将按该项目归集。
+          {t('deploy.projNewHint')}
         </div>
       </div>
 
       <div className={s.row}>
-        <Badge tone="info">项目必选</Badge>
+        <Badge tone="info">{t('deploy.projRequired')}</Badge>
         <span className={s.muted} style={{ fontSize: 12 }}>
-          成本归集链路：orders.project_id → resources.project_id → billing_usage.project_id
+          {t('deploy.costChain')}
         </span>
       </div>
     </div>

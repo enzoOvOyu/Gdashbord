@@ -1,4 +1,5 @@
-// API 客户端（ARCH §12.7：VITE_API_BASE_URL 消费点；Mock 关闭时指向真实网关）
+
+import { t } from '../i18n';// API 客户端（ARCH §12.7：VITE_API_BASE_URL 消费点；Mock 关闭时指向真实网关）
 // 时序指标走独立 /api/metrics/*，与业务实体接口分离（§11 / §12.8）。
 const BASE = (import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080') as string;
 const USE_MOCK = import.meta.env.VITE_ENABLE_MOCK === 'true';
@@ -21,7 +22,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
     ...init,
   });
-  if (!res.ok) throw new ApiError(`请求失败 ${path}：${res.status}`, res.status);
+  if (!res.ok) throw new ApiError(t('err.requestFailed', { v0: path, v1: res.status }), res.status);
   return (await res.json()) as T;
 }
 
@@ -39,6 +40,7 @@ export const EP = {
   me: '/api/auth/me',
   projects: '/api/projects',
   project: (id: number): string => `/api/projects/${id}`,
+  projectSummary: (id: number): string => `/api/projects/${id}/summary`,
   resources: '/api/resources',
   resource: (uuid: string): string => `/api/resources/${uuid}`,
   resourceStart: (uuid: string): string => `/api/resources/${uuid}/start`,
@@ -48,6 +50,8 @@ export const EP = {
   resourceUsage: (uuid: string): string => `/api/resources/${uuid}/usage`,
   resourceTransactions: (uuid: string): string => `/api/resources/${uuid}/transactions`,
   resourceLogs: (uuid: string): string => `/api/resources/${uuid}/logs`,
+  /** v0.7：资源详情「弹性」Tab（只读视图 + 最近伸缩事件；写入口在工作台） */
+  resourceScaling: (uuid: string): string => `/api/resources/${uuid}/scaling`,
   orders: '/api/deployment-orders',
   nodePools: '/api/node-pools',
   nodes: '/api/nodes',
@@ -67,7 +71,12 @@ export const EP = {
   models: '/api/models',
   images: '/api/images',
   appTemplates: '/api/app-templates',
-  notebooks: '/api/notebooks',
+  // v0.7 工作台（ARCH §12.11）
+  notebooks: '/api/workbench/notebooks',
+  notebook: (id: number): string => `/api/workbench/notebooks/${id}`,
+  scalingPolicies: '/api/scaling/policies',
+  scalingPolicy: (id: number): string => `/api/scaling/policies/${id}`,
+  scalingEvents: '/api/scaling/events',
   datasets: '/api/datasets',
   buckets: '/api/buckets',
   pipelines: '/api/pipelines',

@@ -1,4 +1,5 @@
 // 区域选择器（PRD §3.3：区域为按页上下文控件，不再是全局常驻条）
+import { t } from '../../i18n';
 import { REGION_LIST, REGION_META } from '../../lib/ids';
 import type { RegionCode } from '../../types/domain';
 import { Select } from './Input';
@@ -18,19 +19,19 @@ export function RegionSelect({
   onChange,
   disabledReason,
   includeAll,
-  ariaLabel = '区域',
+  ariaLabel = t('common.region'),
 }: RegionSelectProps) {
   return (
     <div style={{ position: 'relative', display: 'inline-flex' }}>
       <Select
         value={value}
         aria-label={ariaLabel}
-        title={disabledReason ?? '切换区域后数据将按该区域重新计算'}
+        title={disabledReason ?? t('rs.hint')}
         disabled={Boolean(disabledReason)}
         onChange={(e) => onChange(e.target.value as RegionCode)}
         style={{ minWidth: includeAll ? 148 : 118 }}
       >
-        {includeAll && <option value="all">全部区域</option>}
+        {includeAll && <option value="all">{t('rs.allRegions')}</option>}
         {REGION_LIST.map((r) => (
           <option key={r} value={r}>
             {REGION_META[r].label} {REGION_META[r].iso}

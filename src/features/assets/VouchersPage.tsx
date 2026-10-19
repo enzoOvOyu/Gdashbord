@@ -1,4 +1,5 @@
 // 代金券（PRD §4.9：面额/余额/适用范围/有效期；结算优先消耗最先到期的券）
+import { t } from '../../i18n';
 import { useQuery } from '@tanstack/react-query';
 import { Card, Table, Badge } from '../../components/ui';
 import type { Column } from '../../components/ui';
@@ -27,23 +28,23 @@ export default function VouchersPage() {
   });
 
   const columns: Array<Column<VoucherRow>> = [
-    { key: 'code', header: '券码', mono: true, render: (v) => v.code },
-    { key: 'amount', header: '面额', numeric: true, mono: true, render: (v) => formatUsd(v.amount) },
-    { key: 'balance', header: '余额', numeric: true, mono: true, render: (v) => formatUsd(v.balance) },
+    { key: 'code', header: t('asset.voucherCode'), mono: true, render: (v) => v.code },
+    { key: 'amount', header: t('asset.faceValue'), numeric: true, mono: true, render: (v) => formatUsd(v.amount) },
+    { key: 'balance', header: t('common.balance'), numeric: true, mono: true, render: (v) => formatUsd(v.balance) },
     {
       key: 'scope',
-      header: '适用范围',
+      header: t('asset.scope'),
       render: (v) => (
         <span style={{ fontSize: 13 }}>
-          {v.applicable_kind ? KIND_META[v.applicable_kind].label : '不限类型'}
+          {v.applicable_kind ? KIND_META[v.applicable_kind].label : t('asset.anyKind')}
           {' · '}
-          {v.applicable_region ? (REGION_META[v.applicable_region]?.label ?? v.applicable_region) : '不限区域'}
+          {v.applicable_region ? (REGION_META[v.applicable_region]?.label ?? v.applicable_region) : t('asset.anyRegion')}
         </span>
       ),
     },
     {
       key: 'valid',
-      header: '有效期',
+      header: t('common.validity'),
       render: (v) => (
         <span style={{ fontSize: 12 }}>
           {formatDateTime(v.valid_from)} → {formatDateTime(v.valid_to)}
@@ -52,7 +53,7 @@ export default function VouchersPage() {
     },
     {
       key: 'status',
-      header: '状态',
+      header: t('common.status'),
       render: (v) => (
         <Badge tone={v.status === 'unused' ? 'success' : v.status === 'partial' ? 'info' : v.status === 'expired' ? 'muted' : 'neutral'}>
           {v.status}
@@ -67,12 +68,10 @@ export default function VouchersPage() {
 
   return (
     <div>
-      <h1 style={{ fontSize: 24, fontWeight: 600, margin: '0 0 4px' }}>代金券</h1>
+      <h1 style={{ fontSize: 24, fontWeight: 600, margin: '0 0 4px' }}>{t('nav.vouchers')}</h1>
       <p style={{ color: 'var(--rs-text-secondary)', margin: '0 0 24px' }}>
-        可用余额合计 <strong>{formatUsd(totalBalance)}</strong>；结算优先消耗最先到期的券，抵扣关系写入
-        voucher_redemptions 保证可追溯（PRD §7.7）。
-      </p>
-      <Card title="代金券列表" tight>
+        {t('asset.availableTotal')} <strong>{formatUsd(totalBalance)}</strong>{t('asset.redemptionHint')}</p>
+      <Card title={t('asset.voucherList')} tight>
         <Table columns={columns} rows={vouchers} rowKey={(v) => String(v.id)} zebra />
       </Card>
     </div>

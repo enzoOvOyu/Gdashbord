@@ -1,5 +1,6 @@
 // 运营&运维 · 日志（§4.4.1 B 档：行 → Drawer，含上下文前后各 50 行）
 // 支持按区域/级别/关键字检索，并能跳转到来源资源详情页。
+import { t, dt } from '../../i18n';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -42,8 +43,8 @@ export default function LogsPage() {
   return (
     <div>
       <PageHeader
-        title="日志"
-        desc={`结构化逐行日志（ts / level / request_id / route / status / latency）。当前 ${REGION_META[region].label} 区域，切换区域后日志集按 region 重算。`}
+        title={t('nav.logs')}
+        desc={t('logs.pageHint', { v0: REGION_META[region].label })}
         actions={<RegionSelect value={region} onChange={setRegion} />}
       />
 
@@ -51,13 +52,13 @@ export default function LogsPage() {
         <LogFilters level={level} onLevel={setLevel} q={q} onQ={setQ} />
         <span className={s.spacer} />
         <span className={s.muted} style={{ fontSize: 12 }}>
-          {logs.length} 行 · 其中 {errors} 行 ERROR
+          {t('logs.countSummary', { v0: logs.length, v1: errors })}
         </span>
       </Toolbar>
 
       <Card>
         {isLoading ? (
-          <div className={s.muted}>加载中…</div>
+          <div className={s.muted}>{t('common.loading')}</div>
         ) : (
           <LogsList logs={logs} onRowClick={(l) => setOpen(l)} />
         )}
@@ -94,7 +95,7 @@ export default function LogsPage() {
                 }
               }}
             >
-              跳转到来源资源
+              {t('logs.jumpSource')}
             </Button>
           ) : null
         }
@@ -103,18 +104,18 @@ export default function LogsPage() {
           <div className={s.col} style={{ gap: 12 }}>
             <KeyValue
               items={[
-                { label: '日志 ID', value: open.id, mono: true },
-                { label: '时间', value: formatDateTime(open.ts) },
-                { label: '级别', value: open.level.toUpperCase() },
-                { label: '来源', value: open.source },
-                { label: '区域', value: REGION_META[open.region].label },
+                { label: t('logs.id'), value: open.id, mono: true },
+                { label: t('common.time'), value: formatDateTime(open.ts) },
+                { label: t('common.severity'), value: open.level.toUpperCase() },
+                { label: t('events.source'), value: open.source },
+                { label: t('common.region'), value: REGION_META[open.region].label },
                 { label: 'request_id', value: open.request_id ?? '—', mono: true },
                 { label: 'route', value: open.route ?? '—', mono: true },
                 { label: 'status', value: open.status == null ? '—' : String(open.status) },
                 { label: 'latency', value: open.latency_ms == null ? '—' : `${open.latency_ms} ms` },
               ]}
             />
-            <div style={{ fontSize: 13 }}>{open.message}</div>
+            <div style={{ fontSize: 13 }}>{dt(open.message)}</div>
             {open.traceback && (
               <pre
                 style={{
@@ -132,7 +133,7 @@ export default function LogsPage() {
             )}
             <div>
               <div className={s.sectionTitle} style={{ fontSize: 13 }}>
-                上下文（前后各 50 行）
+                {t('logs.context')}
               </div>
               <LogsList logs={ctxLogs} maxHeight={320} />
             </div>

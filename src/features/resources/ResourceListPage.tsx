@@ -1,4 +1,5 @@
 // 四类资源列表（PRD §4.3.0：共用骨架，列与筛选器各自不同；A 档行点击 → Drawer）
+import { t, dt } from '../../i18n';
 import { useMemo, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ExternalLink, Trash2, Play, Square, Plus, RefreshCw } from 'lucide-react';
@@ -38,11 +39,11 @@ import {
 import type { GpuBareMetalSpec, InferenceSpec, VgpuSpec } from '../../types/domain';
 
 const UNIT_SUFFIX: Record<string, string> = {
-  per_gpu_hour: '/GPU·时',
-  per_machine_hour: '/台·时',
-  per_cluster_hour: '/集群·时',
-  per_gb_hour: '/GB·时',
-  per_instance_hour: '/实例·时',
+  get per_gpu_hour() { return t('unit.perGpuHour'); },
+  get per_machine_hour() { return t('unit.perMachineHour'); },
+  get per_cluster_hour() { return t('unit.perClusterHour'); },
+  get per_gb_hour() { return t('unit.perGbHour'); },
+  get per_instance_hour() { return t('unit.perInstanceHour'); },
 };
 
 type DrawerTab = 'overview' | 'metrics' | 'events';
@@ -94,11 +95,11 @@ export default function ResourceListPage() {
     const target = pendingDelete;
     try {
       await del.mutateAsync(target.resource_uuid as string);
-      toast.success(`已删除 ${target.display_id}（软删：配额已释放、计量已停止）`);
+      toast.success(t('ds.deleted', { v0: target.display_id }));
       setPendingDelete(null);
       if (drawerUuid === (target.resource_uuid as string)) setDrawerUuid(null);
     } catch {
-      toast.error(`删除失败：${target.display_id as string}`);
+      toast.error(t('rlp.deleteFailedValue', { v0: target.display_id as string }));
     }
   };
 
@@ -107,11 +108,11 @@ export default function ResourceListPage() {
       await lifecycle.mutateAsync({ uuid: r.resource_uuid as string, action });
       toast.success(
         action === 'start'
-          ? `已启动 ${r.name}`
-          : `已停止 ${r.name}（算力停计，仅计存储）`,
+          ? t('rlp.startedValue', { v0: r.name })
+          : t('rlp.stoppedValue', { v0: r.name }),
       );
     } catch {
-      toast.error('操作失败，请重试');
+      toast.error(t('ds.actionFailed'));
     }
   };
 
@@ -119,7 +120,7 @@ export default function ResourceListPage() {
   const baseCols: Col[] = [
     {
       key: 'name',
-      header: '名称 / ID',
+      header: t('rlp.searchLabel'),
       render: (r) => (
         <span className={s.col}>
           <b>{r.name}</b>
@@ -131,17 +132,17 @@ export default function ResourceListPage() {
     },
     {
       key: 'status',
-      header: '状态',
+      header: t('common.status'),
       render: (r) => (
         <LifecycleBadge status={r.status} deleted={Boolean(r.deleted_at)} showZh={false} />
       ),
     },
-    { key: 'region', header: '区域', render: (r) => REGION_META[r.region].iso },
+    { key: 'region', header: t('common.region'), render: (r) => REGION_META[r.region].iso },
   ];
 
   const kindCols: Record<string, Col[]> = {
     gpu_vm: [
-      { key: 'pool', header: '节点池', render: (r) => NODE_POOL_LABEL[r.node_pool] },
+      { key: 'pool', header: t('common.nodePool'), render: (r) => NODE_POOL_LABEL[r.node_pool] },
       {
         key: 'gpu',
         header: 'GPU',
@@ -150,82 +151,82 @@ export default function ResourceListPage() {
       },
       {
         key: 'vm',
-        header: 'vCPU/内存',
+        header: t('rlp.vcpuMem'),
         render: (r) => {
           const sp = r.spec_json as { vcpu?: number; memory_gb?: number };
           return `${sp.vcpu ?? '—'}C / ${sp.memory_gb ?? '—'}G`;
         },
       },
-      { key: 'storage', header: '存储', render: (r) => `${r.storage_gb} GB` },
+      { key: 'storage', header: t('common.storage'), render: (r) => `${r.storage_gb} GB` },
     ],
     gpu_baremetal: [
       {
         key: 'machine',
-        header: '机型',
+        header: t('common.machineType'),
         render: (r) => (r.spec_json as GpuBareMetalSpec).machine_type,
       },
       {
         key: 'count',
-        header: '台数',
+        header: t('bm.machineCount'),
         numeric: true,
-        render: (r) => `${(r.spec_json as GpuBareMetalSpec).machine_count} 台`,
+        render: (r) => t('bm.machineCountValue', { v0: (r.spec_json as GpuBareMetalSpec).machine_count }),
       },
       {
         key: 'totalGpu',
-        header: '整机总卡数',
+        header: t('bm.totalGpuLabel'),
         numeric: true,
         render: (r) => (
-          <span title="台数 × 单节点 GPU 数，仅展示；计费按「台·小时」">
+          <span title={t('rlp.totalGpuHint')}>
             {(r.spec_json as GpuBareMetalSpec).gpu_count}
           </span>
         ),
       },
       {
         key: 'nvme',
-        header: '本地 NVMe',
+        header: t('pools.localNvme'),
         render: (r) => `${(r.spec_json as GpuBareMetalSpec).local_nvme_gb} GB`,
       },
     ],
     vgpu: [
-      { key: 'pool', header: '节点池', render: (r) => NODE_POOL_LABEL[r.node_pool] },
-      { key: 'k8s', header: 'K8s 版本', render: (r) => (r.spec_json as VgpuSpec).k8s_version },
+      { key: 'pool', header: t('common.nodePool'), render: (r) => NODE_POOL_LABEL[r.node_pool] },
+      { key: 'k8s', header: t('deploy.k8sVersion'), render: (r) => (r.spec_json as VgpuSpec).k8s_version },
       {
         key: 'nodes',
-        header: '节点数',
+        header: t('common.nodeCount'),
         numeric: true,
         render: (r) => (r.spec_json as VgpuSpec).node_count,
       },
-      { key: 'gpu', header: 'GPU 总量', numeric: true, render: (r) => r.gpu_count },
+      { key: 'gpu', header: t('rlp.gpuTotal'), numeric: true, render: (r) => r.gpu_count },
     ],
     inference: [
-      { key: 'model', header: '模型', render: (r) => (r.spec_json as InferenceSpec).model_ref },
+      { key: 'model', header: t('common.model'), render: (r) => (r.spec_json as InferenceSpec).model_ref },
       {
         key: 'replicas',
-        header: '副本数',
+        header: t('common.replicas'),
         numeric: true,
         render: (r) => (r.spec_json as InferenceSpec).replicas,
       },
       {
         key: 'gpu',
-        header: '单副本 GPU',
+        header: t('rlp.gpuPerReplica'),
         numeric: true,
         render: (r) => (r.spec_json as InferenceSpec).gpu_count,
       },
-      { key: 'pool', header: '节点池', render: (r) => NODE_POOL_LABEL[r.node_pool] },
+      { key: 'pool', header: t('common.nodePool'), render: (r) => NODE_POOL_LABEL[r.node_pool] },
     ],
   };
 
   const actionCol: Col = {
     key: 'actions',
-    header: '操作',
+    header: t('common.actions'),
     render: (r) => (
       <span className={s.row}>
         {!readOnly && r.status === 'running' && (
           <Button
             size="sm"
             variant="ghost"
-            title="停止"
-            aria-label="停止"
+            title={t('common.stop')}
+            aria-label={t('common.stop')}
             onClick={() => void doLifecycle(r, 'stop')}
             icon={<Square size={13} />}
           />
@@ -234,15 +235,15 @@ export default function ResourceListPage() {
           <Button
             size="sm"
             variant="ghost"
-            title="启动"
-            aria-label="启动"
+            title={t('fx.stepBoot')}
+            aria-label={t('fx.stepBoot')}
             onClick={() => void doLifecycle(r, 'start')}
             icon={<Play size={13} />}
           />
         )}
         <Link
           to={`/resources/${routeKey}/${r.resource_uuid as string}`}
-          title="查看完整详情"
+          title={t('common.viewDetail')}
           className={s.row}
         >
           <ExternalLink size={13} />
@@ -251,8 +252,8 @@ export default function ResourceListPage() {
           <Button
             size="sm"
             variant="ghost"
-            title="删除"
-            aria-label="删除"
+            title={t('common.delete')}
+            aria-label={t('common.delete')}
             onClick={() => setPendingDelete(r)}
             icon={<Trash2 size={13} color="var(--rs-danger)" />}
           />
@@ -266,21 +267,21 @@ export default function ResourceListPage() {
     ...kindCols[kind],
     {
       key: 'price',
-      header: '单价',
+      header: t('common.unitPrice'),
       numeric: true,
       mono: true,
       render: (r) => `${formatUsdRate(r.cost.unit_price)}${UNIT_SUFFIX[r.cost.unit]}`,
     },
     {
       key: 'cost',
-      header: '$/时',
+      header: t('rlp.perHourShort'),
       numeric: true,
       mono: true,
       render: (r) => formatUsd(r.cost.per_hour),
     },
     {
       key: 'uptime',
-      header: '运行时长',
+      header: t('common.uptime'),
       numeric: true,
       render: (r) => (r.running_since ? runningDuration(r.running_since).text : '—'),
     },
@@ -294,10 +295,10 @@ export default function ResourceListPage() {
           <span className={s.row}>
             <Icon size={20} />
             {meta.label}
-            <Badge tone="info">{rows.length} 个</Badge>
+            <Badge tone="info">{t('common.countGeneric', { v0: rows.length })}</Badge>
           </span>
         }
-        desc="区域与项目切换均由接口真实重算（G9）；点击任意行可展开快速预览。"
+        desc={t('rlp.pageHint')}
         actions={
           <>
             <Button
@@ -306,12 +307,12 @@ export default function ResourceListPage() {
               onClick={() => void refetch()}
               icon={<RefreshCw size={14} />}
             >
-              刷新
+              {t('common.refresh')}
             </Button>
             {!readOnly && (
               <Link to={`/deployment/${meta.routeKey === 'servers' ? 'server' : meta.routeKey}`}>
                 <Button size="sm" variant="primary" icon={<Plus size={14} />}>
-                  新建 {meta.label}
+                  {t('deploy.createKind', { v0: meta.label })}
                 </Button>
               </Link>
             )}
@@ -323,8 +324,8 @@ export default function ResourceListPage() {
         <Select
           value={region}
           onChange={(e) => setRegion(e.target.value as typeof region)}
-          aria-label="区域"
-          title="切换区域后列表按该区域重新计算"
+          aria-label={t('common.region')}
+          title={t('rlp.regionHint')}
           style={{ minWidth: 118 }}
         >
           {(['jp', 'th', 'sg', 'us'] as const).map((r) => (
@@ -336,28 +337,28 @@ export default function ResourceListPage() {
         <Select
           value={String(projectId)}
           onChange={(e) => setProjectId(e.target.value === 'all' ? 'all' : Number(e.target.value))}
-          aria-label="项目"
+          aria-label={t('common.project')}
         >
-          <option value="all">全部项目</option>
+          <option value="all">{t('common.allProjects')}</option>
           {projects.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name}
             </option>
           ))}
         </Select>
-        <Select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="状态">
-          <option value="all">全部状态</option>
+        <Select value={status} onChange={(e) => setStatus(e.target.value)} aria-label={t('common.status')}>
+          <option value="all">{t('common.allStatus')}</option>
           <option value="running">Running</option>
           <option value="stopped">Stopped</option>
           <option value="provisioning">Provisioning</option>
           <option value="error">Error</option>
           <option value="terminating">Terminating</option>
-          <option value="deleted">已释放</option>
+          <option value="deleted">{t('status.released')}</option>
         </Select>
         <Input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="搜索 display_id / uuid / 名称"
+          placeholder={t('rlp.searchPlaceholder')}
           style={{ minWidth: 220 }}
         />
       </Toolbar>
@@ -373,19 +374,19 @@ export default function ResourceListPage() {
           }}
           empty={
             isLoading ? (
-              <EmptyState icon="⏳" title="加载中…" />
+              <EmptyState icon="⏳" title={t('common.loading')} />
             ) : (
               <EmptyState
                 icon="📭"
-                title={`${REGION_META[region].label} 区域暂无${meta.label}`}
-                hint="切换区域，或创建该类资源"
+                title={t('rlp.emptyRegion', { v0: REGION_META[region].label, v1: meta.label })}
+                hint={t('rlp.emptyHint')}
                 action={
                   !readOnly ? (
                     <Link
                       to={`/deployment/${meta.routeKey === 'servers' ? 'server' : meta.routeKey}`}
                     >
                       <Button size="sm" variant="primary" icon={<Plus size={14} />}>
-                        立即创建
+                        {t('rlp.createNow')}
                       </Button>
                     </Link>
                   ) : undefined
@@ -412,19 +413,17 @@ export default function ResourceListPage() {
 
       <ConfirmDialog
         open={Boolean(pendingDelete)}
-        title={`删除 ${meta.label}`}
+        title={t('ds.deleteKind', { v0: meta.label })}
         confirmText={pendingDelete ? (pendingDelete.display_id as string) : ''}
-        confirmLabel="确认删除"
+        confirmLabel={t('common.confirmDelete')}
         pending={del.isPending}
         description={
           pendingDelete ? (
             <span>
-              即将删除 <b>{pendingDelete.name}</b>（{pendingDelete.display_id as string}）。
+              {t('ds.aboutToDelete')} <b>{pendingDelete.name}</b>{t('common.idInParens', { v0: pendingDelete.display_id as string })}<br />
+              {t('rlp.thisOpIs')}<b>{t('rlp.realSoftDelete')}</b>{t('rlp.softDeletePart1')}<code>deleted_at</code>{t('rlp.quotaReleased')}<b>{t('ds.usageKept')}</b>{t('ds.forReconciliation')}
               <br />
-              该操作为<b>真实软删</b>：资源进入 terminating 并标记 <code>deleted_at</code>，
-              配额立即释放、计量立即停止；<b>已发生的用量与扣费流水保留</b>用于对账。
-              <br />
-              当前时单价 {formatUsd(pendingDelete.cost.per_hour)}/时，删除后不再产生新费用。
+              {t('rlp.rateNote', { v0: formatUsd(pendingDelete.cost.per_hour) })}
             </span>
           ) : null
         }
@@ -471,10 +470,10 @@ function ResourceQuickDrawer({
       footer={
         <>
           <Button variant="ghost" size="sm" onClick={onClose}>
-            关闭
+            {t('common.off')}
           </Button>
           <Button variant="primary" size="sm" onClick={onOpen}>
-            查看完整详情
+            {t('common.viewDetail')}
           </Button>
         </>
       }
@@ -482,9 +481,9 @@ function ResourceQuickDrawer({
       <div className={s.col} style={{ gap: 16 }}>
         <DrawerTabs
           items={[
-            { key: 'overview', label: '概览' },
-            { key: 'metrics', label: '指标' },
-            { key: 'events', label: '事件' },
+            { key: 'overview', label: t('detail.overview') },
+            { key: 'metrics', label: t('rlp.metrics') },
+            { key: 'events', label: t('detail.events') },
           ]}
           value={tab}
           onChange={onTab}
@@ -492,21 +491,21 @@ function ResourceQuickDrawer({
         {tab === 'overview' && (
           <KeyValue
             items={[
-              { label: '类型', value: meta.label },
+              { label: t('common.type'), value: meta.label },
               {
-                label: '区域',
+                label: t('common.region'),
                 value: `${REGION_META[resource.region].label} ${REGION_META[resource.region].iso}`,
               },
-              { label: '节点池', value: NODE_POOL_LABEL[resource.node_pool] },
-              { label: '项目', value: resource.project_name },
+              { label: t('common.nodePool'), value: NODE_POOL_LABEL[resource.node_pool] },
+              { label: t('common.project'), value: resource.project_name },
               {
-                label: '计费单位',
+                label: t('cost.billingUnit'),
                 value: `${formatUsdRate(resource.cost.unit_price)}${UNIT_SUFFIX[resource.cost.unit]}`,
               },
-              { label: '当前 $/时', value: formatUsd(resource.cost.per_hour) },
-              { label: '计量状态', value: resource.cost.metering_note },
+              { label: t('detail.currentHourly'), value: formatUsd(resource.cost.per_hour) },
+              { label: t('bt.meteringStatus'), value: resource.cost.metering_note },
               {
-                label: '运行时长',
+                label: t('common.uptime'),
                 value: resource.running_since ? runningDuration(resource.running_since).text : '—',
               },
               { label: 'UUID', value: resource.resource_uuid as string, mono: true },
@@ -516,7 +515,7 @@ function ResourceQuickDrawer({
         {tab === 'metrics' && <DrawerMetrics uuid={resource.resource_uuid as string} />}
         {tab === 'events' && <DrawerEvents uuid={resource.resource_uuid as string} />}
         <div className={s.muted} style={{ fontSize: 12 }}>
-          完整详情路径：/resources/{routeKey}/{resource.resource_uuid as string}
+          {t('rlp.detailPath', { v0: routeKey, v1: resource.resource_uuid as string })}
         </div>
       </div>
     </Drawer>
@@ -532,13 +531,13 @@ function DrawerMetrics({ uuid }: { uuid: string }) {
     current: number | null;
   }>;
   if (series.length === 0) {
-    return <EmptyState icon="📉" title="暂无指标" hint="供给中或已停止的资源不采集指标" />;
+    return <EmptyState icon="📉" title={t('common.noMetrics')} hint={t('rlp.noMetricsHint')} />;
   }
   return (
     <KeyValue
       items={series.slice(0, 8).map((m) => ({
         label: m.label,
-        value: m.current === null ? '—（无数据）' : `${m.current.toFixed(1)} ${m.unit}`,
+        value: m.current === null ? t('common.dashNoData') : `${m.current.toFixed(1)} ${m.unit}`,
       }))}
     />
   );
@@ -546,7 +545,7 @@ function DrawerMetrics({ uuid }: { uuid: string }) {
 
 function DrawerEvents({ uuid }: { uuid: string }) {
   const { data = [] } = useEvents(uuid);
-  if (data.length === 0) return <EmptyState icon="🕘" title="暂无事件" />;
+  if (data.length === 0) return <EmptyState icon="🕘" title={t('common.noEvents')} />;
   return (
     <div className={s.col} style={{ gap: 10 }}>
       {data.slice(0, 6).map((e) => (
@@ -555,11 +554,11 @@ function DrawerEvents({ uuid }: { uuid: string }) {
             <Badge
               tone={e.level === 'error' ? 'danger' : e.level === 'warning' ? 'warning' : 'info'}
             >
-              {e.title}
+              {dt(e.title)}
             </Badge>
           </span>
           <span className={s.muted} style={{ fontSize: 12 }}>
-            {e.detail}
+            {dt(e.detail)}
           </span>
         </div>
       ))}

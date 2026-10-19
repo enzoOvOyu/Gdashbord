@@ -430,6 +430,17 @@ function pushEvent(
   });
 }
 
+/**
+ * 对外写入资源事件（供 handlers 在业务动作后追加审计事件，如弹性策略生效）。
+ * 与内部 pushEvent 同源，保证事件序列与主表一致。
+ */
+export function recordResourceEvent(
+  r: Resource,
+  e: Parameters<typeof pushEvent>[1],
+): void {
+  pushEvent(r, e);
+}
+
 export function startResource(r: Resource): Resource {
   const ts = new Date().toISOString();
   r.status = 'running';

@@ -1,5 +1,6 @@
 // Table（DESIGN-SYSTEM §5.4：行高 44、表头 13/600/secondary、斑马纹可选、空态插画 + 引导）
 // 复杂筛选/排序/虚拟滚动由 TanStack Table 承担（ARCH §2），此处为轻量展示封装。
+import { t } from '../../i18n';
 import type { ReactNode } from 'react';
 import clsx from 'clsx';
 import s from './ui.module.css';
@@ -75,7 +76,7 @@ export function Table<T>({
 
 export function EmptyState({
   icon = '📭',
-  title = '暂无数据',
+  title = t('common.noData'),
   hint,
   action,
 }: {

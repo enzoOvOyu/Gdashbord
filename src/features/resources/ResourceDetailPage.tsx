@@ -1,4 +1,5 @@
 // 资源详情分发（PRD §4.3：四类为各自独立的页面组件与展示规则，禁止共用模板）
+import { t, dt } from '../../i18n';
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { ui as s, Card, EmptyState, Button } from '../../components/ui';
@@ -10,20 +11,30 @@ import { VgpuDetail, VGPU_TABS } from './detail/VgpuDetail';
 import { InferenceDetail, INFERENCE_TABS } from './detail/InferenceDetail';
 import { ProvisioningSteps } from '../shared/ProvisioningSteps';
 
+/** 订单失败原因码 → 用户可读文案（ARCH §12.11 错误码模式；未知码原样展示） */
+function failureReasonText(code: string | null | undefined): string {
+  if (!code) return t('common.unknownReason');
+  if (code === 'InsufficientCapacity') return t('fx.errCapacity');
+  if (code === 'ImagePullFailed') return t('fx.errPull');
+  if (code === 'DriverMismatch') return t('fx.errDriver');
+  if (code === 'QuotaExceeded') return t('fx.errQuota');
+  return code;
+}
+
 export default function ResourceDetailPage() {
   const { resourceUuid } = useParams();
   const { data: detail, isLoading, isError } = useResource(resourceUuid);
   const [tab, setTab] = useState('overview');
 
   if (isLoading) {
-    return <EmptyState icon="⏳" title="加载资源详情…" />;
+    return <EmptyState icon="⏳" title={t('rdp.loading')} />;
   }
   if (isError || !detail) {
     return (
       <EmptyState
         icon="🔍"
-        title="资源不存在或已删除"
-        hint={`UUID：${resourceUuid ?? '—'}`}
+        title={t('rdp.notFound')}
+        hint={t('detail.uuidLabel', { v0: resourceUuid ?? '—' })}
       />
     );
   }
@@ -73,11 +84,8 @@ export default function ResourceDetailPage() {
               padding: 12,
             }}
           >
-            <b>供给失败</b>：{detail.order?.failure_reason ?? '未知原因'}。
-            <div className={s.muted} style={{ fontSize: 12, marginTop: 4 }}>
-              失败子步骤：
-              {detail.steps.find((x) => x.state === 'failed')?.step_key ?? '—'}
-            </div>
+            <b>{t('fx.provisionFailed')}</b>{t('detail.failReason', { v0: failureReasonText(detail.order?.failure_reason) })}<div className={s.muted} style={{ fontSize: 12, marginTop: 4 }}>
+              {t('detail.failedSubsteps', { v0: dt(detail.steps.find((x) => x.state === 'failed')?.step_key ?? '—') })}</div>
           </div>
         )}
         {body}

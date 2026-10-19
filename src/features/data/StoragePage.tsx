@@ -1,4 +1,5 @@
 // 对象存储（PRD §4.6）：桶列表与Region 分布；按 $0.023/GB·月 计价（§4.3）
+import { t } from '../../i18n';
 import { useQuery } from '@tanstack/react-query';
 import { Card, Table, StatTile, Badge } from '../../components/ui';
 import type { Column } from '../../components/ui';
@@ -22,10 +23,10 @@ export default function StoragePage() {
   }, {});
 
   const columns: Array<Column<Bucket>> = [
-    { key: 'name', header: '桶名称', render: (r) => <span className={s.mono}>{r.name}</span> },
+    { key: 'name', header: t('dp.bucketName'), render: (r) => <span className={s.mono}>{r.name}</span> },
     {
       key: 'region',
-      header: '区域',
+      header: t('common.region'),
       render: (r) => (
         <span className={s.secondary}>
           {REGION_META[r.region]?.label ?? r.region}
@@ -34,12 +35,12 @@ export default function StoragePage() {
     },
     {
       key: 'endpoint',
-      header: '访问端点',
+      header: t('dp.endpoint'),
       render: (r) => <span className={s.mono}>s3.{r.region}.runsun.cloud</span>,
     },
     {
       key: 'created',
-      header: '创建于',
+      header: t('common.createdAt'),
       render: (r) => <span className={s.secondary}>{formatRelative(r.created_at)}</span>,
     },
   ];
@@ -53,14 +54,14 @@ export default function StoragePage() {
           gap: 'var(--rs-s4)',
         }}
       >
-        <StatTile label="桶数量" value={buckets.length} />
-        <StatTile label="覆盖区域" value={Object.keys(byRegion).length} hint="区域数" />
-        <StatTile label="对象存储单价" value={`${formatUsd(OBJECT_STORAGE_RATE_GB_MONTH)}/GB·月`} />
+        <StatTile label={t('dp.bucketCount')} value={buckets.length} />
+        <StatTile label={t('dp.coveredRegions')} value={Object.keys(byRegion).length} hint={t('dp.regionCount')} />
+        <StatTile label={t('dp.storageRate')} value={t('dp.storageRateValue', { v0: formatUsd(OBJECT_STORAGE_RATE_GB_MONTH) })} />
       </div>
 
       <Card
-        title="对象存储"
-        actions={isLoading ? <Badge tone="info">加载中…</Badge> : <Badge tone="muted">{buckets.length} 个桶</Badge>}
+        title={t('dp.storageTitle')}
+        actions={isLoading ? <Badge tone="info">{t('common.loading')}</Badge> : <Badge tone="muted">{t('dp.bucketCountValue', { v0: buckets.length })}</Badge>}
       >
         <Table columns={columns} rows={buckets} rowKey={(r) => String(r.id)} zebra />
       </Card>

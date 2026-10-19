@@ -432,12 +432,33 @@ export interface AppTemplate {
   default_image_id: InternalId | null;
   form_schema: Record<string, unknown>;
 }
+/**
+ * Notebook / IDE（ARCH §12.5 · PRD §4.5.1）
+ * v0.7：挂靠范围由「仅 GPU 云服务器」扩展为 **GPU 云服务器 / GPU 裸金属 / vGPU** 三类；
+ * 推理服务不挂开发环境（无 SSH 面），仅在工作台提供 Playground 链接。
+ */
 export interface NotebookItem {
   id: InternalId;
+  org_id: InternalId;
+  name: string;
+  /** 宿主资源（null = 未挂靠的空态引导场景） */
   resource_id: InternalId | null;
+  /** 宿主资源形态；v0.7 三类挂靠（gpu_vm / gpu_baremetal / vgpu） */
+  resource_kind: ResourceKind | null;
+  /** IDE 形态：JupyterLab / VS Code Server 二选一 */
+  ide: 'jupyter' | 'vscode';
+  /** 向后兼容旧字段（= ide） */
   type: 'jupyter' | 'vscode';
-  status: string;
+  status: 'running' | 'stopped' | 'provisioning' | 'error';
+  region: RegionCode;
   url_path: string;
+  /** 继承宿主资源的 GPU 数 */
+  gpu_count: number;
+  /** 挂载的存储（GB） */
+  storage_mount_gb: number;
+  /** 闲置自动关机（分钟；0 = 不自动关机，AutoDL 省钱心智） */
+  auto_shutdown_idle_min: number;
+  image_ref: string;
   created_at: string;
 }
 export interface Dataset {
@@ -478,4 +499,118 @@ export interface NotificationItem {
   link: string | null;
   read_at: string | null;
   created_at: string;
+}
+
+// ─────────── 弹性伸缩（v0.7 · ARCH §12.12 · PRD §4.2.6 / §4.5.2） ───────────
+
+/** 策略模型：节点池伸缩（整机/虚拟机/分片） vs 服务副本伸缩（推理） */
+export type StrategyModel = 'node_pool' | 'replica';
+
+/** 触发指标（ARCH §12.12 scaling_trigger 枚举） */
+export type ScalingTrigger =
+  | 'queue_depth'
+  | 'pending_pods'
+  | 'qpm'
+  | 'gpu_allocation_rate'
+  | 'concurrency'
+  | 'ttft_p99'
+  | 'kv_cache_usage'
+  | 'requests_waiting';
+
+export type ScalingStatus = 'active' | 'paused' | 'cooldown';
+export type ScalingDirection = 'scale_out' | 'scale_in';
+
+/**
+ * 弹性伸缩策略（scaling_policies）
+ * 一个资源最多一条生效策略（UNIQUE INDEX ... WHERE status='active'）。
+ * 裸金属铁律：min_size ≥ 1（warm floor），UI 双重明示。
+ */
+export interface ScalingPolicy {
+  id: InternalId;
+  policy_uuid: string;
+  org_id: InternalId;
+  resource_id: InternalId;
+  strategy_model: StrategyModel;
+  trigger_metric: ScalingTrigger;
+  /** 触发目标值（如 ttft_p99 ≤ 800ms） */
+  target_value: number | null;
+  min_size: number;
+  max_size: number;
+  /** 仅 replica 模型允许 true；默认 false + 冷启动风险提示 */
+  scale_to_zero: boolean;
+  drain_timeout_s: number;
+  /** 库存不足回退同型邻近池 */
+  fallback_enabled: boolean;
+  /** stabilization 防抖窗口（裸金属 600–1800s） */
+  cooldown_s: number;
+  status: ScalingStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+/** 伸缩事件（scaling_events）：策略执行审计，携带触发时指标快照 */
+export interface ScalingEvent {
+  id: InternalId;
+  event_uuid: string;
+  policy_id: InternalId;
+  resource_id: InternalId;
+  direction: ScalingDirection;
+  from_size: number;
+  to_size: number;
+  /** { metric, value, target, windowS } —— 与 §6.9 指标同窗口序列一致 */
+  trigger_snapshot: {
+    metric: ScalingTrigger;
+    value: number;
+    target: number;
+    windowS: number;
+  };
+  warm_pool_hit: boolean | null;
+  duration_s: number | null;
+  /** 失败原因 / 人工干预说明 */
+  reason: string | null;
+  created_at: string;
+}
+
+/** 工作台·弹性伸缩页的策略展示行（策略 + 绑定资源 + 当前实际值 + 最近一次伸缩） */
+export interface ScalingPolicyRow extends ScalingPolicy {
+  resource_uuid: string;
+  display_id: DisplayId;
+  resource_name: string;
+  resource_kind: ResourceKind;
+  region: RegionCode;
+  /** 当前实际值（节点数 / 副本数），与 resources.spec_json 一致 */
+  current_size: number;
+  /** 最近一次伸缩时间 */
+  last_event_at: string | null;
+}
+
+/** 项目卡片/详情聚合（PRD §3.5.1 · GET /api/projects/:id/summary） */
+export interface ProjectSummary {
+  id: InternalId;
+  name: string;
+  slug: string;
+  is_default: boolean;
+  default_region: RegionCode;
+  created_at: string;
+  /** 运行中 GPU 数 / 总 GPU 数（按资源规格派生） */
+  gpu_running: number;
+  gpu_total: number;
+  /** 四类资源计数 */
+  kind_counts: Record<ResourceKind, number>;
+  running_count: number;
+  /** 本月成本（USD）与环比 */
+  cost_mtd: number;
+  cost_prev_mtd: number;
+  /** 配额水位（%）：取四个指标的最大占用率 */
+  quota_usage_pct: number;
+  member_count: number;
+  /** 最近活动资源（最多 5 条） */
+  recent_resources: Array<{
+    resource_uuid: string;
+    display_id: DisplayId;
+    name: string;
+    kind: ResourceKind;
+    status: ResourceStatus;
+    region: RegionCode;
+  }>;
 }

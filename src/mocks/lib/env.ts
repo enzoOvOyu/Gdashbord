@@ -16,6 +16,10 @@ export const VITE_DEFAULT_REGION = (env.VITE_DEFAULT_REGION ?? 'jp') as
 export const VITE_THEME_DEFAULT = (env.VITE_THEME_DEFAULT ?? 'light') as
   | 'light'
   | 'dark';
+/** i18n 默认语言（DS §5.24；运行期可经语言切换器切换并持久化 rs.locale） */
+export const VITE_I18N_DEFAULT_LOCALE = (env.VITE_I18N_DEFAULT_LOCALE ?? 'zh-CN') as
+  | 'zh-CN'
+  | 'en-US';
 export const VITE_LOW_BALANCE_THRESHOLD_USD = Number(
   env.VITE_LOW_BALANCE_THRESHOLD_USD ?? 50,
 );

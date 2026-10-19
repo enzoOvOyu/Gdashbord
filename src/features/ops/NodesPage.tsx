@@ -1,5 +1,6 @@
 // 运营&运维 · 节点（§4.4.1 A 档：行 → Drawer → 整页 /ops/nodes/:nodeUid）
 // 每个非 Ready 节点都能展开看到对应 Xid 事件（G7 不完美即真实 + 事件必须有证据）。
+import { t, dt } from '../../i18n';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowUpRight, AlertTriangle } from 'lucide-react';
@@ -31,7 +32,7 @@ import {
 import { NODE_STATE_META, StateRing, MetricDiff } from './shared';
 
 const STATE_FILTERS = [
-  { value: 'all', label: '全部状态' },
+  { value: 'all', get label() { return t('common.allStatus'); } },
   { value: 'ready', label: 'Ready' },
   { value: 'cordoned', label: 'Cordoned' },
   { value: 'draining', label: 'Draining' },
@@ -55,26 +56,26 @@ export default function NodesPage() {
   const columns: Array<Column<NodeView>> = [
     {
       key: 'uid',
-      header: '节点',
+      header: t('nav.nodes'),
       mono: true,
       render: (n) => n.node_uid,
     },
     {
       key: 'pool',
-      header: '机型',
+      header: t('common.machineType'),
       render: (n) => n.pool_display_name,
     },
-    { key: 'rack', header: '机架位', mono: true, render: (n) => n.rack_id ?? '—' },
-    { key: 'sw', header: '交换机组', mono: true, render: (n) => n.switch_group ?? '—' },
+    { key: 'rack', header: t('common.rack'), mono: true, render: (n) => n.rack_id ?? '—' },
+    { key: 'sw', header: t('common.switchGroup'), mono: true, render: (n) => n.switch_group ?? '—' },
     {
       key: 'state',
-      header: '状态',
+      header: t('common.status'),
       render: (n) => (
         <span className={s.row} style={{ gap: 6 }}>
           <Badge tone={NODE_STATE_META[n.state]?.tone ?? 'neutral'}>
             {NODE_STATE_META[n.state]?.label.split('（')[0] ?? n.state}
           </Badge>
-          {n.straggler && <Badge tone="warning">慢节点</Badge>}
+          {n.straggler && <Badge tone="warning">{t('nodes.slowNode')}</Badge>}
         </span>
       ),
     },
@@ -82,17 +83,17 @@ export default function NodesPage() {
       key: 'gpu',
       header: 'GPU',
       numeric: true,
-      render: (n) => `${n.gpu_count} 卡`,
+      render: (n) => t('common.gpuCountValue', { v0: n.gpu_count }),
     },
     {
       key: 'hosted',
-      header: '承载资源',
+      header: t('pools.bearingResources'),
       numeric: true,
       render: (n) => n.hosted_resources,
     },
     {
       key: 'updated',
-      header: '更新于',
+      header: t('common.updatedAt'),
       render: (n) => formatRelative(n.updated_at),
     },
     {
@@ -101,7 +102,7 @@ export default function NodesPage() {
       width: 92,
       render: (n) => (
         <Button size="sm" variant="ghost" onClick={() => setOpenUid(n.node_uid)}>
-          查看
+          {t('common.view')}
         </Button>
       ),
     },
@@ -112,13 +113,13 @@ export default function NodesPage() {
   return (
     <div>
       <PageHeader
-        title="节点"
-        desc={`平台物理节点（rack / switch / GPU）。当前 ${REGION_META[region].label} 区域，切换区域后节点清单与状态分布必须重算。`}
+        title={t('nav.nodes')}
+        desc={t('nodes.pageHint', { v0: REGION_META[region].label })}
         actions={<RegionSelect value={region} onChange={setRegion} />}
       />
 
       <Toolbar>
-        <Select value={state} onChange={(e) => setState(e.target.value)} aria-label="节点状态">
+        <Select value={state} onChange={(e) => setState(e.target.value)} aria-label={t('nodes.statusDist')}>
           {STATE_FILTERS.map((f) => (
             <option key={f.value} value={f.value}>
               {f.label}
@@ -127,17 +128,17 @@ export default function NodesPage() {
         </Select>
         <span className={s.spacer} />
         <span className={s.muted} style={{ fontSize: 12 }}>
-          {nodes.length} 个节点{notReady.length > 0 ? ` · ${notReady.length} 个非 Ready` : ''}
+          {t('nodes.countLabel', { v0: nodes.length })}{notReady.length > 0 ? t('nodes.notReadySuffix', { v0: notReady.length }) : ''}
         </span>
       </Toolbar>
 
       <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 16 }}>
-        <Card title="五态分布">
-          {dist ? <StateRing dist={dist} /> : <div className={s.muted}>加载中…</div>}
+        <Card title={t('nodes.fiveStates')}>
+          {dist ? <StateRing dist={dist} /> : <div className={s.muted}>{t('common.loading')}</div>}
         </Card>
-        <Card title="非 Ready 节点">
+        <Card title={t('nodes.nonReady')}>
           {notReady.length === 0 ? (
-            <EmptyState icon="✅" title="该区域全部节点 Ready" hint="切换区域查看其它区域运维状态" />
+            <EmptyState icon="✅" title={t('nodes.allReady')} hint={t('nodes.allReadyHint')} />
           ) : (
             <div className={s.col} style={{ gap: 8 }}>
               {notReady.slice(0, 5).map((n) => (
@@ -166,7 +167,7 @@ export default function NodesPage() {
                   </Badge>
                   <span className={s.spacer} />
                   <span className={s.muted} style={{ fontSize: 11 }}>
-                    展开看 Xid →
+                    {t('nodes.expandXid')}
                   </span>
                 </button>
               ))}
@@ -176,7 +177,7 @@ export default function NodesPage() {
       </div>
 
       {isLoading ? (
-        <div className={s.muted}>加载中…</div>
+        <div className={s.muted}>{t('common.loading')}</div>
       ) : (
         <Table
           columns={columns}
@@ -187,8 +188,8 @@ export default function NodesPage() {
           empty={
             <EmptyState
               icon="🖥️"
-              title="该区域没有匹配的节点"
-              hint="切换区域或调整状态筛选"
+              title={t('nodes.noMatch')}
+              hint={t('nodes.noMatchHint')}
             />
           }
         />
@@ -214,7 +215,7 @@ export default function NodesPage() {
               if (openUid) navigate(`/ops/nodes/${openUid}`);
             }}
           >
-            查看完整详情
+            {t('common.viewDetail')}
           </Button>
         }
       >
@@ -222,8 +223,8 @@ export default function NodesPage() {
           <div className={s.col} style={{ gap: 12 }}>
             <DrawerTabs<DrawerTab>
               items={[
-                { key: 'overview', label: '概览' },
-                { key: 'events', label: `事件（${detail.events.length}）` },
+                { key: 'overview', label: t('detail.overview') },
+                { key: 'events', label: t('nodes.eventsCount', { v0: detail.events.length }) },
               ]}
               value={tab}
               onChange={setTab}
@@ -231,22 +232,22 @@ export default function NodesPage() {
             {tab === 'overview' ? (
               <KeyValue
                 items={[
-                  { label: '节点 UID', value: detail.node.node_uid, mono: true },
-                  { label: '机型', value: detail.node.pool_display_name },
-                  { label: 'GPU', value: `${detail.node.gpu_count} 卡` },
-                  { label: '机架位', value: detail.node.rack_id ?? '—', mono: true },
-                  { label: '交换机组', value: detail.node.switch_group ?? '—', mono: true },
+                  { label: t('nodes.uid'), value: detail.node.node_uid, mono: true },
+                  { label: t('common.machineType'), value: detail.node.pool_display_name },
+                  { label: 'GPU', value: t('common.gpuCountValue', { v0: detail.node.gpu_count }) },
+                  { label: t('common.rack'), value: detail.node.rack_id ?? '—', mono: true },
+                  { label: t('common.switchGroup'), value: detail.node.switch_group ?? '—', mono: true },
                   {
-                    label: '状态',
+                    label: t('common.status'),
                     value: NODE_STATE_META[detail.node.state]?.label ?? detail.node.state,
                   },
-                  { label: '慢节点', value: detail.node.straggler ? '是' : '否' },
-                  { label: '承载资源', value: `${detail.node.hosted_resources} 个` },
-                  { label: '更新时间', value: formatDateTime(detail.node.updated_at) },
+                  { label: t('nodes.slowNode'), value: detail.node.straggler ? t('common.yes') : t('common.no') },
+                  { label: t('pools.bearingResources'), value: t('common.countGeneric', { v0: detail.node.hosted_resources }) },
+                  { label: t('tickets.updatedAt'), value: formatDateTime(detail.node.updated_at) },
                 ]}
               />
             ) : detail.events.length === 0 ? (
-              <EmptyState icon="📄" title="该节点暂无事件" hint="Ready 且无历史告警的节点不产生事件" />
+              <EmptyState icon="📄" title={t('nodes.noEvents')} hint={t('nodes.noEventsHint')} />
             ) : (
               <div className={s.timeline}>
                 {detail.events.map((e) => (
@@ -267,15 +268,15 @@ export default function NodesPage() {
                     </div>
                     <div className={s.timelineBody}>
                       <div className={s.timelineTitle}>
-                        {e.title}
+                        {dt(e.title)}
                         <Badge tone={e.level === 'error' ? 'danger' : 'warning'}>{e.code}</Badge>
                       </div>
                       <div className={s.timelineTime}>{formatDateTime(e.occurredAt)}</div>
-                      <div className={s.timelineDetail}>{e.detail}</div>
+                      <div className={s.timelineDetail}>{dt(e.detail)}</div>
                       <MetricDiff before={e.metricsBefore} after={e.metricsAfter} />
                       {e.suggestedAction && (
                         <div className={s.muted} style={{ fontSize: 11 }}>
-                          建议动作：{e.suggestedAction}
+                          {t('events.actionValue', { v0: dt(e.suggestedAction) })}
                         </div>
                       )}
                     </div>
@@ -285,7 +286,7 @@ export default function NodesPage() {
             )}
           </div>
         ) : (
-          <div className={s.muted}>加载中…</div>
+          <div className={s.muted}>{t('common.loading')}</div>
         )}
       </Drawer>
     </div>

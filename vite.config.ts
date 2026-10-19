@@ -13,11 +13,26 @@ export default defineConfig({
     port: 5173,
     strictPort: false,
     watch: {
-      // Docker Desktop（Windows）的 bind mount 不向容器传播 inotify 事件，
-      // 默认监听收不到宿主文件变更，dev 服务器会持续返回旧的转换结果。
-      // 开启轮询监听保证容器内 HMR 生效（代价是少量 CPU 轮询）。
-      usePolling: true,
-      interval: 1000,
+      // Docker Desktop（Windows）bind mount 监听策略（2026-10-19 修复「5173 打不开」）：
+      // 1) 禁用 usePolling：轮询会对整个 /app 周期性全量 stat。项目根曾残留
+      //    231MB 的 .pnpm-store（数万个文件），轮询把 gRPC-FUSE 连接打满后返回
+      //    EIO，Vite 反复崩溃、请求 10s~60s 级超时（用户侧现象即「打不开」）。
+      // 2) 默认 inotify 监听为事件驱动、无常驻负载，服务稳定；但 Docker Desktop
+      //    bind mount 不向容器传播宿主文件事件 ⇒ 容器内 HMR 不生效。
+      //    修改源码后需 `docker compose up -d --force-recreate frontend` 重建
+      //    前端容器，浏览器刷新后才会拿到新代码（见 README「Docker 开发环境」）。
+      // 3) ignored 保证监听初始扫描轻量；.pnpm-store 已移出仓库，compose 亦将
+      //    pnpm store 指向命名卷 /pnpm-store，正常情况下不会再现。
+      ignored: [
+        '**/node_modules/**',
+        '**/.git/**',
+        '**/dist/**',
+        '**/docker/**',
+        '**/.pnpm-store/**',
+        '**/.pnpm-store',
+        '**/.workbuddy/**',
+        '**/*.map',
+      ],
     },
   },
   preview: {

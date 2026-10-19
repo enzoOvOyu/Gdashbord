@@ -1,13 +1,14 @@
 // 运营&运维共用件（§4.4.1：每页真实区域上下文 + 严谨派生展示）
+import { t, dt } from '../../i18n';
 import type { BadgeTone } from '../../components/ui';
 import { formatPercent } from '../../lib/money';
 
 export const NODE_STATE_META: Record<string, { label: string; tone: BadgeTone }> = {
   ready: { label: 'Ready', tone: 'success' },
-  cordoned: { label: 'Cordoned（禁止新调度）', tone: 'warning' },
-  draining: { label: 'Draining（驱逐中）', tone: 'info' },
-  remediation: { label: 'Remediation（自愈中）', tone: 'purple' },
-  notready: { label: 'NotReady（不可调度）', tone: 'danger' },
+  cordoned: { get label() { return t('ops.cordoned'); }, tone: 'warning' },
+  draining: { get label() { return t('ops.draining'); }, tone: 'info' },
+  remediation: { get label() { return t('ops.remediation'); }, tone: 'purple' },
+  notready: { get label() { return t('ops.notReady'); }, tone: 'danger' },
 };
 
 export const NODE_STATE_COLOR: Record<string, string> = {
@@ -20,28 +21,28 @@ export const NODE_STATE_COLOR: Record<string, string> = {
 
 /** 运维事件类型（Xid + 运维动作，§4.4.1 事件流） */
 export const EVENT_TYPE_META: Record<string, { label: string; tone: BadgeTone }> = {
-  XID_13: { label: 'Xid 13 图形引擎异常', tone: 'warning' },
-  XID_31: { label: 'Xid 31 MMU 缺页', tone: 'warning' },
-  XID_48: { label: 'Xid 48 双比特 ECC', tone: 'danger' },
-  XID_63: { label: 'Xid 63 行重映射', tone: 'warning' },
-  XID_64: { label: 'Xid 64 行重映射失败', tone: 'danger' },
-  XID_74: { label: 'Xid 74 NVLink 错误', tone: 'danger' },
-  XID_79: { label: 'Xid 79 GPU 掉卡', tone: 'danger' },
-  XID_94: { label: 'Xid 94 可包含 ECC', tone: 'warning' },
-  XID_109: { label: 'Xid 109 上下文切换超时', tone: 'warning' },
-  fail: { label: '健康检查失败', tone: 'danger' },
+  XID_13: { get label() { return t('xid.13'); }, tone: 'warning' },
+  XID_31: { get label() { return t('xid.31'); }, tone: 'warning' },
+  XID_48: { get label() { return t('xid.48'); }, tone: 'danger' },
+  XID_63: { get label() { return t('xid.63'); }, tone: 'warning' },
+  XID_64: { get label() { return t('xid.64'); }, tone: 'danger' },
+  XID_74: { get label() { return t('xid.74'); }, tone: 'danger' },
+  XID_79: { get label() { return t('xid.79'); }, tone: 'danger' },
+  XID_94: { get label() { return t('xid.94'); }, tone: 'warning' },
+  XID_109: { get label() { return t('xid.109'); }, tone: 'warning' },
+  fail: { get label() { return t('ops.healthCheckFailed'); }, tone: 'danger' },
   cordon: { label: 'Cordon', tone: 'warning' },
   drain: { label: 'Drain', tone: 'warning' },
-  evicted: { label: '实例驱逐', tone: 'warning' },
+  evicted: { get label() { return t('ops.instanceEvict'); }, tone: 'warning' },
   remediate: { label: 'Remediation', tone: 'purple' },
-  fixed: { label: '硬件修复', tone: 'success' },
-  rejoin: { label: '重新加入调度', tone: 'success' },
+  fixed: { get label() { return t('ops.hwRepair'); }, tone: 'success' },
+  rejoin: { get label() { return t('ops.rejoin'); }, tone: 'success' },
 };
 
 export const EVENT_TYPE_GROUPS = [
-  { value: 'all', label: '全部事件' },
-  { value: 'xid', label: 'Xid 硬件事件' },
-  { value: 'maint', label: '运维动作' },
+  { value: 'all', get label() { return t('events.allEvents'); } },
+  { value: 'xid', get label() { return t('events.xidOnly'); } },
+  { value: 'maint', get label() { return t('events.opsActions'); } },
 ];
 
 export const XID_TYPES = [
@@ -58,23 +59,23 @@ export const XID_TYPES = [
 export const MAINT_TYPES = ['fail', 'cordon', 'drain', 'evicted', 'remediate', 'fixed', 'rejoin'];
 
 export const TICKET_STATUS_META: Record<string, { label: string; tone: BadgeTone }> = {
-  open: { label: '待处理', tone: 'danger' },
-  pending: { label: '处理中', tone: 'warning' },
-  resolved: { label: '已解决', tone: 'success' },
-  closed: { label: '已关闭', tone: 'muted' },
+  open: { get label() { return t('ticket.pending'); }, tone: 'danger' },
+  pending: { get label() { return t('ticket.processing'); }, tone: 'warning' },
+  resolved: { get label() { return t('ticket.resolved'); }, tone: 'success' },
+  closed: { get label() { return t('ticket.closed'); }, tone: 'muted' },
 };
 
 export const TICKET_PRIORITY_META: Record<string, { label: string; tone: BadgeTone }> = {
-  low: { label: '低', tone: 'muted' },
-  normal: { label: '中', tone: 'info' },
-  high: { label: '高', tone: 'warning' },
-  urgent: { label: '紧急', tone: 'danger' },
+  low: { get label() { return t('sev.low'); }, tone: 'muted' },
+  normal: { get label() { return t('sev.medium'); }, tone: 'info' },
+  high: { get label() { return t('sev.high'); }, tone: 'warning' },
+  urgent: { get label() { return t('sev.critical'); }, tone: 'danger' },
 };
 
 export const WINDOW_STATUS_META: Record<string, { label: string; tone: BadgeTone }> = {
-  scheduled: { label: '已计划', tone: 'info' },
-  in_progress: { label: '进行中', tone: 'warning' },
-  completed: { label: '已完成', tone: 'success' },
+  scheduled: { get label() { return t('mw.planned'); }, tone: 'info' },
+  in_progress: { get label() { return t('mw.inProgress'); }, tone: 'warning' },
+  completed: { get label() { return t('mw.completed'); }, tone: 'success' },
 };
 
 const ORDER: string[] = ['ready', 'cordoned', 'draining', 'remediation', 'notready'];
@@ -88,7 +89,7 @@ export function StateRing({ dist, size = 132 }: { dist: Record<string, number>; 
   const healthy = dist.ready ?? 0;
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-      <svg width={size} height={size} viewBox="0 0 128 128" role="img" aria-label="节点状态分布">
+      <svg width={size} height={size} viewBox="0 0 128 128" role="img" aria-label={t('nodes.statusDistTitle')}>
         <circle cx="64" cy="64" r={r} fill="none" stroke="var(--rs-surface-2)" strokeWidth="12" />
         {total > 0 &&
           ORDER.map((k) => {
@@ -126,7 +127,7 @@ export function StateRing({ dist, size = 132 }: { dist: Record<string, number>; 
           textAnchor="middle"
           style={{ fontSize: 11, fill: 'var(--rs-text-muted)' }}
         >
-          节点总数
+          {t('nodes.totalCount')}
         </text>
       </svg>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12 }}>
@@ -151,8 +152,7 @@ export function StateRing({ dist, size = 132 }: { dist: Record<string, number>; 
           </div>
         ))}
         <div style={{ marginTop: 4, fontSize: 11, color: 'var(--rs-text-muted)' }}>
-          健康率 {total > 0 ? formatPercent((healthy / total) * 100, 1) : '—'}
-        </div>
+          {t('nodes.healthRateLine', { v0: total > 0 ? formatPercent((healthy / total) * 100, 1) : '—' })}</div>
       </div>
     </div>
   );
@@ -169,7 +169,7 @@ export function TrendLine({
   height?: number;
 }) {
   if (points.length < 2) {
-    return <div style={{ fontSize: 12, color: 'var(--rs-text-muted)' }}>趋势数据不足</div>;
+    return <div style={{ fontSize: 12, color: 'var(--rs-text-muted)' }}>{t('chart.notEnoughData')}</div>;
   }
   const values = points.map((p) => p.amount);
   const max = Math.max(...values, 0.01);
@@ -187,7 +187,7 @@ export function TrendLine({
       viewBox={`0 0 ${width} ${height}`}
       preserveAspectRatio="none"
       role="img"
-      aria-label="成本趋势"
+      aria-label={t('cost.trend')}
     >
       <path d={d} fill="none" stroke="var(--rs-brand)" strokeWidth="2" />
       <path
@@ -225,9 +225,9 @@ export function MetricDiff({
               padding: '2px 6px',
             }}
           >
-            {k}: <span style={{ color: 'var(--rs-text-muted)' }}>{String(b ?? '—')}</span>
+            {k}: <span style={{ color: 'var(--rs-text-muted)' }}>{dt(String(b ?? '—'))}</span>
             {' → '}
-            <b>{String(a ?? '—')}</b>
+            <b>{dt(String(a ?? '—'))}</b>
           </span>
         );
       })}

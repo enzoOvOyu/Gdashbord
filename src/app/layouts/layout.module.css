@@ -84,6 +84,43 @@
 .navItemIcon { width: 20px; text-align: center; flex: none; }
 .navSub { padding-left: var(--rs-s5); font-size: var(--rs-fs-sm); }
 
+/* ── v0.7 分组展开/收起（DESIGN §5.10.1 / PRD §2.1） ── */
+/* 组标题行：非链接，button + aria-expanded */
+.navGroupBtn {
+  display: flex; align-items: center; gap: var(--rs-s2);
+  width: 100%;
+  padding: 7px var(--rs-s3);
+  border: 0; border-left: 3px solid transparent;
+  border-radius: var(--rs-r-md);
+  background: transparent;
+  color: var(--rs-text-secondary);
+  font: inherit; font-size: var(--rs-fs-base); font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+.navGroupBtn:hover { background: var(--rs-surface-2); color: var(--rs-text); }
+.navGroupBtn:focus-visible { outline: none; box-shadow: var(--rs-focus-ring); }
+.navGroupBtnText { flex: 1; min-width: 0; }
+.navChevron {
+  flex: none;
+  color: var(--rs-text-muted);
+  transition: transform 0.18s ease;
+}
+.navChevronOpen { transform: rotate(180deg); }
+/* 子菜单：高度过渡 ≤200ms；收起态不可聚焦 */
+.navSubList {
+  display: flex; flex-direction: column; gap: 2px;
+  padding-left: var(--rs-s6);
+  overflow: hidden;
+  max-height: 640px;
+  opacity: 1;
+  transition: max-height 0.18s ease, opacity 0.18s ease;
+}
+.navSubListCollapsed { max-height: 0; opacity: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .navChevron, .navSubList { transition: none; }
+}
+
 /* ── 主区 ── */
 .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 

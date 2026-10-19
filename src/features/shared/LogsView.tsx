@@ -1,4 +1,5 @@
 // 结构化逐行日志（Modal 风格：ts / level / request_id / route / status / latency）
+import { t, dt } from '../../i18n';
 import { useState } from 'react';
 import { ui as s, EmptyState, Select, Input, Button } from '../../components/ui';
 import { formatTime } from '../../lib/date';
@@ -31,8 +32,8 @@ export function LogFilters({
 }) {
   return (
     <div className={s.toolbar}>
-      <Select value={level} onChange={(e) => onLevel(e.target.value)} aria-label="级别">
-        <option value="all">全部级别</option>
+      <Select value={level} onChange={(e) => onLevel(e.target.value)} aria-label={t('common.severity')}>
+        <option value="all">{t('logs.allLevels')}</option>
         <option value="error">ERROR</option>
         <option value="warning">WARNING</option>
         <option value="info">INFO</option>
@@ -41,7 +42,7 @@ export function LogFilters({
       <Input
         value={q}
         onChange={(e) => onQ(e.target.value)}
-        placeholder="搜索关键字 / 来源"
+        placeholder={t('logs.searchPlaceholder')}
         style={{ minWidth: 220 }}
       />
     </div>
@@ -76,7 +77,7 @@ function LogRow({
           {log.source}
         </span>
         <span style={{ flex: 1, minWidth: 200, color: log.level === 'error' ? 'var(--rs-danger)' : undefined }}>
-          {log.message}
+          {dt(log.message)}
         </span>
         {log.request_id && <span className={s.muted}>{log.request_id}</span>}
         {log.route && <span className={s.muted}>{log.route}</span>}
@@ -95,7 +96,7 @@ function LogRow({
               setOpen((v) => !v);
             }}
           >
-            {open ? '收起堆栈' : '展开堆栈'}
+            {open ? t('logs.collapseStack') : t('logs.expandStack')}
           </Button>
         )}
       </div>
@@ -128,7 +129,7 @@ export function LogsList({
   maxHeight?: number;
 }) {
   if (!logs || logs.length === 0) {
-    return <EmptyState icon="📄" title="没有匹配的日志" hint="调整级别或关键字筛选" />;
+    return <EmptyState icon="📄" title={t('logs.noMatch')} hint={t('logs.noMatchHint')} />;
   }
   return (
     <div

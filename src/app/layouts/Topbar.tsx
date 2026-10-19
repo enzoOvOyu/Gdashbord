@@ -1,14 +1,17 @@
 // Topbar 顶部全局条（PRD §3.1 / DESIGN-SYSTEM §5.16；高度 56px，左→右三区）
 // v0.6：移除全局常驻区域选择器（改为按页上下文，§3.3）；品牌区冻结常驻。
+import { t } from '../../i18n';
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
-  Plus, Bell, HelpCircle, Sun, Moon, ChevronDown, Search, Menu,
+  Plus, Bell, HelpCircle, Sun, Moon, ChevronDown, Search, Menu, Languages,
 } from 'lucide-react';
 import s from './layout.module.css';
 import { EP, api } from '../../lib/api-client';
 import { useAuthStore, useThemeStore } from '../../stores/auth';
+import { useLocaleStore } from '../../stores/locale';
+import { LOCALE_LABELS } from '../../i18n';
 import { KIND_META, KIND_LIST, KIND_ICON } from '../../lib/ids';
 import type { Project } from '../../types/domain';
 import { ROLE_LABEL, ROLE_LIST } from '../../lib/rbac';
@@ -25,12 +28,15 @@ interface MeData {
 function useBreadcrumb(): string {
   const { pathname } = useLocation();
   const seg = pathname.split('/').filter(Boolean);
-  return seg.length ? seg.join(' / ') : '总览';
+  return seg.length ? seg.join(' / ') : t('nav.overview');
 }
 
 export function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
   const theme = useThemeStore((st) => st.theme);
   const toggleTheme = useThemeStore((st) => st.toggle);
+  const locale = useLocaleStore((st) => st.locale);
+  const toggleLocale = useLocaleStore((st) => st.toggleLocale);
+  const nextLocaleLabel = locale === 'zh-CN' ? LOCALE_LABELS['en-US'] : LOCALE_LABELS['zh-CN'];
   const role = useAuthStore((st) => st.role);
   const setRole = useAuthStore((st) => st.setRole);
   const project = useAuthStore((st) => st.project);
@@ -53,7 +59,7 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
     <header className={s.topbar}>
       <div className={s.topbarLeft}>
         {onToggleSidebar && (
-          <button className={s.iconBtn} onClick={onToggleSidebar} aria-label="打开导航">
+          <button className={s.iconBtn} onClick={onToggleSidebar} aria-label={t('tb.openNav')}>
             <Menu size={18} />
           </button>
         )}
@@ -64,9 +70,9 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
           </span>
           <span className={s.topBrandName}>RunSun</span>
         </Link>
-        <div className={s.searchBox} role="button" tabIndex={0} title="全局搜索（⌘K）">
+        <div className={s.searchBox} role="button" tabIndex={0} title={t('tb.search')}>
           <Search size={14} />
-          <span>搜索资源 / 模型 / 文档</span>
+          <span>{t('tb.searchPlaceholder')}</span>
           <span className={s.kbd}>⌘K</span>
         </div>
         <span className={s.crumbs}>{crumbs}</span>
@@ -76,7 +82,7 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
         {/* + 新建资源（下拉 4 类，图标与资源类型唯一来源一致） */}
         <div style={{ position: 'relative' }}>
           <button className={s.iconBtn} onClick={() => setOpenNew((v) => !v)}>
-            <Plus size={16} /> 新建
+            <Plus size={16} /> {t('tb.create')}
           </button>
           {openNew && (
             <div className={s.menu}>
@@ -92,7 +98,7 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
                   >
                     <span className={s.row}>
                       <Icon size={14} />
-                      新建 {KIND_META[k].label}
+                      {t('deploy.createKind', { v0: KIND_META[k].label })}
                     </span>
                   </Link>
                 );
@@ -101,15 +107,25 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
           )}
         </div>
 
-        <button className={s.iconBtn} aria-label="通知中心">
+        <button className={s.iconBtn} aria-label={t('tb.notifications')}>
           <Bell size={16} />
           {unread > 0 && <span className={s.badgeCount}>{unread}</span>}
         </button>
-        <button className={s.iconBtn} aria-label="帮助">
+        <button className={s.iconBtn} aria-label={t('tb.help')}>
           <HelpCircle size={16} />
         </button>
-        <button className={s.iconBtn} onClick={toggleTheme} aria-label="切换主题">
+        <button className={s.iconBtn} onClick={toggleTheme} aria-label={t('tb.toggleTheme')}>
           {theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}
+        </button>
+        <button
+          className={s.iconBtn}
+          onClick={toggleLocale}
+          aria-label={t('tb.switchLanguage')}
+          title={t('tb.switchLanguage')}
+          style={{ gap: 4, fontSize: 12 }}
+        >
+          <Languages size={16} />
+          {nextLocaleLabel}
         </button>
 
         {/* 账号菜单：用户 / 组织 / 套餐 / 角色 / 项目（项目仅快速切换，新建在部署流程内 §3.5） */}
@@ -121,24 +137,24 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
           </button>
           {openMenu && (
             <div className={s.menu}>
-              <div className={s.menuLabel}>账号</div>
+              <div className={s.menuLabel}>{t('tb.account')}</div>
               <div className={s.menuItem}>
-                <span>用户</span>
+                <span>{t('tb.user')}</span>
                 <span>{me?.user.display_name ?? '—'}</span>
               </div>
               <div className={s.menuItem}>
-                <span>组织</span>
+                <span>{t('tb.org')}</span>
                 <span>{org?.name ?? '—'}</span>
               </div>
               <div className={s.menuItem}>
-                <span>套餐</span>
+                <span>{t('tb.plan')}</span>
                 <span>{plan?.name ?? '—'}</span>
               </div>
               <div className={s.menuItem}>
-                <span>余额</span>
+                <span>{t('common.balance')}</span>
                 <span>{org ? formatUsd(org.credit_balance) : '—'}</span>
               </div>
-              <div className={s.menuLabel}>角色（演示切换）</div>
+              <div className={s.menuLabel}>{t('tb.roleDemo')}</div>
               <div className={s.menuItem} style={{ flexWrap: 'wrap', gap: 4 }}>
                 {ROLE_LIST.map((r) => (
                   <button
@@ -156,7 +172,7 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
                   </button>
                 ))}
               </div>
-              <div className={s.menuLabel}>项目（快速切换 · 新建在部署向导内）</div>
+              <div className={s.menuLabel}>{t('tb.projectQuick')}</div>
               {(me?.projects ?? []).map((p) => (
                 <button
                   key={p.id}
@@ -172,7 +188,7 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
                 >
                   <span>
                     {p.name}
-                    {p.is_default && <span className={s.muted}> · 默认</span>}
+                    {p.is_default && <span className={s.muted}> {t('tb.projectDefault')}</span>}
                   </span>
                   {p.id === project.id && <span>✓</span>}
                 </button>

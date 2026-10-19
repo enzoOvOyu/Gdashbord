@@ -1,5 +1,6 @@
 // 部署向导分发器（PRD §4.2：四类资源各有独立流程，禁止共用一套表单）
 // 路由 /deployment/:kind → 对应向导；按 kind 懒加载，减少首屏体积。
+import { t } from '../../i18n';
 import { Suspense, lazy, type ComponentType } from 'react';
 import { useParams } from 'react-router-dom';
 import { ShieldAlert } from 'lucide-react';
@@ -46,11 +47,11 @@ export default function DeploymentWizard() {
 
   if (!kind) {
     return (
-      <Card title="未知的资源类型">
+      <Card title={t('deploy.unknownKind')}>
         <EmptyState
           icon="🧭"
-          title={`未识别的资源类型：${kindParam ?? '（空）'}`}
-          hint="请从左侧「部署中心」选择 GPU 云服务器 / GPU 裸金属 / vGPU / 推理服务"
+          title={t('deploy.unknownKindValue', { v0: kindParam ?? t('common.emptyValue') })}
+          hint={t('deploy.pickKind')}
         />
       </Card>
     );
@@ -59,11 +60,11 @@ export default function DeploymentWizard() {
   if (!canCreateResource(role)) {
     const Icon = KIND_ICON[kind];
     return (
-      <Card title="无创建权限">
+      <Card title={t('deploy.noPermission')}>
         <div className={s.row} style={{ alignItems: 'flex-start', gap: 12 }}>
           <ShieldAlert size={18} color="var(--rs-warning)" style={{ flex: 'none' }} />
           <span className={s.muted}>
-            当前角色（{role}）不允许创建{KIND_META[kind].label}。请联系组织 Owner 或 Admin 调整角色。
+            {t('deploy.roleDenied', { v0: role, v1: KIND_META[kind].label })}
           </span>
           <Icon size={18} />
         </div>
@@ -76,7 +77,7 @@ export default function DeploymentWizard() {
     <Suspense
       fallback={
         <div className={s.muted} style={{ padding: 24 }}>
-          正在加载「{KIND_META[kind].label}」创建流程…
+          {t('deploy.loadingWizard', { v0: KIND_META[kind].label })}
         </div>
       }
     >

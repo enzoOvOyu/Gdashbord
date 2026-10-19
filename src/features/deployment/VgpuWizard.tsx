@@ -1,4 +1,5 @@
 // 新建 vGPU（PRD §4.2.3：CoreWeave CKS / 火山引擎 VKE 托管 K8s）
+import { t } from '../../i18n';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -20,10 +21,15 @@ import { WIZARD_STEP_SCHEMAS } from './schemas';
 import { WizardShell } from './shared/WizardShell';
 import { ProjectRegionStep, type ProjectRegionValue } from './shared/ProjectRegionStep';
 import { estimateVgpu, type DiscountKey } from './shared/pricing';
+import {
+  NodePoolScalingForm,
+  ScalingSwitch,
+  type NodePoolScalingValue,
+} from './shared/ScalingForm';
 import { useCreateOrder, useNodePools, useProjects } from '../shared/api';
 import type { RegionCode } from '../../types/domain';
 
-const STEPS = ['项目与区域', '控制面', '节点池与切片', '网络与存储', '访问与确认'];
+const STEPS = [t('deploy.stepProjectRegion'), t('deploy.cpStep'), t('deploy.poolSliceStep'), t('detail.netStorage'), t('deploy.accessStep')];
 const MIG_PROFILES = ['1g.24gb', '2g.48gb', '3g.96gb'];
 
 interface PoolEntry {
@@ -32,6 +38,9 @@ interface PoolEntry {
   slicing_policy: 'none' | 'mig' | 'time_slicing' | 'mps';
   mig_profile: string;
   time_slice_share: number;
+  /** v0.7 弹性区间（每池节点数）；未开启弹性时等于 node_count */
+  min_nodes: number;
+  max_nodes: number;
 }
 
 export default function VgpuWizard() {
@@ -42,7 +51,15 @@ export default function VgpuWizard() {
   const [tier, setTier] = useState<'standard' | 'ha'>('standard');
   const [apiPublic, setApiPublic] = useState(false);
   const [pools, setPools] = useState<PoolEntry[]>([
-    { node_pool: 'H100_SXM', node_count: 2, slicing_policy: 'none', mig_profile: '2g.48gb', time_slice_share: 4 },
+    {
+      node_pool: 'H100_SXM',
+      node_count: 2,
+      slicing_policy: 'none',
+      mig_profile: '2g.48gb',
+      time_slice_share: 4,
+      min_nodes: 2,
+      max_nodes: 4,
+    },
   ]);
   const [vpc, setVpc] = useState('default-vpc');
   const [subnet, setSubnet] = useState('subnet-az1');
@@ -52,6 +69,17 @@ export default function VgpuWizard() {
   const [pvcGb, setPvcGb] = useState(500);
   const [kubeconfig, setKubeconfig] = useState<'download' | 'console'>('console');
   const [rbacAdmin, setRbacAdmin] = useState(true);
+  // v0.7 弹性伸缩开关（vGPU：由原 autoscale 升级；策略模型 = 节点池伸缩，每池 min/max 节点）
+  const [elasticScaling, setElasticScaling] = useState(false);
+  const [scalingCfg, setScalingCfg] = useState<NodePoolScalingValue>({
+    strategy_model: 'node_pool',
+    trigger_metric: 'queue_depth',
+    target_value: 20,
+    min_size: 2,
+    max_size: 4,
+    fallback_enabled: true,
+    cooldown_s: 600,
+  });
   const [discount, setDiscount] = useState<DiscountKey>('on_demand');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -60,6 +88,9 @@ export default function VgpuWizard() {
     data: Array<{ id: number; name: string; is_default: boolean; default_region: RegionCode }>;
   };
   const create = useCreateOrder();
+
+  const minNodes = pools.reduce((a, p) => a + p.min_nodes, 0);
+  const maxNodes = pools.reduce((a, p) => a + p.max_nodes, 0);
 
   const currentValues = {
     ...base,
@@ -75,6 +106,9 @@ export default function VgpuWizard() {
     default_pvc_gb: pvcGb,
     kubeconfig_access: kubeconfig,
     rbac_default_admin: rbacAdmin,
+    elastic_scaling: elasticScaling,
+    // 策略区间的 min/max = 各池 min/max 之和（§4.2.6.3 与工作台同一数据模型）
+    scaling: elasticScaling ? { ...scalingCfg, min_size: minNodes, max_size: maxNodes } : null,
   };
 
   const validate = (i: number): boolean => {
@@ -102,16 +136,17 @@ export default function VgpuWizard() {
   const gpusPer = (code: NodePoolCode): number =>
     poolViews.find((p) => p.code === code)?.gpus_per_node ?? 8;
 
+  const nodeTotal = pools.reduce((a, p) => a + p.node_count, 0);
+  const gpuTotal = pools.reduce((a, p) => a + p.node_count * gpusPer(p.node_pool), 0);
+
   const price = estimateVgpu({
     region: base.region,
     ha: tier === 'ha',
     pools: pools.map((p) => ({ node_pool: p.node_pool, node_count: p.node_count, gpusPerNode: gpusPer(p.node_pool) })),
     pvcGb,
     discount,
+    scaling: elasticScaling ? { current: nodeTotal, min: minNodes, max: maxNodes } : null,
   });
-
-  const nodeTotal = pools.reduce((a, p) => a + p.node_count, 0);
-  const gpuTotal = pools.reduce((a, p) => a + p.node_count * gpusPer(p.node_pool), 0);
 
   const submit = async (): Promise<void> => {
     if (!validate(STEPS.length - 1)) return;
@@ -144,12 +179,15 @@ export default function VgpuWizard() {
           storage_gb: pvcGb,
           kubeconfig_access: kubeconfig,
           rbac_default_admin: rbacAdmin,
+          scaling: elasticScaling
+            ? { ...scalingCfg, min_size: minNodes, max_size: maxNodes }
+            : null,
         },
       });
-      toast.success('订单已受理，托管控制面创建中');
+      toast.success(t('deploy.vgpuAccepted'));
       navigate(`/resources/vgpu/${res.resource_uuid}`);
     } catch {
-      toast.error('创建失败，请检查配置');
+      toast.error(t('deploy.createFailed'));
     }
   };
 
@@ -157,6 +195,23 @@ export default function VgpuWizard() {
 
   const updatePool = (idx: number, patch: Partial<PoolEntry>): void => {
     setPools((prev) => prev.map((p, i) => (i === idx ? { ...p, ...patch } : p)));
+  };
+
+  /**
+   * 开启弹性时以各池当前节点数为基线初始化弹性区间（min = 当前节点数，max = 当前 + 2），
+   * 保证「当前节点数 ∈ [min, max]」且策略 min/max 为各池之和（§4.2.6.3）。
+   */
+  const setElasticScalingWithDefaults = (v: boolean): void => {
+    setElasticScaling(v);
+    if (v) {
+      setPools((prev) =>
+        prev.map((p) => ({
+          ...p,
+          min_nodes: Math.max(1, p.node_count),
+          max_nodes: Math.min(64, p.node_count + 2),
+        })),
+      );
+    }
   };
 
   return (
@@ -177,36 +232,36 @@ export default function VgpuWizard() {
           onChange={(p) => setBase((v) => ({ ...v, ...p }))}
           projects={projects}
           errors={errors}
-          nameHint="留空则自动命名为 cks-cluster-01"
+          nameHint={t('deploy.vgpuNameHint')}
         />
       )}
 
       {step === 1 && (
         <div className={s.col} style={{ gap: 16 }}>
           <div className={s.formGrid}>
-            <Field label="K8s 版本" required error={errors.k8s_version}>
+            <Field label={t('deploy.k8sVersion')} required error={errors.k8s_version}>
               <Select value={k8sVersion} onChange={(e) => setK8sVersion(e.target.value as typeof k8sVersion)}>
-                <option value="1.28">v1.28（维护期至 2026-08）</option>
-                <option value="1.29">v1.29（维护期至 2026-12）</option>
-                <option value="1.30">v1.30（维护期至 2027-04）</option>
-                <option value="1.31">v1.31（当前推荐）</option>
+                <option value="1.28">{t('vgpu.k8s128')}</option>
+                <option value="1.29">{t('vgpu.k8s129')}</option>
+                <option value="1.30">{t('vgpu.k8s130')}</option>
+                <option value="1.31">{t('vgpu.k8s131')}</option>
               </Select>
             </Field>
-            <Field label="控制面规格" required error={errors.control_plane_tier}>
+            <Field label={t('deploy.cpSpec')} required error={errors.control_plane_tier}>
               <Select value={tier} onChange={(e) => setTier(e.target.value as typeof tier)}>
-                <option value="standard">Standard（单副本，$0.10/集群·时）</option>
-                <option value="ha">HA（3 副本，$0.30/集群·时）</option>
+                <option value="standard">{t('vgpu.tierStandard')}</option>
+                <option value="ha">{t('vgpu.tierHa')}</option>
               </Select>
             </Field>
           </div>
-          <SwitchRow label="API Server 公网访问" checked={apiPublic} onChange={setApiPublic} />
+          <SwitchRow label={t('deploy.apiPublic')} checked={apiPublic} onChange={setApiPublic} />
         </div>
       )}
 
       {step === 2 && (
         <div className={s.col} style={{ gap: 16 }}>
           {available.length === 0 ? (
-            <EmptyState icon="📭" title="该区域暂无可用节点池" hint="请返回第 1 步切换区域" />
+            <EmptyState icon="📭" title={t('deploy.noPoolsInRegion')} hint={t('deploy.backToStep1')} />
           ) : (
             pools.map((p, idx) => (
               <div
@@ -214,7 +269,7 @@ export default function VgpuWizard() {
                 style={{ border: '1px solid var(--rs-border)', borderRadius: 8, padding: 12 }}
               >
                 <div className={s.row} style={{ justifyContent: 'space-between', marginBottom: 8 }}>
-                  <b>节点池 {idx + 1}</b>
+                  <b>{t('deploy.poolValue', { v0: idx + 1 })}</b>
                   {pools.length > 1 && (
                     <Button
                       size="sm"
@@ -222,7 +277,7 @@ export default function VgpuWizard() {
                       icon={<Trash2 size={13} color="var(--rs-danger)" />}
                       onClick={() => setPools((prev) => prev.filter((_, i) => i !== idx))}
                     >
-                      移除
+                      {t('common.remove')}
                     </Button>
                   )}
                 </div>
@@ -233,28 +288,28 @@ export default function VgpuWizard() {
                       selected={p.node_pool === pv.code}
                       onClick={() => updatePool(idx, { node_pool: pv.code })}
                       title={pv.display_name}
-                      meta={`${pv.gpus_per_node} 卡/节点 · ${pv.vram_gb} GB`}
-                      price={`$${pv.unit_price.toFixed(2)}/GPU·时`}
+                      meta={t('deploy.poolSummary', { v0: pv.gpus_per_node, v1: pv.vram_gb })}
+                      price={t('deploy.ratePerGpuHour', { v0: pv.unit_price.toFixed(2) })}
                     />
                   ))}
                 </CardGrid>
                 <div className={s.formGrid} style={{ marginTop: 12 }}>
-                  <Field label="节点数">
+                  <Field label={t('common.nodeCount')}>
                     <Input
                       type="number"
                       value={p.node_count}
                       onChange={(e) => updatePool(idx, { node_count: Number(e.target.value) })}
                     />
                   </Field>
-                  <Field label="GPU 切片策略">
+                  <Field label={t('deploy.slicePolicy')}>
                     <Select
                       value={p.slicing_policy}
                       onChange={(e) =>
                         updatePool(idx, { slicing_policy: e.target.value as PoolEntry['slicing_policy'] })
                       }
                     >
-                      <option value="none">整卡直通（无切片）</option>
-                      <option value="mig">MIG 切片</option>
+                      <option value="none">{t('deploy.fullPassthrough')}</option>
+                      <option value="mig">{t('vgpu.migSlices')}</option>
                       <option value="time_slicing">Time-Slicing</option>
                       <option value="mps">MPS</option>
                     </Select>
@@ -271,13 +326,34 @@ export default function VgpuWizard() {
                     </Field>
                   )}
                   {p.slicing_policy === 'time_slicing' && (
-                    <Field label="Time-Slicing 共享数">
+                    <Field label={t('deploy.timeSlicing')}>
                       <Input
                         type="number"
                         value={p.time_slice_share}
                         onChange={(e) => updatePool(idx, { time_slice_share: Number(e.target.value) })}
                       />
                     </Field>
+                  )}
+                  {/* v0.7：开启弹性后每池显示 min/max 节点数（§4.2.3 / §4.2.6） */}
+                  {elasticScaling && (
+                    <>
+                      <Field label={t('deploy.poolMinNodes')}>
+                        <Input
+                          type="number"
+                          min={1}
+                          value={p.min_nodes}
+                          onChange={(e) => updatePool(idx, { min_nodes: Number(e.target.value) })}
+                        />
+                      </Field>
+                      <Field label={t('deploy.poolMaxNodes')}>
+                        <Input
+                          type="number"
+                          min={1}
+                          value={p.max_nodes}
+                          onChange={(e) => updatePool(idx, { max_nodes: Number(e.target.value) })}
+                        />
+                      </Field>
+                    </>
                   )}
                 </div>
               </div>
@@ -297,18 +373,37 @@ export default function VgpuWizard() {
                     slicing_policy: 'none',
                     mig_profile: '2g.48gb',
                     time_slice_share: 4,
+                    min_nodes: 1,
+                    max_nodes: 3,
                   },
                 ])
               }
             >
-              添加节点池
+              {t('deploy.addPool')}
             </Button>
           )}
           {errors['pools'] && <div className={s.fieldError}>{errors['pools']}</div>}
           <div className={s.muted} style={{ fontSize: 12 }}>
-            合计 {nodeTotal} 节点 / {gpuTotal} 卡 · 当前所选：
-            {pools.map((p) => NODE_POOL_LABEL[p.node_pool]).join('、')}
+            {t('vgpu.poolTotals', { v0: nodeTotal, v1: gpuTotal })}{pools.map((p) => NODE_POOL_LABEL[p.node_pool]).join(t('common.listSep'))}
           </div>
+
+          {/* v0.7 弹性伸缩（§4.2.3 第 3 步 / §4.2.6）：由原 autoscale 升级为统一开关 */}
+          <ScalingSwitch checked={elasticScaling} onChange={setElasticScalingWithDefaults} />
+          {elasticScaling && (
+            <>
+              <NodePoolScalingForm
+                value={{ ...scalingCfg, min_size: minNodes, max_size: maxNodes }}
+                onChange={(v) => setScalingCfg(v)}
+                sizeUnit={t('deploy.unitNode')}
+                hideSizeFields
+                sizeSummary={t('deploy.vgpuBandSummary', { v0: minNodes, v1: maxNodes })}
+              />
+              <div className={s.muted} style={{ fontSize: 12 }}>
+                ⚠ {t('vgpu.licenseHint')}
+              </div>
+            </>
+          )}
+          {errors['scaling'] && <div className={s.fieldError}>{errors['scaling']}</div>}
         </div>
       )}
 
@@ -318,13 +413,13 @@ export default function VgpuWizard() {
             <Field label="VPC" required error={errors.vpc}>
               <Input value={vpc} onChange={(e) => setVpc(e.target.value)} />
             </Field>
-            <Field label="子网（须与区域一致）" required error={errors.subnet}>
+            <Field label={t('deploy.subnet')} required error={errors.subnet}>
               <Select value={subnet} onChange={(e) => setSubnet(e.target.value)}>
                 <option value="subnet-az1">{base.region}-az1</option>
                 <option value="subnet-az2">{base.region}-az2</option>
               </Select>
             </Field>
-            <Field label="网络插件" required>
+            <Field label={t('deploy.cni')} required>
               <Select value={cni} onChange={(e) => setCni(e.target.value as typeof cni)}>
                 <option value="cilium">Cilium</option>
                 <option value="calico">Calico</option>
@@ -334,30 +429,30 @@ export default function VgpuWizard() {
               <Select value={storageClass} onChange={(e) => setStorageClass(e.target.value as typeof storageClass)}>
                 <option value="ssd">SSD</option>
                 <option value="nvme">NVMe</option>
-                <option value="shared-fs">共享文件系统</option>
+                <option value="shared-fs">{t('deploy.sharedFs')}</option>
               </Select>
             </Field>
-            <Field label="默认 PVC（GB）">
+            <Field label={t('deploy.defaultPvc')}>
               <Input type="number" value={pvcGb} onChange={(e) => setPvcGb(Number(e.target.value))} />
             </Field>
           </div>
-          <SwitchRow label="启用 Ingress（Nginx）" checked={ingress} onChange={setIngress} />
+          <SwitchRow label={t('deploy.ingress')} checked={ingress} onChange={setIngress} />
         </div>
       )}
 
       {step === 4 && (
         <div className={s.col} style={{ gap: 16 }}>
           <div className={s.formGrid}>
-            <Field label="kubeconfig 获取方式" required>
+            <Field label={t('deploy.kubeconfig')} required>
               <Select value={kubeconfig} onChange={(e) => setKubeconfig(e.target.value as typeof kubeconfig)}>
-                <option value="download">下载文件</option>
-                <option value="console">托管控制台</option>
+                <option value="download">{t('common.download')}</option>
+                <option value="console">{t('common.managedConsole')}</option>
               </Select>
             </Field>
           </div>
-          <SwitchRow label="默认授予集群管理员权限" checked={rbacAdmin} onChange={setRbacAdmin} />
+          <SwitchRow label={t('deploy.clusterAdmin')} checked={rbacAdmin} onChange={setRbacAdmin} />
           <div className={s.muted} style={{ fontSize: 12 }}>
-            计费：控制面 + 各节点池 GPU·小时；费用明细见右侧（分三行）。
+            {t('deploy.vgpuBillingHint')}
           </div>
         </div>
       )}

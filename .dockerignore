@@ -6,6 +6,7 @@ coverage
 .docker-data
 .git
 .workbuddy
+.pnpm-store
 *.log
 README.md
 .gitignore

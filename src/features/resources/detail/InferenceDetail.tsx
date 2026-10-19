@@ -1,4 +1,5 @@
 // 推理服务详情（PRD §4.3.4：RunPod Serverless 端点 + vLLM/SGLang 指标语义）
+import { t } from '../../../i18n';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -15,6 +16,7 @@ import {
 import { MetricsGrid, RangeTabs, QuantileCards } from '../../shared/MetricsPanel';
 import { EventsTimeline } from '../../shared/EventsTimeline';
 import { BillingTab } from '../../shared/BillingTab';
+import { ScalingTab } from './ScalingTab';
 import { LogFilters, LogsList } from '../../shared/LogsView';
 import {
   useEvents,
@@ -34,17 +36,19 @@ type TabKey =
   | 'serving'
   | 'logs'
   | 'config'
+  | 'elastic'
   | 'events'
   | 'billing';
 
 export const INFERENCE_TABS: Array<{ key: TabKey; label: string }> = [
-  { key: 'instances', label: '实例管理' },
-  { key: 'monitor', label: '监控' },
-  { key: 'serving', label: '服务治理' },
-  { key: 'logs', label: '日志' },
-  { key: 'config', label: '配置' },
-  { key: 'events', label: '事件' },
-  { key: 'billing', label: '计费' },
+  { key: 'instances', get label() { return t('inf.instances'); } },
+  { key: 'monitor', get label() { return t('detail.monitor'); } },
+  { key: 'serving', get label() { return t('inf.governance'); } },
+  { key: 'logs', get label() { return t('nav.logs'); } },
+  { key: 'config', get label() { return t('detail.config'); } },
+  { key: 'elastic', get label() { return t('detail.elastic'); } },
+  { key: 'events', get label() { return t('detail.events'); } },
+  { key: 'billing', get label() { return t('detail.billing'); } },
 ];
 
 interface ReplicaView {
@@ -80,35 +84,35 @@ export function InferenceDetail({ detail, tab }: { detail: ResourceDetail; tab: 
       <div className={s.col} style={{ gap: 16 }}>
         <div className={s.grid} style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' }}>
           <StatTile
-            label="副本数（当前/期望）"
+            label={t('inf.replicasCurrentDesired')}
             value={`${replicas.filter((r) => r.phase === 'Running').length} / ${spec.replicas}`}
             hint={
               replicas.filter((r) => r.phase === 'Running').length !== spec.replicas
-                ? 'HPA 扩缩中，长时间不等需告警'
-                : '副本数与期望一致'
+                ? t('inf.hpaScaling')
+                : t('inf.replicasMatch')
             }
           />
           <StatTile
-            label="总 RPS"
+            label={t('inf.totalRps')}
             value={formatNumber(replicas.reduce((a, b) => a + b.rps, 0), 1)}
           />
           <StatTile
-            label="并发请求"
+            label={t('inf.concurrent')}
             value={formatNumber(replicas.reduce((a, b) => a + b.runningRequests, 0), 0)}
           />
           <StatTile
             label="HPA"
-            value={spec.hpa ? `${spec.hpa.min}–${spec.hpa.max}` : '未启用'}
-            hint={spec.hpa ? `指标 ${spec.hpa.metric} ≤ ${spec.hpa.target}` : undefined}
+            value={spec.hpa ? `${spec.hpa.min}–${spec.hpa.max}` : t('common.disabled')}
+            hint={spec.hpa ? t('inf.metricTarget', { v0: spec.hpa.metric, v1: spec.hpa.target }) : undefined}
           />
         </div>
         <Table
           rows={replicas}
           rowKey={(r) => r.name}
           zebra
-          empty={<EmptyState icon="📦" title="暂无副本" />}
+          empty={<EmptyState icon="📦" title={t('inf.noReplicas')} />}
           columns={[
-            { key: 'name', header: '副本', mono: true, render: (r) => r.name },
+            { key: 'name', header: t('inf.replica'), mono: true, render: (r) => r.name },
             {
               key: 'phase',
               header: 'Phase',
@@ -118,17 +122,17 @@ export function InferenceDetail({ detail, tab }: { detail: ResourceDetail; tab: 
                 </Badge>
               ),
             },
-            { key: 'node', header: '所在节点', render: (r) => r.node },
-            { key: 'gpu', header: 'GPU 数', numeric: true, render: (r) => r.gpuCount },
-            { key: 'vram', header: '显存', numeric: true, render: (r) => `${r.vramGb} GB` },
+            { key: 'node', header: t('inf.node'), render: (r) => r.node },
+            { key: 'gpu', header: t('common.gpuNum'), numeric: true, render: (r) => r.gpuCount },
+            { key: 'vram', header: t('common.gpuMemory'), numeric: true, render: (r) => `${r.vramGb} GB` },
             { key: 'rps', header: 'RPS', numeric: true, render: (r) => formatNumber(r.rps, 1) },
             {
               key: 'running',
-              header: '运行中请求',
+              header: t('inf.runningReqs'),
               numeric: true,
               render: (r) => r.runningRequests,
             },
-            { key: 'restarts', header: '重启次数', numeric: true, render: (r) => r.restarts },
+            { key: 'restarts', header: t('inf.restarts'), numeric: true, render: (r) => r.restarts },
           ]}
         />
       </div>
@@ -141,7 +145,7 @@ export function InferenceDetail({ detail, tab }: { detail: ResourceDetail; tab: 
         <RangeTabs value={range} onChange={setRange} />
         <div>
           <h2 className={s.sectionTitle} style={{ marginBottom: 12 }}>
-            延迟分位（vLLM 语义）
+            {t('inf.latencyQuantiles')}
           </h2>
           <QuantileCards
             items={[
@@ -156,7 +160,7 @@ export function InferenceDetail({ detail, tab }: { detail: ResourceDetail; tab: 
         </div>
         <MetricsGrid metrics={metrics} />
         {metrics.length === 0 && (
-          <EmptyState icon="📉" title="暂无指标" hint="服务已停用或正在供给" />
+          <EmptyState icon="📉" title={t('common.noMetrics')} hint={t('detail.serviceOff')} />
         )}
       </div>
     );
@@ -174,18 +178,18 @@ export function InferenceDetail({ detail, tab }: { detail: ResourceDetail; tab: 
         <InfoCard
           title="Endpoints"
           items={[
-            { label: '服务 URL', value: `${ep.apiBase}/chat/completions`, mono: true },
-            { label: '模型名', value: spec.model_ref },
+            { label: t('inf.serviceUrl'), value: `${ep.apiBase}/chat/completions`, mono: true },
+            { label: t('inf.modelName'), value: spec.model_ref },
             {
-              label: '鉴权方式',
-              value: spec.auth_enabled ? 'API Key（创建时展示一次）' : '无鉴权',
+              label: t('inf.authMode'),
+              value: spec.auth_enabled ? t('inf.apiKeyOnce') : t('inf.noAuth'),
             },
-            { label: '端口', value: spec.port },
+            { label: t('common.port'), value: spec.port },
           ]}
         />
         <Card>
           <div className={s.cardHeader}>
-            <div className={s.cardTitle}>灰度与流量</div>
+            <div className={s.cardTitle}>{t('inf.canaryTraffic')}</div>
           </div>
           <div className={s.cardBody}>
             {traffic.map((t) => (
@@ -200,19 +204,19 @@ export function InferenceDetail({ detail, tab }: { detail: ResourceDetail; tab: 
             ))}
             {!spec.canary && (
               <div className={s.muted} style={{ fontSize: 12 }}>
-                未开启灰度；可在创建时配置 canary 副本与流量比例。
+                {t('inf.noCanary')}
               </div>
             )}
           </div>
         </Card>
         <InfoCard
-          title="网关策略"
+          title={t('inf.gatewayPolicy')}
           items={[
-            { label: '引擎', value: spec.engine },
-            { label: '最大 batch', value: spec.max_batch_size ?? '—' },
-            { label: '前缀缓存', value: spec.enable_prefix_caching ? '启用' : '关闭' },
-            { label: 'Chunked Prefill', value: spec.enable_chunked_prefill ? '启用' : '关闭' },
-            { label: '冷备', value: spec.cold_standby ? '启用' : '关闭' },
+            { label: t('common.engine'), value: spec.engine },
+            { label: t('inf.maxBatch'), value: spec.max_batch_size ?? '—' },
+            { label: t('inf.prefixCache'), value: spec.enable_prefix_caching ? t('common.on') : t('common.off') },
+            { label: 'Chunked Prefill', value: spec.enable_chunked_prefill ? t('common.on') : t('common.off') },
+            { label: t('inf.warm'), value: spec.cold_standby ? t('common.on') : t('common.off') },
           ]}
         />
       </div>
@@ -232,24 +236,24 @@ export function InferenceDetail({ detail, tab }: { detail: ResourceDetail; tab: 
     return (
       <div className={s.col} style={{ gap: 16 }}>
         <InfoCard
-          title="模型与引擎"
+          title={t('inf.modelEngine')}
           items={[
-            { label: '模型', value: spec.model_ref },
-            { label: '模型 slug', value: spec.model_slug, mono: true },
-            { label: '量化', value: spec.quantization },
+            { label: t('common.model'), value: spec.model_ref },
+            { label: t('inf.modelSlug'), value: spec.model_slug, mono: true },
+            { label: t('common.quantization'), value: spec.quantization },
             { label: 'max_model_len', value: formatNumber(spec.max_model_len) },
-            { label: '引擎', value: spec.engine },
+            { label: t('common.engine'), value: spec.engine },
             { label: 'max_batch_size', value: spec.max_batch_size ?? '—' },
-            { label: '前缀缓存', value: spec.enable_prefix_caching ? '启用' : '关闭' },
-            { label: '端口', value: spec.port },
+            { label: t('inf.prefixCache'), value: spec.enable_prefix_caching ? t('common.on') : t('common.off') },
+            { label: t('common.port'), value: spec.port },
           ]}
         />
         <InfoCard
-          title="环境变量"
+          title={t('common.envVars')}
           items={Object.entries(spec.env ?? {}).map(([k, v]) => ({ label: k, value: v, mono: true }))}
         />
         <Segmented
-          options={[{ value: 'curl', label: 'cURL 调用示例' }]}
+          options={[{ value: 'curl', label: t('inf.curlExample') }]}
           value="curl"
           onChange={() => undefined}
         />
@@ -273,6 +277,10 @@ export function InferenceDetail({ detail, tab }: { detail: ResourceDetail; tab: 
 
   if (tab === 'events') {
     return <EventsTimeline events={events} />;
+  }
+
+  if (tab === 'elastic') {
+    return <ScalingTab resourceUuid={detail.resource_uuid as string} />;
   }
 
   return <BillingTab detail={detail} />;

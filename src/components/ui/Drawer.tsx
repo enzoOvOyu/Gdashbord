@@ -1,4 +1,5 @@
 // Drawer（DESIGN-SYSTEM §5.19：A/B 档展开载体；Esc/遮罩关闭，URL 同步 ?drawer=）
+import { t } from '../../i18n';
 import { useEffect, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
@@ -62,7 +63,7 @@ export function Drawer({
           <Button
             variant="ghost"
             size="sm"
-            aria-label="关闭"
+            aria-label={t('common.off')}
             onClick={onClose}
             icon={<X size={16} />}
           />

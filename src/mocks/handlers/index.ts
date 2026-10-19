@@ -22,6 +22,7 @@ import {
   eventsOf,
   orderOf,
   placementOf,
+  recordResourceEvent,
   requestedFootprint,
   resourceByUuid,
   softDeleteResource,
@@ -48,11 +49,31 @@ import {
   projectById,
 } from '../fixtures/projects';
 import {
+  projectMembersOf,
+  projectSummaryById,
+  projectSummaries,
+} from '../fixtures/project-summary';
+import {
+  SCALING_EVENTS,
+  createPolicy,
+  deletePolicy,
+  eventsOfPolicy,
+  policyById,
+  policyOfResource,
+  policyRows,
+  updatePolicy,
+} from '../fixtures/scaling';
+import {
+  NOTEBOOKS,
+  attachableResources,
+  createNotebook,
+  deleteNotebook,
+} from '../fixtures/notebooks';
+import {
   APP_TEMPLATES,
   BUCKETS,
   DATASETS,
   INVOICES,
-  NOTEBOOKS,
   NOTIFICATIONS,
   PIPELINES,
   RESERVATIONS,
@@ -177,6 +198,37 @@ export const handlers = [
       );
     }
     return new HttpResponse(null, { status: 204 });
+  }),
+
+  // v0.7：项目卡片/详情聚合（PRD §3.5.1）
+  http.get('/api/projects/summaries', async () => {
+    await listDelay();
+    return HttpResponse.json(projectSummaries());
+  }),
+
+  http.get('/api/projects/:id/summary', async ({ params }) => {
+    await listDelay();
+    const summary = projectSummaryById(Number(params.id) as InternalId);
+    if (!summary) {
+      return HttpResponse.json(
+        { code: 'PROJECT_NOT_FOUND', message: '项目不存在' },
+        { status: 404 },
+      );
+    }
+    return HttpResponse.json(summary);
+  }),
+
+  /** 项目成员（真实 IAM 归属日后由后端下发） */
+  http.get('/api/projects/:id/members', async ({ params }) => {
+    await listDelay();
+    const p = projectById(Number(params.id) as InternalId);
+    if (!p) {
+      return HttpResponse.json(
+        { code: 'PROJECT_NOT_FOUND', message: '项目不存在' },
+        { status: 404 },
+      );
+    }
+    return HttpResponse.json(projectMembersOf(p));
   }),
 
   // ─────────── 资源（业务实体） ───────────
@@ -326,6 +378,28 @@ export const handlers = [
     return HttpResponse.json(transactionsOfResource());
   }),
 
+  /**
+   * v0.7 资源详情「弹性」Tab：**只读**视图（PRD §4.5.2 与工作台的分工）。
+   * 一切新建 / 编辑 / 暂停 / 解绑只在工作台·弹性伸缩页完成，本接口不提供写操作。
+   */
+  http.get('/api/resources/:uuid/scaling', async ({ params }) => {
+    await listDelay();
+    const r = resourceByUuid(String(params.uuid));
+    if (!r) {
+      return HttpResponse.json(
+        { code: 'RESOURCE_NOT_FOUND', message: '资源不存在' },
+        { status: 404 },
+      );
+    }
+    const policy = policyOfResource(r.id);
+    if (!policy) return HttpResponse.json({ policy: null, events: [] });
+    const row = policyRows(null, null).find((p) => p.id === policy.id) ?? null;
+    return HttpResponse.json({
+      policy: row,
+      events: eventsOfPolicy(policy.id).slice(0, 10),
+    });
+  }),
+
   /** 结构化日志（推理「日志」Tab / 日志页共用） */
   http.get('/api/resources/:uuid/logs', async ({ request, params }) => {
     await listDelay();
@@ -414,7 +488,39 @@ export const handlers = [
 
     const spec = body.requested_spec ?? {};
 
-    // 配额预检（PRD §7.3 超限）：used + 请求量 > limit ⇒ 拒绝并引导提额工单
+    // v0.7 §4.2.6.3：开启弹性伸缩时配额预检按 **max 档** 校验（弹到上限不得超配额）
+    const scalingSpec = (spec.scaling ?? null) as {
+      strategy_model?: string;
+      trigger_metric?: string;
+      target_value?: number | null;
+      min_size?: number;
+      max_size?: number;
+      scale_to_zero?: boolean;
+      drain_timeout_s?: number;
+      fallback_enabled?: boolean;
+      cooldown_s?: number;
+    } | null;
+    const maxSize = Number(scalingSpec?.max_size ?? 0);
+    let scaleFactor = 1;
+    if (scalingSpec && maxSize > 0) {
+      const currentSize =
+        body.resource_kind === 'gpu_baremetal'
+          ? Math.max(1, Number(spec.machine_count ?? 1))
+          : body.resource_kind === 'vgpu'
+            ? Math.max(
+                1,
+                ((spec.pools ?? []) as Array<{ node_count: number }>).reduce(
+                  (a, p) => a + Number(p.node_count ?? 0),
+                  0,
+                ),
+              )
+            : body.resource_kind === 'inference'
+              ? Math.max(1, Number(spec.replicas ?? 1))
+              : Math.max(1, Number(spec.quantity ?? 1));
+      scaleFactor = Math.max(1, maxSize / currentSize);
+    }
+
+    // 配额预检（PRD §7.3 超限）：used + 请求量（× 弹性 max 档系数） > limit ⇒ 拒绝并引导提额工单
     const footprint = requestedFootprint(body.resource_kind, pool, spec as unknown as ResourceSpec);
     const METRIC_OF: Array<[QuotaMetric, number]> = [
       ['gpu', footprint.gpu],
@@ -422,7 +528,8 @@ export const handlers = [
       ['storage_gb', footprint.storageGb],
       ['public_ip', footprint.publicIp],
     ];
-    for (const [metric, amount] of METRIC_OF) {
+    for (const [metric, rawAmount] of METRIC_OF) {
+      const amount = Math.ceil(rawAmount * scaleFactor);
       if (amount <= 0) continue;
       const q = QUOTAS.find((x) => x.metric === metric && x.region === region);
       if (!q) continue;
@@ -494,6 +601,39 @@ export const handlers = [
 
     const name = (body.name ?? '').trim() || `${KIND_META[body.resource_kind].label}-${id}`;
     const resource = createResourceFromOrder(order, name);
+
+    // v0.7 §4.2.6.3：requested_spec.scaling 非空 → 下单即生成 scaling_policies 行
+    // （与工作台·弹性伸缩页同一数据模型，资源详情「弹性」Tab 读同一行）
+    if (scalingSpec) {
+      const created = createPolicy({
+        resource_id: resource.id,
+        strategy_model: scalingSpec.strategy_model === 'replica' ? 'replica' : 'node_pool',
+        trigger_metric: (scalingSpec.trigger_metric ?? 'queue_depth') as never,
+        target_value: scalingSpec.target_value ?? null,
+        min_size: Number(scalingSpec.min_size ?? 1),
+        max_size: Number(scalingSpec.max_size ?? 1),
+        scale_to_zero: scalingSpec.scale_to_zero === true,
+        drain_timeout_s: scalingSpec.drain_timeout_s,
+        fallback_enabled: scalingSpec.fallback_enabled !== false,
+        cooldown_s: scalingSpec.cooldown_s,
+      });
+      if (created.ok) {
+        recordResourceEvent(resource, {
+          occurredAt: new Date().toISOString(),
+          level: 'info',
+          source: 'autoscaler',
+          code: 'SCALING_POLICY_BOUND',
+          title: '弹性伸缩策略已生效',
+          detail: `策略模型 ${created.policy.strategy_model}，触发指标 ${created.policy.trigger_metric}，规模区间 ${created.policy.min_size} ~ ${created.policy.max_size}。完整策略管理见工作台·弹性伸缩。`,
+          metricsAfter: {
+            min_size: created.policy.min_size,
+            max_size: created.policy.max_size,
+          },
+          suggestedAction: '在工作台·弹性伸缩页查看触发历史与事件时间线',
+        });
+      }
+    }
+
     // 新资源立即纳入用量与日志派生
     appendUsageFor(resource);
     rebuildTransactions(ORG.credit_balance);
@@ -792,9 +932,180 @@ export const handlers = [
     await listDelay();
     return HttpResponse.json(APP_TEMPLATES);
   }),
-  http.get('/api/notebooks', async () => {
+  // v0.7 工作台·Notebook / IDE（PRD §4.5.1：三类挂靠）
+  http.get('/api/workbench/notebooks', async ({ request }) => {
     await listDelay();
-    return HttpResponse.json(NOTEBOOKS);
+    const url = new URL(request.url);
+    const region = url.searchParams.get('region');
+    const kind = url.searchParams.get('resource_kind');
+    return HttpResponse.json(
+      NOTEBOOKS.filter((n) => {
+        if (region && region !== 'all' && n.region !== region) return false;
+        if (kind && kind !== 'all' && n.resource_kind !== kind) return false;
+        return true;
+      }).map((n) => {
+        const host = RESOURCES.find((r) => r.id === n.resource_id);
+        return {
+          ...n,
+          resource_name: host?.name ?? null,
+          resource_uuid: host?.resource_uuid ?? null,
+          resource_display_id: host?.display_id ?? null,
+        };
+      }),
+    );
+  }),
+
+  http.post('/api/workbench/notebooks', async ({ request }) => {
+    await writeDelay();
+    const body = (await request.json()) as {
+      name?: string;
+      resource_id?: number;
+      ide?: 'jupyter' | 'vscode';
+      storage_mount_gb?: number;
+      auto_shutdown_idle_min?: number;
+    };
+    const result = createNotebook({
+      name: body.name ?? '',
+      resource_id: Number(body.resource_id ?? 0) as InternalId,
+      ide: body.ide === 'vscode' ? 'vscode' : 'jupyter',
+      storage_mount_gb: body.storage_mount_gb,
+      auto_shutdown_idle_min: body.auto_shutdown_idle_min,
+    });
+    if (!result.ok) {
+      return HttpResponse.json(
+        { code: result.code, message: result.message },
+        { status: result.code === 'RESOURCE_NOT_FOUND' ? 404 : 400 },
+      );
+    }
+    return HttpResponse.json(result.notebook, { status: 201 });
+  }),
+
+  http.delete('/api/workbench/notebooks/:id', async ({ params }) => {
+    await writeDelay();
+    const ok = deleteNotebook(Number(params.id));
+    if (!ok) {
+      return HttpResponse.json(
+        { code: 'NOTEBOOK_NOT_FOUND', message: 'Notebook 不存在' },
+        { status: 404 },
+      );
+    }
+    return new HttpResponse(null, { status: 204 });
+  }),
+
+  /** 可挂靠宿主资源（Notebook 新建向导；PRD §4.5.1 正向流程） */
+  http.get('/api/workbench/attachable-resources', async ({ request }) => {
+    await listDelay();
+    const region = new URL(request.url).searchParams.get('region');
+    return HttpResponse.json(
+      attachableResources(region).map((r) => ({
+        id: r.id,
+        resource_uuid: r.resource_uuid,
+        display_id: r.display_id,
+        name: r.name,
+        kind: r.kind,
+        region: r.region,
+        gpu_count: r.gpu_count,
+        status: r.status,
+      })),
+    );
+  }),
+
+  // ─────────── 弹性伸缩（v0.7 · ARCH §12.11 / §12.12） ───────────
+  http.get('/api/scaling/policies', async ({ request }) => {
+    await listDelay();
+    const url = new URL(request.url);
+    const region = url.searchParams.get('region');
+    const model = url.searchParams.get('strategy_model');
+    return HttpResponse.json(policyRows(region, (model ?? null) as 'node_pool' | 'replica' | 'all' | null));
+  }),
+
+  http.post('/api/scaling/policies', async ({ request }) => {
+    await writeDelay();
+    const body = (await request.json()) as Record<string, unknown>;
+    const result = createPolicy({
+      resource_id: Number(body.resource_id ?? 0) as InternalId,
+      strategy_model: body.strategy_model === 'replica' ? 'replica' : 'node_pool',
+      trigger_metric: String(body.trigger_metric ?? 'queue_depth') as never,
+      target_value: body.target_value === undefined ? null : Number(body.target_value),
+      min_size: Number(body.min_size ?? 1),
+      max_size: Number(body.max_size ?? 2),
+      scale_to_zero: body.scale_to_zero === true,
+      drain_timeout_s: body.drain_timeout_s === undefined ? undefined : Number(body.drain_timeout_s),
+      fallback_enabled: body.fallback_enabled !== false,
+      cooldown_s: body.cooldown_s === undefined ? undefined : Number(body.cooldown_s),
+    });
+    if (!result.ok) {
+      return HttpResponse.json(
+        { code: result.code, message: result.message },
+        { status: result.code === 'RESOURCE_NOT_FOUND' ? 404 : 409 },
+      );
+    }
+    return HttpResponse.json(result.policy, { status: 201 });
+  }),
+
+  http.patch('/api/scaling/policies/:id', async ({ params, request }) => {
+    await writeDelay();
+    const id = Number(params.id);
+    if (!policyById(id)) {
+      return HttpResponse.json(
+        { code: 'POLICY_NOT_FOUND', message: '策略不存在' },
+        { status: 404 },
+      );
+    }
+    const body = (await request.json()) as Record<string, unknown>;
+    const result = updatePolicy(id, {
+      min_size: body.min_size === undefined ? undefined : Number(body.min_size),
+      max_size: body.max_size === undefined ? undefined : Number(body.max_size),
+      target_value: body.target_value === undefined ? undefined : Number(body.target_value),
+      cooldown_s: body.cooldown_s === undefined ? undefined : Number(body.cooldown_s),
+      drain_timeout_s:
+        body.drain_timeout_s === undefined ? undefined : Number(body.drain_timeout_s),
+      status: body.status as 'active' | 'paused' | 'cooldown' | undefined,
+    });
+    if (!result.ok) {
+      return HttpResponse.json(
+        { code: result.code, message: result.message },
+        { status: 409 },
+      );
+    }
+    return HttpResponse.json(result.policy);
+  }),
+
+  http.delete('/api/scaling/policies/:id', async ({ params }) => {
+    await writeDelay();
+    const result = deletePolicy(Number(params.id));
+    if (!result.ok) {
+      return HttpResponse.json(
+        { code: result.code, message: result.message },
+        { status: result.code === 'POLICY_NOT_FOUND' ? 404 : 409 },
+      );
+    }
+    return new HttpResponse(null, { status: 204 });
+  }),
+
+  http.get('/api/scaling/events', async ({ request }) => {
+    await listDelay();
+    const url = new URL(request.url);
+    const resourceId = url.searchParams.get('resource_id');
+    const direction = url.searchParams.get('direction');
+    let list = SCALING_EVENTS;
+    if (resourceId && resourceId !== 'all') {
+      const rid = Number(resourceId);
+      const pid = SCALING_EVENTS.filter((e) => e.resource_id === rid).map((e) => e.policy_id);
+      list = list.filter((e) => pid.includes(e.policy_id));
+    }
+    if (direction && direction !== 'all') {
+      list = list.filter((e) => e.direction === direction);
+    }
+    return HttpResponse.json(
+      list.slice().sort((a, b) => (a.created_at < b.created_at ? 1 : -1)).slice(0, 200),
+    );
+  }),
+
+  /** 单策略的触发历史（A 档 Drawer 迷你图） */
+  http.get('/api/scaling/policies/:id/events', async ({ params }) => {
+    await listDelay();
+    return HttpResponse.json(eventsOfPolicy(Number(params.id)));
   }),
   http.get('/api/datasets', async ({ request }) => {
     await listDelay();

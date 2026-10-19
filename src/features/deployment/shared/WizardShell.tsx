@@ -1,4 +1,5 @@
 // 向导骨架（PRD §4.2.0：左侧步骤导航 + 中部表单 + 右侧费用明细悬浮卡）
+import { t } from '../../../i18n';
 import type { ReactNode } from 'react';
 import {
   ui as s,
@@ -51,10 +52,10 @@ export function WizardShell({
         title={
           <span className={s.row}>
             <Icon size={20} />
-            新建 {meta.label}
+            {t('deploy.createKind', { v0: meta.label })}
           </span>
         }
-        desc="左侧步骤可点跳已完成步；右侧费用明细随配置即时重算（取价来自 billing_rates）。"
+        desc={t('deploy.shellHint')}
       />
       <div className={s.wizard}>
         <div className={s.wizardSteps}>
@@ -88,7 +89,7 @@ export function WizardShell({
           <Card>
             <div className={s.cardHeader}>
               <div className={s.cardTitle}>
-                第 {current + 1} / {steps.length} 步 · {steps[current]}
+                {t('deploy.stepProgress', { v0: current + 1, v1: steps.length, v2: steps[current] })}
               </div>
             </div>
             <div className={s.cardBody}>{children}</div>
@@ -99,15 +100,15 @@ export function WizardShell({
               disabled={current === 0}
               onClick={() => onJump(current - 1)}
             >
-              上一步
+              {t('common.prev')}
             </Button>
             {last ? (
               <Button variant="primary" onClick={onSubmit} disabled={submitting}>
-                {submitting ? '创建中…' : '创建'}
+                {submitting ? t('common.creating') : t('common.create')}
               </Button>
             ) : (
               <Button variant="primary" onClick={() => onJump(current + 1)}>
-                下一步
+                {t('common.next')}
               </Button>
             )}
           </div>
@@ -116,11 +117,11 @@ export function WizardShell({
         <div className={s.priceCard}>
           <Card>
             <div className={s.cardHeader}>
-              <div className={s.cardTitle}>费用明细</div>
+              <div className={s.cardTitle}>{t('deploy.costDetail')}</div>
             </div>
             <div className={s.cardBody}>
               {price.lines.length === 0 ? (
-                <div className={s.muted}>完成选型后显示逐项费用</div>
+                <div className={s.muted}>{t('deploy.costAfterSelect')}</div>
               ) : (
                 price.lines.map((l) => (
                   <div className={s.priceLine} key={l.label}>
@@ -129,22 +130,38 @@ export function WizardShell({
                       <br />
                       <span style={{ fontSize: 11 }}>{l.detail}</span>
                     </span>
-                    <span>{formatUsd(l.hourly)}/时</span>
+                    <span>{t('common.perHour', { v0: formatUsd(l.hourly) })}</span>
                   </div>
                 ))
               )}
               <div className={s.priceTotal}>
-                <span>合计</span>
+                <span>{t('common.total')}</span>
                 <span>
-                  {formatUsd(price.hourly)}/时
+                  {t('common.perHour', { v0: formatUsd(price.hourly) })}
                   <br />
                   <span className={s.muted} style={{ fontSize: 12 }}>
-                    {formatUsd(price.monthly)}/月(730h)
+                    {t('common.perMonth', { v0: formatUsd(price.monthly) })}
                   </span>
                 </span>
               </div>
+              {/* v0.7 §4.2.6.3：开启弹性伸缩后给出保底（min）/ 峰值（max）双档月度预估 */}
+              {price.floorMonthly !== null && price.peakMonthly !== null && (
+                <div style={{ marginTop: 8 }}>
+                  <div className={s.priceLine}>
+                    <span className={s.priceLineLabel}>{t('deploy.floorBand')}</span>
+                    <span>{t('common.perMonth', { v0: formatUsd(price.floorMonthly) })}</span>
+                  </div>
+                  <div className={s.priceLine}>
+                    <span className={s.priceLineLabel}>{t('deploy.peakBand')}</span>
+                    <span>{t('common.perMonth', { v0: formatUsd(price.peakMonthly) })}</span>
+                  </div>
+                  <div className={s.muted} style={{ fontSize: 11 }}>
+                    {t('deploy.bandHint')}
+                  </div>
+                </div>
+              )}
               <div className={s.field} style={{ marginTop: 12 }}>
-                <label className={s.fieldLabel}>计费方式</label>
+                <label className={s.fieldLabel}>{t('deploy.billingMode')}</label>
                 <Select
                   value={discount}
                   onChange={(e) => onDiscount(e.target.value as DiscountKey)}
@@ -158,10 +175,10 @@ export function WizardShell({
               </div>
               {discount === 'spot' && (
                 <div className={s.muted} style={{ fontSize: 11, marginTop: 6 }}>
-                  抢占式实例可能被回收（容量紧张时优先回收），请勿用于不可中断任务。
+                  {t('price.spotWarn')}
                 </div>
               )}
-              <Badge tone="muted">金额由 billing_rates × 区域系数 × 折扣派生</Badge>
+              <Badge tone="muted">{t('deploy.priceDerived')}</Badge>
             </div>
           </Card>
         </div>

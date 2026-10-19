@@ -1,5 +1,6 @@
 // 预留实例 Reservations（PRD §4.8 资产）：承诺用量换取折扣承诺价
 // 折扣系数取自 pricing.DISCOUNT_FACTOR（§4.5），承诺价与之口径一致。
+import { t } from '../../i18n';
 import { useQuery } from '@tanstack/react-query';
 import { Card, Table, StatTile, Badge } from '../../components/ui';
 import type { Column } from '../../components/ui';
@@ -19,11 +20,11 @@ const STATUS_TONE: Record<ReservationStatus, 'success' | 'info' | 'muted' | 'dan
   refunded: 'muted',
 };
 const STATUS_LABEL: Record<ReservationStatus, string> = {
-  active: '生效中',
-  scheduled: '待生效',
-  expired: '已过期',
-  cancelled: '已取消',
-  refunded: '已退款',
+  get active() { return t('status.active'); },
+  get scheduled() { return t('status.pendingEffective'); },
+  get expired() { return t('status.expired'); },
+  get cancelled() { return t('status.cancelled'); },
+  get refunded() { return t('status.refunded'); },
 };
 
 export default function ReservationsPage() {
@@ -39,7 +40,7 @@ export default function ReservationsPage() {
   const columns: Array<Column<Reservation>> = [
     {
       key: 'pool',
-      header: '节点池 / 区域',
+      header: t('asset.poolRegion'),
       render: (r) => (
         <span>
           <strong style={{ color: 'var(--rs-text)' }}>{NODE_POOL_LABEL[r.node_pool]}</strong>
@@ -48,31 +49,31 @@ export default function ReservationsPage() {
         </span>
       ),
     },
-    { key: 'gpu', header: '承诺 GPU', numeric: true, render: (r) => formatNumber(r.gpu_count) },
+    { key: 'gpu', header: t('asset.committedGpu'), numeric: true, render: (r) => formatNumber(r.gpu_count) },
     {
       key: 'price',
-      header: '承诺单价',
+      header: t('asset.committedRate'),
       numeric: true,
       render: (r) => (
         <span>
           {formatUsd(r.committed_price_per_gpu_hour)}
           <br />
           <span className={s.muted}>
-            按量 {formatUsd(effectiveRatePerGpuHour(r.node_pool, r.region))}
+            {t('asset.paygRate', { v0: formatUsd(effectiveRatePerGpuHour(r.node_pool, r.region)) })}
           </span>
         </span>
       ),
     },
     {
       key: 'save',
-      header: '月度折算',
+      header: t('asset.monthlyEquiv'),
       numeric: true,
       render: (r) =>
         formatUsd(r.committed_price_per_gpu_hour * r.gpu_count * HOURS_PER_MONTH),
     },
     {
       key: 'window',
-      header: '有效期',
+      header: t('common.validity'),
       render: (r) => (
         <span className={s.secondary}>
           {formatRelative(r.start_at)} ~ {formatRelative(r.end_at)}
@@ -81,7 +82,7 @@ export default function ReservationsPage() {
     },
     {
       key: 'status',
-      header: '状态',
+      header: t('common.status'),
       render: (r) => <Badge tone={STATUS_TONE[r.status]}>{STATUS_LABEL[r.status]}</Badge>,
     },
   ];
@@ -95,13 +96,13 @@ export default function ReservationsPage() {
           gap: 'var(--rs-s4)',
         }}
       >
-        <StatTile label="预留数量" value={rows.length} />
-        <StatTile label="承诺 GPU 合计" value={formatNumber(committedGpu)} hint="生效+待生效" />
+        <StatTile label={t('asset.reservedQty')} value={rows.length} />
+        <StatTile label={t('asset.committedTotal')} value={formatNumber(committedGpu)} hint={t('asset.activePending')} />
       </div>
 
       <Card
-        title="预留实例"
-        actions={isLoading ? <Badge tone="info">加载中…</Badge> : <Badge tone="muted">{rows.length} 项</Badge>}
+        title={t('nav.reservations')}
+        actions={isLoading ? <Badge tone="info">{t('common.loading')}</Badge> : <Badge tone="muted">{t('common.countItems', { v0: rows.length })}</Badge>}
       >
         <Table columns={columns} rows={rows} rowKey={(r) => String(r.id)} zebra />
       </Card>

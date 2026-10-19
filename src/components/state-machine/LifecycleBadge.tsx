@@ -1,5 +1,6 @@
 // LifecycleBadge — 资源生命周期 6 态（DESIGN-SYSTEM §5.18 / §8.2，PRD §5.4）
 // 渲染要求：「颜色 + 图标 + 文本」至少两者并存；Terminating 须区别于 Stopped（不可逆）。
+import { t } from '../../i18n';
 import { Badge, type BadgeTone } from '../ui/Badge';
 
 export type LifecycleState =
@@ -22,17 +23,17 @@ export const LIFECYCLE_META: Record<LifecycleState, Meta> = {
   stopped: { label: 'Stopped', icon: '⏸', tone: 'muted' },
   error: { label: 'Error', icon: '✕', tone: 'danger' },
   terminating: { label: 'Terminating', icon: '⇥', tone: 'terminating' },
-  deleted: { label: '已释放', icon: '␡', tone: 'muted' },
+  deleted: { get label() { return t('status.released'); }, icon: '␡', tone: 'muted' },
 };
 
 /** 中文辅助标签（状态语义更明确） */
 export const LIFECYCLE_LABEL_ZH: Record<LifecycleState, string> = {
-  provisioning: '创建中',
-  running: '运行中',
-  stopped: '已停止',
-  error: '异常',
-  terminating: '终止中',
-  deleted: '已释放',
+  get provisioning() { return t('status.creating'); },
+  get running() { return t('status.running'); },
+  get stopped() { return t('status.stopped'); },
+  get error() { return t('status.error'); },
+  get terminating() { return t('status.terminating'); },
+  get deleted() { return t('status.released'); },
 };
 
 export function LifecycleBadge({

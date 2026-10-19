@@ -1,4 +1,5 @@
 // 新建 GPU 云服务器（PRD §4.2.1：阿里云/火山引擎骨架 + RunPod 卡片化；计费单位 = GPU·小时）
+import { t } from '../../i18n';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -20,6 +21,11 @@ import { WIZARD_STEP_SCHEMAS } from './schemas';
 import { WizardShell } from './shared/WizardShell';
 import { ProjectRegionStep, type ProjectRegionValue } from './shared/ProjectRegionStep';
 import { estimateVm, type DiscountKey } from './shared/pricing';
+import {
+  NodePoolScalingForm,
+  ScalingSwitch,
+  type NodePoolScalingValue,
+} from './shared/ScalingForm';
 import { useCreateOrder, useNodePools, useProjects } from '../shared/api';
 import type { NodePoolView } from '../shared/api';
 
@@ -31,7 +37,7 @@ interface ImageLite {
   size_gb: number;
 }
 
-const STEPS = ['项目与区域', '规格选型', '镜像与存储', '网络与安全', '高级与确认'];
+const STEPS = [t('deploy.stepProjectRegion'), t('deploy.stepSpec'), t('deploy.stepImageStorage'), t('deploy.stepNetworkSecurity'), t('deploy.stepAdvanced')];
 
 export default function GpuVmWizard() {
   const navigate = useNavigate();
@@ -57,6 +63,17 @@ export default function GpuVmWizard() {
   const [sshKey, setSshKey] = useState('ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEnzoDemoKey');
   const [quantity, setQuantity] = useState(1);
   const [idleShutdown, setIdleShutdown] = useState(0);
+  // v0.7 弹性伸缩开关（默认关；开启 = 节点池伸缩策略，PRD §4.2.6）
+  const [elasticScaling, setElasticScaling] = useState(false);
+  const [scaling, setScaling] = useState<NodePoolScalingValue>({
+    strategy_model: 'node_pool',
+    trigger_metric: 'queue_depth',
+    target_value: 20,
+    min_size: 1,
+    max_size: Math.max(2, quantity),
+    fallback_enabled: true,
+    cooldown_s: 600,
+  });
   const [discount, setDiscount] = useState<DiscountKey>('on_demand');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -88,6 +105,8 @@ export default function GpuVmWizard() {
     ssh_pubkey: sshKey,
     quantity,
     auto_shutdown_idle_min: idleShutdown,
+    elastic_scaling: elasticScaling,
+    scaling: elasticScaling ? scaling : null,
   };
 
   const validate = (i: number): boolean => {
@@ -122,6 +141,8 @@ export default function GpuVmWizard() {
     bandwidthMbps: bandwidth,
     quantity,
     discount,
+    // §4.2.6.3 保底 / 峰值双档月度预估
+    scaling: elasticScaling ? { current: quantity, min: scaling.min_size, max: scaling.max_size } : null,
   });
 
   const submit = async (): Promise<void> => {
@@ -146,12 +167,15 @@ export default function GpuVmWizard() {
           ssh_pubkey: sshKey,
           public_ip: publicIp,
           bandwidth_mbps: bandwidth,
+          quantity,
+          // v0.7：弹性伸缩配置写入 requested_spec.scaling，下单即生成 scaling_policies 行
+          scaling: elasticScaling ? scaling : null,
         },
       });
-      toast.success(`订单已受理，开始供给（预估 ${price.hourly.toFixed(2)}/时）`);
+      toast.success(t('deploy.vmAccepted', { v0: price.hourly.toFixed(2) }));
       navigate(`/resources/servers/${res.resource_uuid}`);
     } catch {
-      toast.error('创建失败，请检查配置');
+      toast.error(t('deploy.createFailed'));
     }
   };
 
@@ -176,7 +200,7 @@ export default function GpuVmWizard() {
           onChange={(p) => setBase((v) => ({ ...v, ...p }))}
           projects={projects}
           errors={errors}
-          nameHint={`留空则自动命名为 ${'server'}-${pool}-01`}
+          nameHint={t('deploy.vmNameHint', { v0: 'server', v1: pool })}
         />
       )}
 
@@ -184,10 +208,10 @@ export default function GpuVmWizard() {
         <div className={s.col} style={{ gap: 16 }}>
           <div>
             <div className={s.metricLabel} style={{ marginBottom: 8 }}>
-              规格选型（卡片化比价 · 本区域单价已含区域系数）
+              {t('deploy.specHint')}
             </div>
             {available.length === 0 ? (
-              <EmptyState icon="📭" title="该区域暂无可用节点池" hint="请返回第 1 步切换区域" />
+              <EmptyState icon="📭" title={t('deploy.noPoolsInRegion')} hint={t('deploy.backToStep1')} />
             ) : (
               <CardGrid>
                 {available.map((p) => (
@@ -205,20 +229,19 @@ export default function GpuVmWizard() {
             )}
             {unavailable.length > 0 && (
               <div className={s.muted} style={{ fontSize: 12, marginTop: 8 }}>
-                该区域不可用：
-                {unavailable
-                  .map((p) => `${NODE_POOL_LABEL[p.code]}（仅 ${p.fallback_regions.map((r) => r.toUpperCase()).join('/')}）`)
-                  .join('、')}
+                {t('deploy.regionUnavailable')}{unavailable
+                  .map((p) => t('deploy.poolOnlyIn', { v0: NODE_POOL_LABEL[p.code], v1: p.fallback_regions.map((r) => r.toUpperCase()).join('/') }))
+                  .join(t('common.listSep'))}
               </div>
             )}
             {errors.node_pool && <div className={s.fieldError}>{errors.node_pool}</div>}
           </div>
           <div className={s.formGrid}>
-            <Field label="GPU 数量" required error={errors.gpu_count}>
+            <Field label={t('common.gpuCount')} required error={errors.gpu_count}>
               <Select value={gpuCount} onChange={(e) => setGpuCount(Number(e.target.value))}>
                 {[1, 2, 4, 8].map((n) => (
                   <option key={n} value={n}>
-                    {n} 卡
+                    {t('common.gpuCountValue', { v0: n })}
                   </option>
                 ))}
               </Select>
@@ -232,7 +255,7 @@ export default function GpuVmWizard() {
                 ))}
               </Select>
             </Field>
-            <Field label="内存" required error={errors.memory_gb}>
+            <Field label={t('common.memory')} required error={errors.memory_gb}>
               <Select value={memoryGb} onChange={(e) => setMemoryGb(Number(e.target.value))}>
                 {[112, 224, 448, 896, 1792].map((n) => (
                   <option key={n} value={n}>
@@ -243,7 +266,7 @@ export default function GpuVmWizard() {
             </Field>
           </div>
           <div className={s.muted} style={{ fontSize: 12 }}>
-            规格族：gpu.{gpuCount}x{NODE_POOL_LABEL[pool].replace(/\s/g, '')}.{vcpu}c.{memoryGb}g
+            {t('deploy.specFamily', { v0: gpuCount, v1: NODE_POOL_LABEL[pool].replace(/\s/g, ''), v2: vcpu, v3: memoryGb })}
           </div>
         </div>
       )}
@@ -252,7 +275,7 @@ export default function GpuVmWizard() {
         <div className={s.col} style={{ gap: 16 }}>
           <div>
             <div className={s.metricLabel} style={{ marginBottom: 8 }}>
-              镜像
+              {t('common.image')}
             </div>
             <CardGrid>
               {images.slice(0, 8).map((img) => (
@@ -268,20 +291,20 @@ export default function GpuVmWizard() {
             {errors.image_ref && <div className={s.fieldError}>{errors.image_ref}</div>}
           </div>
           <div className={s.formGrid}>
-            <Field label="系统盘（GB）" required error={errors.system_disk_gb}>
+            <Field label={t('deploy.systemDisk')} required error={errors.system_disk_gb}>
               <Input
                 type="number"
                 value={systemDiskGb}
                 onChange={(e) => setSystemDiskGb(Number(e.target.value))}
               />
             </Field>
-            <Field label="系统盘类型" required>
+            <Field label={t('deploy.systemDiskType')} required>
               <Select value={diskType} onChange={(e) => setDiskType(e.target.value as 'nvme_ssd' | 'ssd')}>
                 <option value="nvme_ssd">NVMe SSD</option>
                 <option value="ssd">SSD</option>
               </Select>
             </Field>
-            <Field label="数据盘（GB）" error={errors.data_disk_gb}>
+            <Field label={t('deploy.dataDisk')} error={errors.data_disk_gb}>
               <Input
                 type="number"
                 value={dataDiskGb}
@@ -298,22 +321,22 @@ export default function GpuVmWizard() {
             <Field label="VPC" required error={errors.vpc}>
               <Input value={vpc} onChange={(e) => setVpc(e.target.value)} />
             </Field>
-            <Field label="子网（须与区域一致）" required error={errors.subnet}>
+            <Field label={t('deploy.subnet')} required error={errors.subnet}>
               <Select value={subnet} onChange={(e) => setSubnet(e.target.value)}>
                 <option value="subnet-az1">{base.region}-az1</option>
                 <option value="subnet-az2">{base.region}-az2</option>
               </Select>
             </Field>
-            <Field label="安全组" required error={errors.security_group}>
+            <Field label={t('deploy.securityGroup')} required error={errors.security_group}>
               <Select value={sg} onChange={(e) => setSg(e.target.value)}>
                 <option value="default">default</option>
                 <option value="web">web</option>
               </Select>
             </Field>
           </div>
-          <SwitchRow label="分配公网 IP" checked={publicIp} onChange={setPublicIp} />
+          <SwitchRow label={t('deploy.publicIp')} checked={publicIp} onChange={setPublicIp} />
           {publicIp && (
-            <Field label="带宽（Mbps）" error={errors.bandwidth_mbps}>
+            <Field label={t('deploy.bandwidth')} error={errors.bandwidth_mbps}>
               <Input
                 type="number"
                 value={bandwidth}
@@ -321,7 +344,7 @@ export default function GpuVmWizard() {
               />
             </Field>
           )}
-          <Field label="SSH 公钥" required error={errors.ssh_pubkey}>
+          <Field label={t('common.sshKey')} required error={errors.ssh_pubkey}>
             <Input value={sshKey} onChange={(e) => setSshKey(e.target.value)} />
           </Field>
         </div>
@@ -330,25 +353,36 @@ export default function GpuVmWizard() {
       {step === 4 && (
         <div className={s.col} style={{ gap: 16 }}>
           <div className={s.formGrid}>
-            <Field label="创建数量（实例）" required error={errors.quantity}>
+            <Field label={t('deploy.instanceCount')} required error={errors.quantity}>
               <Input
                 type="number"
                 value={quantity}
                 onChange={(e) => setQuantity(Number(e.target.value))}
               />
             </Field>
-            <Field label="闲置自动关机（分钟）" error={errors.auto_shutdown_idle_min}>
+            <Field label={t('deploy.idleShutdown')} error={errors.auto_shutdown_idle_min}>
               <Select value={idleShutdown} onChange={(e) => setIdleShutdown(Number(e.target.value))}>
-                <option value={0}>不自动关机</option>
-                <option value={30}>闲置 30 分钟</option>
-                <option value={60}>闲置 60 分钟</option>
-                <option value={120}>闲置 120 分钟</option>
+                <option value={0}>{t('deploy.idleNever')}</option>
+                <option value={30}>{t('deploy.idle30')}</option>
+                <option value={60}>{t('deploy.idle60')}</option>
+                <option value={120}>{t('deploy.idle120')}</option>
               </Select>
             </Field>
           </div>
           <div className={s.muted} style={{ fontSize: 12 }}>
-            创建后按 GPU·小时计费；停止后仅计存储。费用明细以右侧为准。
+            {t('deploy.vmBillingHint')}
           </div>
+
+          {/* v0.7 弹性伸缩（§4.2.1 第 5 步 / §4.2.6） */}
+          <ScalingSwitch checked={elasticScaling} onChange={setElasticScaling} />
+          {elasticScaling && (
+            <NodePoolScalingForm
+              value={scaling}
+              onChange={setScaling}
+              sizeUnit={t('deploy.unitInstance')}
+            />
+          )}
+          {errors['scaling'] && <div className={s.fieldError}>{errors['scaling']}</div>}
         </div>
       )}
     </WizardShell>
@@ -372,14 +406,14 @@ function PoolCard({
       title={
         <span>
           {p.display_name}
-          <span className={s.muted}> · {p.gpus_per_node} 卡/节点</span>
+          <span className={s.muted}> · {t('deploy.gpusPerNode', { v0: p.gpus_per_node })}</span>
         </span>
       }
-      meta={`${p.gpu_model} · ${p.vram_gb} GB 显存 · ${p.interconnect}`}
-      price={`$${p.unit_price.toFixed(2)}/GPU·时`}
+      meta={t('deploy.specSummary', { v0: p.gpu_model, v1: p.vram_gb, v2: p.interconnect })}
+      price={t('deploy.ratePerGpuHour', { v0: p.unit_price.toFixed(2) })}
       extra={
         <span className={s.muted} style={{ fontSize: 11 }}>
-          本区域可用 {avail} / {p.supply?.totalGpu ?? 0} 卡
+          {t('deploy.availInRegion', { v0: avail, v1: p.supply?.totalGpu ?? 0 })}
         </span>
       }
     />
